@@ -1,85 +1,47 @@
-# backend/main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorClient
-import bcrypt 
+from fastapi.staticfiles import StaticFiles
+import os
 
-app = FastAPI()
+# Import các router
+from api import auth, users, medical_records, clinic, billing, admin
 
-# 1. Cấu hình CORS
-origins = ["http://localhost:5173"]
+app = FastAPI(title="Aura AI Backend")
+
+# Cấu hình CORS (Để Frontend gọi được API)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Trong môi trường dev, cho phép tất cả
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. Kết nối Database
-MONGO_URL = "mongodb://localhost:27017"
-client = AsyncIOMotorClient(MONGO_URL)
-db = client.aura_db
-users_collection = db.users
+# Mount thư mục uploads để xem ảnh
+os.makedirs("uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
-# 3. Dữ liệu đầu vào 
-class LoginRequest(BaseModel):
-    userName: str
-    password: str
+# --- ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT ---
+# Kiểm tra kỹ các dòng include_router này:
 
-class RegisterRequest(BaseModel):
-    userName: str
-    password: str
-    role: str = "USER"
+# 1. Auth: Đăng ký, Đăng nhập
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 
-@app.post("/api/register")
-async def register(data: RegisterRequest):
-    existing_user = await users_collection.find_one({"userName": data.userName})
-    if existing_user:
-        raise HTTPException(status_code=400,details="Tên tài khoản đã được sử dụng")
-    hashed_password = bcrypt.hashpw(data.password.encode('utf-8'), bcrypt.gensalt())
-    new_user = {
-        "userName": data.userName,
-        "password": hashed_password.decode('utf-8'),
-        "role": data.role
-    }
+# 2. Users: Lấy thông tin cá nhân
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 
-    await users_collection.insert_one(new_user)
-    return {"Tạo tài khoản thành công!"}
-    
-# --- API ĐĂNG NHẬP (BẢN FINAL ĐÃ FIX LỖI 500) ---
-@app.post("/api/login")
-async def login(data: LoginRequest):
-    # Bước 1: Tìm user
-    user = await users_collection.find_one({"userName": data.userName})
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="Tên tài khoản không tồn tại")
-    
-    # Bước 2: Chuẩn bị dữ liệu mật khẩu
-    try:
-        password_input = data.password.encode('utf-8') 
-        password_hash = user["password"].encode('utf-8')
-    except Exception as e:
-        print(f"Lỗi dữ liệu: {e}")
-        raise HTTPException(status_code=500, detail="Lỗi dữ liệu mật khẩu trong Database")
+# 3. Medical Records: Upload ảnh, AI
+app.include_router(medical_records.router, prefix="/api/v1/medical-records", tags=["Medical Records"])
 
-    # Bước 3: Kiểm tra mật khẩu (So sánh trực tiếp)
-    # Lưu ý: checkpw không bao giờ gây lỗi, nó chỉ trả về True/False
-    is_correct = bcrypt.checkpw(password_input, password_hash)
-    
-    # Đưa đoạn kiểm tra này ra ngoài try/except để tránh bị bắt nhầm thành lỗi 500
-    if not is_correct:
-         raise HTTPException(status_code=400, detail="Sai mật khẩu")
+# 4. Clinic: Quản lý phòng khám
+app.include_router(clinic.router, prefix="/api/v1/clinics", tags=["Clinics"])
 
-    # Bước 4: Thành công -> Trả về kết quả
-    return {
-        "message": "Đăng nhập thành công",
-        "access_token": "fake_token_123456",
-        "user_info": {
-            "full_name": user.get("full_name"),
-            "role": user.get("role"),
-            "userName": user["userName"]
-        }
-    }
+# 5. Billing: Thanh toán
+app.include_router(billing.router, prefix="/api/v1/billing", tags=["Billing"])
+
+# 6. Admin: Quản lý người dùng, Báo cáo
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin Dashboard"])
+# --------------------------------------
+@app.get("/")
+def root():
+    return {"message": "Welcome to Aura AI Backend API"}

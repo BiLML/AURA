@@ -1,0 +1,23 @@
+# Sử dụng Python 3.10 Slim
+FROM python:3.10-slim
+
+# 1. Cài đặt thư viện hệ thống cần thiết cho OpenCV và ONNX
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \   
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2. Copy requirements và cài đặt
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 3. Copy toàn bộ code (Bao gồm cả folder server và ai_service)
+COPY . .
+
+# 4. Không cần CMD cứng ở đây, docker-compose sẽ điều khiển
