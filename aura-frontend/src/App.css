@@ -23,3 +23,296 @@ body {
   box-sizing: border-box;
   font-family:  'Poppins', sans-serif;
 }
+
+/* ========================================================= */
+/* 2. HIỆU ỨNG THỦY TINH (GLASSMORPHISM) - .login-box */
+/* ========================================================= */
+.login-box {
+  background: rgba(255, 255, 255, 0.15); /* Nền trắng hơi trong suốt */
+  border-radius: 20px; /* Góc bo tròn */
+  padding: 50px 60px; 
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); /* Bóng đổ mạnh */
+  backdrop-filter: blur(8px); /* HIỆU ỨNG THỦY TINH */
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.28); /* Viền mờ */
+  width: 420px; 
+  max-width: 90%; 
+  text-align: center;
+  color: white; 
+}
+
+/* ========================================================= */
+/* 3. TIÊU ĐỀ, INPUT VÀ ICON */
+/* ========================================================= */
+.form-title h3 {
+  color: #fff; 
+  margin-top: 0;
+  margin-bottom: 30px;
+  font-size: 2.5em;
+  font-weight: 600; 
+  letter-spacing: 1px;
+}
+.form-title img {
+    /* Đảm bảo logo có màu trắng/sáng để khớp với theme Glassmorphism */
+    filter: brightness(0) invert(1); 
+}
+
+.input-group {
+  margin-bottom: 30px; 
+  position: relative; 
+}
+
+.input-group input {
+  width: 100%; 
+  padding: 15px 15px 15px 50px; 
+  border: 1px solid rgba(255, 255, 255, 0.4); 
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.1) !important; 
+  font-size: 1.05em;
+  color: #fff !important; 
+  font-weight: 500;
+  box-sizing: border-box;
+  transition: all 0.3s;
+}
+
+.input-group input::placeholder {
+    color: rgba(255, 255, 255, 0.7); 
+}
+
+.icon {
+  position: absolute; 
+  left: 20px; 
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.8); 
+  font-size: 1.1em;
+  z-index: 2; 
+}
+
+/* Các Icon phụ (đã bỏ trong Login.tsx hiện tại nhưng giữ lại CSS cho tính linh hoạt) */
+.input-group .fa-chevron-down, 
+.input-group .fa-eye {
+    left: auto;
+    right: 20px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+
+/* ========================================================= */
+/* 4. REMEMBER ME VÀ FORGOT PASSWORD (ĐÃ CẬP NHẬT) */
+/* ========================================================= */
+/* Tạo một container linh hoạt để chứa cả hai phần */
+.login-options {
+    display: flex; /* Dùng flexbox để căn chỉnh ngang */
+    justify-content: space-between; /* Đẩy hai mục ra hai bên */
+    align-items: center;
+    margin-top: 15px;
+    margin-bottom: 25px; /* Tăng khoảng cách dưới để tách khỏi nút Login */
+    font-size: 0.95em;
+    color: #fff;
+}
+
+/* Style cho phần Ghi nhớ tôi */
+.remember-me {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.remember-me label {
+    margin-left: 8px; /* Khoảng cách giữa checkbox và chữ */
+    font-weight: 500;
+}
+
+/* Style cho liên kết Quên mật khẩu */
+.forgot-password {
+    text-align: right; /* Đảm bảo căn phải */
+}
+.forgot-password a {
+    color: #fff; 
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.forgot-password a:hover {
+    color: #f0f0f0;
+}
+
+/* Giữ nguyên style nút chính (section 5) và các phần khác */
+
+
+/* ========================================================= */
+/* 5. NÚT CHÍNH (LOGIN) - ĐÃ CẬP NHẬT THEO YÊU CẦU */
+/* ========================================================= */
+button[type="submit"] {
+  width: 60%; /* Yêu cầu: 60% */
+  padding: 1rem; /* Yêu cầu: 1rem */
+  margin-bottom: 1rem; /* Yêu cầu: 1rem */
+  
+  /* Căn giữa nút */
+  display: block; 
+  margin-top: 25px; 
+  margin-left: auto; 
+  margin-right: auto; 
+  
+  /* Các yêu cầu về màu sắc và kiểu dáng */
+  background-color: var(--white-color, #ffffff); 
+  border-radius: 4rem; /* Yêu cầu: bo góc rất tròn */
+  color: #6a5acd; /* Màu tím để tạo độ tương phản */
+  font-weight: 700; 
+  
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+button[type="submit"]:hover {
+  background-color: #f0f0f0;
+  transform: translateY(-2px);
+}
+
+/* ========================================================= */
+/* 6. NÚT XÃ HỘI VÀ DIVIDER - ĐÃ CẬP NHẬT CHO BỐ CỤC DỌC */
+/* ========================================================= */
+
+.divider {
+    color: rgba(255, 255, 255, 0.8);
+    margin: 15px 0; 
+    font-size: 1.1em;
+}
+
+.social-button {
+  width: 80%; 
+  padding: 15px; 
+  margin: 0 auto 15px auto; 
+  border-radius: 4rem; 
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.social-button:hover {
+    opacity: 0.9;
+}
+
+.social-button i {
+  margin-right: 10px; 
+  font-size: 1.1em;
+}
+
+/* Style Google */
+.google-btn {
+    background-color: #fff; 
+    color: #333; 
+    border: 1px solid #ced4da; 
+}
+
+.google-btn i.fab.fa-google { 
+    color: #DB4437; 
+}
+
+/* Style Facebook */
+.facebook-btn {
+    background-color: #1877f2; /* Màu xanh Facebook */
+    color: white;
+    border: none;
+}
+
+.facebook-btn:hover {
+    background-color: #166ae7;
+}
+
+/* ========================================================= */
+/* 7. PHẦN ĐĂNG KÝ CUỐI FORM (FINAL - Căn Giữa Hoàn Hảo) */
+/* ========================================================= */
+.register-section {
+    margin-top: 25px;
+    
+    /* 1. Đặt độ rộng 80% và căn giữa để đồng trục với các nút */
+    width: 80%; 
+    margin: 25px auto 0 auto; 
+    
+    /* 2. Dùng Flexbox để xếp hai phần tử này ngang hàng */
+    display: flex; 
+    /* ĐÃ SỬA: Thay đổi từ flex-start thành center để căn giữa nội dung */
+    justify-content: center; 
+    align-items: baseline; 
+    gap: 5px; 
+    padding: 0; 
+}
+
+.register-section p {
+    color: rgba(255, 255, 255, 0.8); 
+    font-size: 1em;
+    font-weight: 400;
+    margin: 0; 
+    padding: 0;
+}
+
+.register-section .register-link {
+    color: #fff; 
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0; 
+    border-radius: 0;
+    line-height: 1; 
+    transition: color 0.3s; 
+}
+
+.register-section .register-link:hover {
+    background-color: transparent; 
+    color: #f0f0f0; 
+    text-decoration: underline; 
+}
+
+/* ========================================================= */
+/* --- STYLE DÀNH CHO DASHBOARD & MODAL (ĐƯỢC GIỮ LẠI TỪ CODE GỐC) --- */
+.admin-table-row:hover {
+    background-color: #f0f0f0; 
+    cursor: pointer; 
+}
+.input-group select {
+    width: 100%; 
+    padding: 12px; 
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    box-sizing: border-box; 
+    font-size: 1em;
+    background-color: #fff;
+    color: #333;
+    -webkit-appearance: none; 
+    -moz-appearance: none;
+    appearance: none;
+}
+.modal-btn-primary {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.modal-btn-secondary {
+    background-color: #e2e8f0;
+    color: #475569;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.modal-btn-primary:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
