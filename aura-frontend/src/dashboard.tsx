@@ -1,51 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+    FaPaperPlane, FaTrash, FaImage, FaFileAlt, 
+    FaHome, FaComments, FaHospital, FaCreditCard, 
+    FaBell, FaSignOutAlt, FaSearch, FaUserCircle, FaCamera, FaCheck, FaCheckDouble 
+} from 'react-icons/fa';
 
+// --- Dashboard Component (USER / PATIENT) ---
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
     
-    const userRole = localStorage.getItem('role') || 'Không xác định';
+    // --- STATE DỮ LIỆU ---
+    const [userRole, setUserRole] = useState<string>('Guest');
+    const [userName, setUserName] = useState<string>('');
+    const [_id, setUserId] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(true); 
+    const [historyData, setHistoryData] = useState<any[]>([]);
+    const [chatData, setChatData] = useState<any[]>([]); 
+    const [full_name, setFullName] = useState<string>('');
+
+    // --- STATE CHAT ---
+    const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+    const [currentMessages, setCurrentMessages] = useState<any[]>([]);
+    const [newMessageText, setNewMessageText] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null); 
+
+    // State giao diện
+    const [activeTab, setActiveTab] = useState<string>('home');
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showFabMenu, setShowFabMenu] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [hasViewedNotifications, setHasViewedNotifications] = useState(false);
+
+    // --- STATE FORM ĐĂNG KÝ PHÒNG KHÁM ---
+    // Refs
+    const [clinicForm, setClinicForm] = useState({
+        name: '', address: '', phone: '', license: '', description: ''
+    });
+    const [isSubmittingClinic, setIsSubmittingClinic] = useState(false);
     
-    const handleLogout = () => {
-        // Xóa thông tin đăng nhập
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        
-        // Chuyển hướng người dùng về trang login
-        navigate('/login');
-    };
+    const notificationRef = useRef<HTMLDivElement>(null);
+    const profileRef = useRef<HTMLDivElement>(null);
 
-    return (
-        <div style={{ padding: '40px', maxWidth: '900px', margin: '50px auto', backgroundColor: '#f9f9f9', borderRadius: '10px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }}>
-            <h1 style={{ color: '#007bff', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-                🎉 Dashboard (Trang Chủ)
-            </h1>
-            
-            <div style={{ marginBottom: '30px' }}>
-                <p style={{ fontSize: '1.1em' }}>
-                    Chào mừng bạn đã đăng nhập thành công! Vai trò của bạn là: 
-                    <strong style={{ color: '#28a745', marginLeft: '5px' }}>{userRole}</strong>
-                </p>
-                <p>Đây là nơi hiển thị các nội dung quan trọng và chức năng chính của ứng dụng.</p>
-            </div>
-
-            <button 
-                onClick={handleLogout}
-                style={{ 
-                    padding: '12px 25px', 
-                    backgroundColor: '#dc3545', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '8px', 
-                    cursor: 'pointer',
-                    fontSize: '1em',
-                    fontWeight: 'bold'
-                }}
-            >
-                Đăng Xuất
-            </button>
-        </div>
-    );
-};
-
-export default Dashboard;
+    // State ảnh upload
+    const [clinicImages, setClinicImages] = useState<{ front: File | null, back: File | null }>({ 
+        front: null, back: null 
+    });
+    const [previewImages, setPreviewImages] = useState<{ front: string | null, back: string | null }>({ 
+        front: null, back: null 
+    });
