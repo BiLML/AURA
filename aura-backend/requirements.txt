@@ -37,6 +37,3 @@ onnxruntime==1.23.2
 # --- AI Development (Optional) ---
 tensorflow
 tf2onnx==1.16.1
-alembic 
-sqlalchemy 
-psycopg2-binary
