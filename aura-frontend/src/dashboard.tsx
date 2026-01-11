@@ -243,3 +243,83 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [currentMessages]);
+    // --- HÀM XỬ LÝ CHỌN ẢNH ---
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'back') => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            let objectUrl: string | null = null;
+            if (file.type.startsWith('image/')) {
+                 objectUrl = URL.createObjectURL(file);
+            }
+            setClinicImages(prev => ({ ...prev, [type]: file }));
+            setPreviewImages(prev => ({ ...prev, [type]: objectUrl }));
+        }
+    };
+
+    const removeImage = (type: 'front' | 'back') => {
+        setClinicImages(prev => ({ ...prev, [type]: null }));
+        setPreviewImages(prev => ({ ...prev, [type]: null }));
+    };
+
+    // --- HÀM ĐĂNG KÝ PHÒNG KHÁM ---
+    const handleClinicSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmittingClinic(true);
+        const token = localStorage.getItem('token');
+    
+        try {
+            const formData = new FormData();
+            
+            // 1. SỬA TÊN KEY CHO KHỚP VỚI BACKEND (api/clinic.py)
+            formData.append('name', clinicForm.name);       // Backend: name
+            formData.append('address', clinicForm.address); // Backend: address
+            formData.append('phone', clinicForm.phone);     // Backend: phone (đã map map với biến phone_number trong service)
+            
+            // 2. XỬ LÝ MÃ GIẤY PHÉP (Do DB chưa có cột license, ta ghép vào mô tả)
+            const fullDescription = `Mã GP: ${clinicForm.license}. \n${clinicForm.description}`;
+            formData.append('description', fullDescription);
+
+            // 3. XỬ LÝ FILE ẢNH
+            // Backend chỉ nhận 1 file có key là "logo". 
+            // Ta ưu tiên lấy ảnh mặt trước làm logo.
+            if (clinicImages.front) {
+                formData.append('logo', clinicImages.front); 
+            } else if (clinicImages.back) {
+                // Nếu không có mặt trước thì lấy mặt sau đỡ
+                formData.append('logo', clinicImages.back);
+            }
+
+            // Gọi API
+            const res = await fetch('http://localhost:8000/api/v1/clinics/register', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}` 
+                    // Lưu ý: KHÔNG ĐƯỢC set 'Content-Type': 'multipart/form-data' thủ công 
+                    // Fetch sẽ tự động set boundary cho FormData
+                },
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                alert("Gửi yêu cầu đăng ký thành công! Vui lòng chờ Admin phê duyệt.");
+                // Reset form
+                setClinicForm({ name: '', address: '', phone: '', license: '', description: '' }); 
+                setClinicImages({ front: null, back: null });
+                setPreviewImages({ front: null, back: null });
+                
+                // Chuyển tab hoặc reload data nếu cần
+                setActiveTab('home');
+            } else {
+                // Hiển thị chi tiết lỗi trả về từ Backend
+                console.error("Lỗi Backend:", data);
+                alert(data.detail || "Có lỗi xảy ra, vui lòng kiểm tra lại thông tin.");
+            }
+        } catch (error) {
+            console.error("Lỗi đăng ký:", error);
+            alert("Lỗi kết nối server!");
+        } finally {
+            setIsSubmittingClinic(false);
+        }
+    };
