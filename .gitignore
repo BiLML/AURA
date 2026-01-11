@@ -1,0 +1,52 @@
+# --- BẢO MẬT (QUAN TRỌNG NHẤT) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+aura-backend/.env
+
+# --- PYTHON (BACKEND) ---
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+db.sqlite3
+
+# --- FILE MODEL AI (Rất quan trọng) ---
+# Chặn folder backup chứa file .keras gốc (Rất nặng, không đẩy lên Git)
+backup_model_ai/
+
+# Chặn các file model lẻ tẻ nếu lỡ sinh ra
+*.keras
+*.h5
+*.weights
+saved_models/
+
+# (Tùy chọn) Chặn ai_onnx nếu file quá 100MB (GitHub giới hạn)
+# Nếu file ONNX của bạn nhỏ, bạn có thể bỏ dòng dưới đi để đẩy lên Git bình thường
+# ai_onnx/
+
+# --- NODEJS / REACT (FRONTEND) ---
+node_modules/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.*
+
+# --- CÔNG CỤ IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- KHÁC ---
+backups/
+dump/
+tools/

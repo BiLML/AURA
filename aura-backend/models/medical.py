@@ -61,7 +61,11 @@ class DoctorValidation(Base):
     is_correct = Column(Boolean)
     doctor_notes = Column(Text)
     feedback_for_ai = Column(Text)
+<<<<<<< HEAD
 
+=======
+    doctor_confirm = Column(String(255), nullable=True)
+>>>>>>> 8fd09fc486e1cae1b5f685143e9fe121221fff5f
     # Relationships
     analysis = relationship("AIAnalysisResult", back_populates="doctor_validation")
     doctor = relationship("User", back_populates="doctor_validations")
