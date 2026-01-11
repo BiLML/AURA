@@ -17,12 +17,9 @@ class User(Base):
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.PENDING)
     created_at = Column(DateTime, default=datetime.utcnow)
     clinic_id = Column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
-<<<<<<< HEAD
 
-=======
     sent_messages = relationship("Message", foreign_keys="[Message.sender_id]", back_populates="sender", cascade="all, delete-orphan")
     received_messages = relationship("Message", foreign_keys="[Message.receiver_id]", back_populates="receiver", cascade="all, delete-orphan")
->>>>>>> 8fd09fc486e1cae1b5f685143e9fe121221fff5f
     assigned_doctor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     # Relationships
     profile = relationship("Profile", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -41,11 +38,6 @@ class Profile(Base):
     full_name = Column(String(255))
     phone = Column(String(20))
     avatar_url = Column(Text)
-<<<<<<< HEAD
     medical_info = Column(JSONB)  # Lưu tiền sử bệnh, dị ứng...
-=======
-    medical_info = Column(JSONB)  
->>>>>>> 8fd09fc486e1cae1b5f685143e9fe121221fff5f
-
     # Relationships
     user = relationship("User", back_populates="profile")

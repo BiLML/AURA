@@ -33,19 +33,12 @@ const Dashboard: React.FC = () => {
     const [hasViewedNotifications, setHasViewedNotifications] = useState(false);
 
     // --- STATE FORM ĐĂNG KÝ PHÒNG KHÁM ---
-<<<<<<< HEAD
-    // Refs
-=======
->>>>>>> 8fd09fc486e1cae1b5f685143e9fe121221fff5f
     const [clinicForm, setClinicForm] = useState({
         name: '', address: '', phone: '', license: '', description: ''
     });
     const [isSubmittingClinic, setIsSubmittingClinic] = useState(false);
     
-<<<<<<< HEAD
-=======
     // Refs
->>>>>>> 8fd09fc486e1cae1b5f685143e9fe121221fff5f
     const notificationRef = useRef<HTMLDivElement>(null);
     const profileRef = useRef<HTMLDivElement>(null);
 
