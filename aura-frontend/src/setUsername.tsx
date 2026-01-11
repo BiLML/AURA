@@ -45,7 +45,7 @@ const SetUsername = () => {
             }
 
             // Gửi cả username và password lên backend
-            const res = await fetch('http://127.0.0.1:8000/api/users/set-username', {
+            const res = await fetch('http://localhost:8000/api/v1/users/set-username', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

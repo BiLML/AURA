@@ -206,7 +206,7 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                 setAvailableDoctors(prev => prev.filter(d => d.id !== doctorId));
                 fetchDashboardData(); 
                 // 2. Tải lại danh sách tìm kiếm để cập nhật trạng thái nút bấm
-                searchDoctors(searchDocTerm);
+                alert("Thêm thành công!");
             } else {
                 alert("Lỗi khi thêm bác sĩ");
             }
@@ -252,7 +252,7 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                 if (res.ok) {
                     setAvailablePatients(prev => prev.filter(p => p.id !== patientId));
                     fetchDashboardData(); // Refresh dashboard
-                    searchPatients(searchPatientTerm); // Refresh modal list
+                    alert("Thêm thành công!");
                 }
             } catch (error) {
                 console.error(error);

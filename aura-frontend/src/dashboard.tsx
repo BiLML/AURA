@@ -123,6 +123,7 @@ const Dashboard: React.FC = () => {
 
                 return {
                     id: item.id,
+                    rawTimestamp: new Date(rawDate).getTime(),
                     date: new Date(rawDate).toLocaleDateString('vi-VN'),
                     time: new Date(rawDate).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
                     result: resultDisplay,
@@ -399,7 +400,17 @@ const Dashboard: React.FC = () => {
         const newState = !showNotifications;
         setShowNotifications(newState);
         setShowUserMenu(false);
-        if (newState) setHasViewedNotifications(true);
+        
+        if (newState) {
+            // Khi mở thông báo -> Lưu lại thời điểm hiện tại là "đã xem"
+            const now = new Date().getTime();
+            localStorage.setItem('last_viewed_notification', now.toString());
+            
+            // Cập nhật state để UI render lại ngay lập tức (ẩn chấm đỏ đi)
+            // Bạn có thể dùng một state dummy để trigger render nếu cần, 
+            // hoặc đơn giản là setHasViewedNotifications(true) như cũ để tạm ẩn.
+            setHasViewedNotifications(true); 
+        }
     };
 
     const getStatusColor = (status: string) => {
@@ -418,8 +429,17 @@ const Dashboard: React.FC = () => {
     }).length;
     
     const recentNotifications = historyData.slice(0, 5);
-    const serverHasUnread = recentNotifications.some(item => (item.status || "").toUpperCase() === 'COMPLETED');
-    const showRedDot = serverHasUnread && !hasViewedNotifications;
+    
+    // 1. Lấy thời gian chuẩn từ trường rawTimestamp (thay vì ghép chuỗi date + time dễ lỗi)
+    const latestNotificationTime = recentNotifications.length > 0 
+        ? recentNotifications[0].rawTimestamp 
+        : 0;
+
+    // 2. Lấy thời gian lần cuối người dùng bấm vào chuông
+    const lastViewedTime = parseInt(localStorage.getItem('last_viewed_notification') || '0');
+
+    // 3. So sánh
+    const showRedDot = latestNotificationTime > lastViewedTime;
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
 
     // --- RENDER CONTENT ---

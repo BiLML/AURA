@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    FaUserMd, FaHospital, FaBrain, FaSignOutAlt, FaSearch, 
-    FaCheck, FaTimes, FaUsers, FaUserShield, FaBell 
+    FaHospital, FaBrain, FaSignOutAlt, FaSearch, 
+    FaCheck, FaUsers, FaUserShield, FaBell 
 } from 'react-icons/fa';
 
 // --- INTERFACES ---
@@ -13,6 +13,11 @@ interface User {
     role: string;
     status: string;
     assigned_doctor_id: string | null;
+    profile?: {
+        full_name: string | null;
+        phone: string | null;
+        medical_info: any | null; // Vì model là JSONB
+    };
 }
 
 interface ClinicRequest {
@@ -253,46 +258,115 @@ const DashboardAdmin: React.FC = () => {
                                     </div>
                                 </div>
                                 <div style={styles.tableContainer}>
-                                    <table style={styles.table}>
-                                        <thead>
-                                            <tr>
-                                                <th style={styles.th}>USER</th>
-                                                <th style={styles.th}>LIÊN HỆ</th>
-                                                <th style={styles.th}>VAI TRÒ</th>
-                                                <th style={styles.th}>TRẠNG THÁI</th>
-                                                <th style={styles.th}>PHỤ TRÁCH</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {userList.map(u => (
-                                                <tr key={u.id} style={styles.tr}>
-                                                    <td style={styles.td}>
-                                                        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                                            <div style={styles.avatarSmall}>{u.username.charAt(0)}</div>
-                                                            <b>{u.username}</b>
-                                                        </div>
-                                                    </td>
-                                                    <td style={styles.td}>{u.email}</td>
-                                                    <td style={styles.td}>
-                                                        <span style={{
-                                                            ...styles.roleBadge, 
-                                                            background: u.role==='doctor' ? '#0ea5e9': u.role==='clinic' ? '#8b5cf6' : '#22c55e'
-                                                        }}>{u.role}</span>
-                                                    </td>
-                                                    <td style={styles.td}><span style={styles.statusActive}>Active</span></td>
-                                                    <td style={styles.td}>
-                                                        {u.assigned_doctor_id ? (
-                                                            <span style={styles.doctorTag}>
-                                                                <FaUserMd style={{marginRight:5}}/>
-                                                                {doctorList.find(d => d.id === u.assigned_doctor_id)?.username || 'Dr.'}
-                                                            </span>
-                                                        ) : <span style={{color:'#cbd5e1'}}>--</span>}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+    <table style={styles.table}>
+        <thead>
+            <tr>
+                {/* 1. Avatar */}
+                <th style={{...styles.th, width: '50px', textAlign:'center'}}>AVT</th>
+                {/* 2. Username */}
+                <th style={styles.th}>USERNAME</th>
+                {/* 3. Full Name (Tách riêng) */}
+                <th style={styles.th}>HỌ VÀ TÊN</th>
+                {/* 4. Gender (Lấy từ JSON) */}
+                <th style={styles.th}>GIỚI TÍNH</th>
+                {/* 5. Phone (Tách riêng) */}
+                <th style={styles.th}>SỐ ĐIỆN THOẠI</th>
+                {/* 6. Email (Tách riêng) */}
+                <th style={styles.th}>EMAIL</th>
+                {/* 7. Role */}
+                <th style={styles.th}>VAI TRÒ</th>
+                {/* 8. Status */}
+                <th style={styles.th}>TRẠNG THÁI</th>
+                {/* 9. Doctor */}
+                <th style={styles.th}>PHỤ TRÁCH</th>
+            </tr>
+        </thead>
+        <tbody>
+            {userList.map(u => {
+                // Xử lý an toàn để lấy Gender từ JSON (vì key có thể là 'gender', 'Gender', 'sex'...)
+                const info = u.profile?.medical_info || {};
+                // Tìm key nào chứa chữ gender/sex
+                const genderKey = Object.keys(info).find(k => k.toLowerCase().includes('gender') || k.toLowerCase().includes('sex'));
+                const genderVal = genderKey ? info[genderKey] : '--';
+
+                return (
+                    <tr key={u.id} style={styles.tr} 
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                        {/* 1. Avatar */}
+                        <td style={{...styles.td, textAlign:'center'}}>
+                             <div style={{
+                                width: '32px', height: '32px', borderRadius: '6px', // Hình vuông bo góc nhẹ giống mẫu
+                                backgroundColor: '#f1f5f9', color: '#64748b',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '12px', fontWeight: 'bold', margin: '0 auto'
+                            }}>
+                                {u.username.charAt(0).toUpperCase()}
+                            </div>
+                        </td>
+
+                        {/* 2. Username */}
+                        <td style={styles.td}>
+                            <span style={{fontWeight:'600', color:'#0f172a'}}>{u.username}</span>
+                        </td>
+
+                        {/* 3. Full Name */}
+                        <td style={styles.td}>
+                            {u.profile?.full_name ? (
+                                <span style={{color:'#334155'}}>{u.profile.full_name}</span>
+                            ) : (
+                                <span style={{color:'#cbd5e1', fontStyle:'italic'}}>Chưa cập nhật</span>
+                            )}
+                        </td>
+
+                        {/* 4. Gender (Cột mới giống hình mẫu) */}
+                        <td style={styles.td}>
+                            <span style={{textTransform:'capitalize'}}>
+                                {String(genderVal)}
+                            </span>
+                        </td>
+
+                        {/* 5. Phone */}
+                        <td style={styles.td}>
+                            {u.profile?.phone || <span style={{color:'#cbd5e1'}}>--</span>}
+                        </td>
+
+                        {/* 6. Email */}
+                        <td style={styles.td}>{u.email}</td>
+
+                        {/* 7. Role */}
+                        <td style={styles.td}>
+                            <span style={{
+                                ...styles.roleBadge, 
+                                background: u.role==='doctor' ? '#e0f2fe': u.role==='clinic' ? '#f3e8ff' : '#dcfce7',
+                                color: u.role==='doctor' ? '#0369a1': u.role==='clinic' ? '#7e22ce' : '#15803d',
+                                border: '1px solid transparent' // Style phẳng nhẹ nhàng hơn
+                            }}>{u.role}</span>
+                        </td>
+
+                        {/* 8. Status */}
+                        <td style={styles.td}>
+                            <div style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                                <div style={{width:6, height:6, borderRadius:'50%', background:'#22c55e'}}></div>
+                                <span>Active</span>
+                            </div>
+                        </td>
+                        
+                        {/* 9. Doctor */}
+                        <td style={styles.td}>
+                             {u.assigned_doctor_id ? (
+                                <span style={{color:'#0ea5e9', fontWeight:'500', fontSize:'12px'}}>
+                                    Dr. {doctorList.find(d => d.id === u.assigned_doctor_id)?.username}
+                                </span>
+                            ) : <span style={{color:'#cbd5e1'}}>--</span>}
+                        </td>
+                    </tr>
+                );
+            })}
+        </tbody>
+    </table>
+</div>
                             </>
                         )}
 
@@ -464,11 +538,47 @@ const styles: { [key: string]: React.CSSProperties } = {
     searchContainer: { display: 'flex', alignItems: 'center', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '8px', fontSize: '14px', width: '220px', color:'#334155' },
 
-    tableContainer: { width:'100%', overflowX:'auto' },
-    table: { width: '100%', borderCollapse: 'collapse', fontSize: '14px' },
-    th: { textAlign: 'left', padding: '16px 24px', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '11px', fontWeight: '700', backgroundColor: '#f8fafc', whiteSpace:'nowrap', textTransform:'uppercase' },
-    tr: { borderBottom: '1px solid #f1f5f9' },
-    td: { padding: '16px 24px', verticalAlign: 'middle', color: '#334155' },
+    tableContainer: { 
+        width: '100%', 
+        overflowX: 'auto', // Cho phép cuộn ngang
+        borderTop: '1px solid #e2e8f0',
+        backgroundColor: 'white'
+    },
+    table: { 
+        width: '100%', 
+        borderCollapse: 'separate', 
+        borderSpacing: 0,
+        fontSize: '13px', // Chữ nhỏ hơn xíu cho gọn giống hình mẫu
+        fontFamily: 'Inter, sans-serif'
+    },
+    th: { 
+        textAlign: 'left', 
+        padding: '12px 16px', 
+        borderBottom: '1px solid #e2e8f0', 
+        color: '#64748b', 
+        fontSize: '12px', 
+        fontWeight: '600', 
+        backgroundColor: '#f8fafc', 
+        whiteSpace: 'nowrap', // QUAN TRỌNG: Không xuống dòng tiêu đề
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+    },
+    tr: { 
+        transition: 'background 0.2s',
+        cursor: 'pointer' // Hiệu ứng chỉ tay
+    },
+    td: { 
+        padding: '12px 16px', 
+        verticalAlign: 'middle', 
+        color: '#334155', 
+        borderBottom: '1px solid #f1f5f9',
+        whiteSpace: 'nowrap' // QUAN TRỌNG: Dữ liệu luôn trên 1 dòng
+    },
+    
+    // Thêm style hover cho row giống excel
+    trHover: {
+        backgroundColor: '#f8fafc'
+    },
     
     // 6. UI ELEMENTS
     avatarSmall: { width: '24px', height: '24px', borderRadius: '50%', background:'#e2e8f0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'bold', color:'#64748b' },

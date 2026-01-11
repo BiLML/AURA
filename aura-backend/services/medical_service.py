@@ -119,10 +119,37 @@ class MedicalService:
     
     # Giữ lại các hàm GET
     def get_records_by_user(self, user_id: UUID, skip: int = 0, limit: int = 100):
-        return self.repo.get_records_by_uploader(user_id, skip, limit)
+        
+        # Truyền skip, limit xuống repo
+        records = self.repo.get_by_patient_id(user_id, skip=skip, limit=limit)
+
+        # --- ĐOẠN CHECK KẾT QUẢ BÁC SĨ (Giữ nguyên logic cũ của bạn) ---
+        for record in records:
+            if record.analysis_result:
+                val = record.analysis_result.doctor_validation
+                if val and val.doctor_confirm:
+                    record.analysis_result.risk_level = val.doctor_confirm
+        # ---------------------------------------------------------------
+
+        return records
         
     def get_all_records(self, skip: int = 0, limit: int = 100):
         return self.repo.get_all_records(skip, limit)
 
-    def get_record_by_id(self, record_id: int):
-        return self.repo.get_record_by_id(record_id)
+    def get_record_by_id(self, record_id: int): # Lưu ý: kiểu dữ liệu record_id có thể là str hoặc int tùy setup, tốt nhất là khớp với repo
+        # 1. Lấy record từ Repo
+        record = self.repo.get_record_by_id(record_id)
+        
+        # 2. [THÊM MỚI] Kiểm tra và ghi đè kết quả nếu Bác sĩ đã chốt
+        if record and record.analysis_result:
+            val = record.analysis_result.doctor_validation
+            
+            # Nếu có validation và đã có kết luận cuối cùng
+            if val and val.doctor_confirm:
+                # Ghi đè để Frontend hiển thị kết quả cuối cùng này
+                record.analysis_result.risk_level = val.doctor_confirm
+                
+                # (Tùy chọn) Bạn có thể gán thêm cờ để Frontend biết đây là kết quả của bác sĩ
+                # record.analysis_result.ai_version = "Doctor Verified" 
+
+        return record

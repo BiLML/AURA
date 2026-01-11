@@ -79,32 +79,52 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) { alert("Vui lòng đăng nhập lại"); return; }
 
+        // 1. Lấy record_id từ patientId đang chọn
+        // (Form chọn Patient, nhưng API cần Record ID của lần khám mới nhất)
+        const selectedP = patientsData.find(p => String(p.id) === String(reportForm.patientId));
+        const recordId = selectedP?.latest_scan?.record_id;
+
+        if (!recordId) {
+            alert("Bệnh nhân này chưa có hồ sơ khám bệnh để chẩn đoán!");
+            return;
+        }
+
         try {
-            const res = await fetch('http://localhost:8000/api/v1/reports', { 
-                method: 'POST', 
+            // GỌI ĐÚNG API PUT MÀ BẠN ĐÃ VIẾT TRONG DOCTOR.PY
+            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${recordId}/diagnose`, { 
+                method: 'PUT', 
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    patient_id: reportForm.patientId,
-                    ai_result: reportForm.aiResult,
+                    // Chỉ gửi 2 trường mà Backend (DoctorDiagnosisUpdate) yêu cầu
                     doctor_diagnosis: reportForm.doctorDiagnosis,
-                    accuracy: reportForm.accuracy,
-                    notes: reportForm.notes
+                    doctor_notes: reportForm.notes
+                    
+                    // Lưu ý: Các trường 'accuracy', 'aiResult' chỉ để hiển thị UI, 
+                    // không cần gửi lên nếu Backend không nhận.
                 })
             });
 
             if (res.ok) {
-                alert("Đã gửi báo cáo thành công! Cảm ơn đóng góp của bạn.");
+                alert("Đã cập nhật chẩn đoán thành công!");
                 setShowReportModal(false);
                 setReportForm({ ...reportForm, doctorDiagnosis: '', notes: '' });
-                fetchMyReports();
+                
+                // Refresh lại dữ liệu để cập nhật bảng bên ngoài
+                // (Gọi lại fetchPatients hoặc reload page tùy bạn)
+                const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (patientsRes.ok) { 
+                    const data = await patientsRes.json(); 
+                    setPatientsData(data.patients || []); 
+                }
             } else {
                 const err = await res.json();
-                alert("Lỗi: " + (err.detail || "Không thể gửi báo cáo"));
+                alert("Lỗi: " + (err.detail || "Không thể lưu chẩn đoán"));
             }
         } catch (error) {
+            console.error(error);
             alert("Lỗi kết nối server!");
         }
     };
@@ -161,21 +181,47 @@ const DashboardDr: React.FC = () => {
         if (!token) return;
         try {
             // SỬA: Endpoint /api/records/patient/{id}
-            const res = await fetch(`http://localhost:8000/api/v1/records/patient/${patientId}`, {
+            const res = await fetch(`http://localhost:8000/api/v1/doctor/patients/${patientId}/history`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
                 // SỬA: Mapping dữ liệu mới
-                const records = (data.records || data || []).map((r: any) => ({
-                    id: r.id,
-                    date: new Date(r.upload_date).toLocaleDateString('vi-VN'),
-                    result: r.ai_result || "Đang phân tích...", // Map ai_result -> result để hiển thị
-                    status: r.ai_analysis_status
-                }));
+                const records = (Array.isArray(data) ? data : []).map((r: any) => {
+                    
+                    // 1. Xử lý hiển thị kết quả (Ưu tiên bác sĩ sửa -> AI -> Mặc định)
+                    let displayResult = "Đang phân tích...";
+                    
+                    // Nếu có object analysis_result (từ schema ImageResponse)
+                    if (r.analysis_result) {
+                        // Nếu bác sĩ đã chẩn đoán (nếu backend có trả về field này trong analysis_result)
+                        if (r.analysis_result.doctor_diagnosis) {
+                             displayResult = r.analysis_result.doctor_diagnosis;
+                        } 
+                        // Nếu không thì lấy kết quả AI
+                        else if (r.analysis_result.risk_level) {
+                            displayResult = r.analysis_result.risk_level;
+                        }
+                    }
+
+                    return {
+                        id: r.id,
+                        // 2. Sửa tên trường ngày: dùng 'created_at' thay vì 'upload_date'
+                        date: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : 'N/A',
+                        result: displayResult,
+                        // Kiểm tra status dựa trên việc có kết quả hay chưa
+                        status: r.analysis_result ? "COMPLETED" : "PENDING"
+                    };
+                });
+                // ------------------------------------------
+
                 setHistoryRecords(records); 
             }
-        } catch (error) { console.error(error); } finally { setHistoryLoading(false); }
+        } catch (error) { 
+            console.error(error); 
+        } finally { 
+            setHistoryLoading(false); 
+        }
     };
 
     const fetchMessageHistory = async (partnerId: string) => {
@@ -495,7 +541,7 @@ const DashboardDr: React.FC = () => {
                                     <h3 style={{...styles.pageTitle, color: '#c0392b'}}>⚠️ Hồ sơ cần xem xét ({totalPending})</h3>
                                 </div>
                                 <table style={styles.table}>
-                                    <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Hành động</th></tr></thead>
+                                    <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả gần nhất</th><th style={styles.th}>Chi tiết</th></tr></thead>
                                     <tbody>
                                         {pendingRecords.length === 0 ? (
                                             <tr><td colSpan={4} style={styles.emptyCell}>Tuyệt vời! Không có hồ sơ nào cần xử lý gấp.</td></tr>
@@ -507,7 +553,7 @@ const DashboardDr: React.FC = () => {
                                                     <td style={styles.td}><span style={{color:'#e74c3c', fontWeight:'bold'}}>{item.aiResult}</span></td>
                                                     <td style={styles.td}>
                                                         {/* SỬA: Link tới AnalysisResult (thay vì /result/) */}
-                                                        <button onClick={() => navigate(`/analysis-result/${item.id}`)} style={styles.primaryBtnSm}>
+                                                        <button onClick={() => navigate(`/doctor/analysis/${item.id}`)} style={styles.primaryBtnSm}>
                                                             <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
                                                         </button>
                                                     </td>
@@ -528,13 +574,15 @@ const DashboardDr: React.FC = () => {
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <div style={styles.searchBox}>
                                         <FaSearch color="#999" />
-                                        <input style={styles.searchInput} placeholder="Tìm tên, SĐT..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
+                                        <input style={styles.searchInput} placeholder="Tìm kiếm bằng tên/ID" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                                     </div>
                                     <select style={styles.selectInput} value={riskFilter} onChange={e=>setRiskFilter(e.target.value)}>
                                         <option value="ALL">Tất cả mức độ</option>
-                                        <option value="SEVERE">Nguy hiểm</option>
-                                        <option value="MODERATE">Trung bình</option>
-                                        <option value="SAFE">Bình thường</option>
+                                        <option value="PDR">PDR</option>
+                                        <option value="Severe NPDR">Severe NPDR</option>
+                                        <option value="Moderate NPDR">Moderate NPDR</option>
+                                        <option value="Mild NPDR (Early Signs)">Mild NPDR (Early Signs)</option>
+                                        <option value="Normal">Normal</option>
                                     </select>
                                 </div>
                             </div>
@@ -545,9 +593,25 @@ const DashboardDr: React.FC = () => {
                                         const matchName = (p.full_name||p.userName).toLowerCase().includes(searchTerm.toLowerCase());
                                         const res = (p.latest_scan?.ai_result || '').toLowerCase(); // SỬA: ai_result
                                         let matchRisk = true;
-                                        if (riskFilter === 'SEVERE') matchRisk = res.includes('nặng') || res.includes('severe');
-                                        if (riskFilter === 'MODERATE') matchRisk = res.includes('trung bình') || res.includes('moderate');
-                                        if (riskFilter === 'SAFE') matchRisk = res.includes('bình thường') || res.includes('normal');
+                                        if (riskFilter === 'ALL') {
+                                            matchRisk = true;
+                                        } 
+                                        else if (riskFilter === 'Normal') {
+                                            matchRisk = res.includes('normal') || res.includes('bình thường') || res.includes('no dr');
+                                        }
+                                        else if (riskFilter === 'Mild NPDR (Early Signs)') {
+                                            matchRisk = res.includes('mild') || res.includes('nhẹ');
+                                        }
+                                        else if (riskFilter === 'Moderate NPDR') {
+                                            matchRisk = res.includes('moderate') || res.includes('trung bình');
+                                        }
+                                        else if (riskFilter === 'Severe NPDR') {
+                                            matchRisk = res.includes('severe') || res.includes('nặng');
+                                        }
+                                        else if (riskFilter === 'PDR') {
+                                            matchRisk = res.includes('pdr');
+                                        }
+
                                         return matchName && matchRisk;
                                     }).map(p => (
                                         <tr key={p.id} style={styles.tr}>
@@ -850,7 +914,7 @@ const DashboardDr: React.FC = () => {
                                                 <td style={styles.td}>{r.date}</td>
                                                 <td style={styles.td}><b style={{color: (r.result||"").includes('Nặng')?'red':'green'}}>{r.result}</b></td>
                                                 <td style={styles.td}>
-                                                    <button onClick={()=>navigate(`/analysis-result/${r.id}`)} style={styles.primaryBtnSm}>Xem</button>
+                                                    <button onClick={()=>navigate(`/doctor/analysis/${r.id}`)} style={styles.primaryBtnSm}>Xem</button>
                                                 </td>
                                             </tr>
                                         )) : <tr><td colSpan={3} style={styles.emptyCell}>Chưa có lịch sử khám</td></tr>}

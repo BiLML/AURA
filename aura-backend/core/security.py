@@ -11,16 +11,18 @@ from core.database import get_db
 from models.users import User 
 
 # Cấu hình Secret Key (Đảm bảo giống file .env nếu có)
-SECRET_KEY = os.getenv("SECRET_KEY", "secret_mac_dinh_khong_dung_cho_production")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-
+SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("LỖI BẢO MẬT: Không tìm thấy SECRET_KEY trong biến môi trường (.env)")
 
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+
+
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # URL này phải khớp với đường dẫn API login trong auth.py
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login") 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)

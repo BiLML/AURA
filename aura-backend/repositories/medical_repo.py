@@ -75,3 +75,17 @@ class MedicalRepository:
     def get_record_by_id(self, record_id: str):
         # Lấy chi tiết một ảnh kèm kết quả phân tích
         return self.db.query(RetinalImage).filter(RetinalImage.id == record_id).first()
+    
+    def get_by_patient_id(self, user_id: str, skip: int = 0, limit: int = 100):
+        """
+        Lấy danh sách ảnh dựa trên User ID của bệnh nhân
+        """
+        return (
+            self.db.query(RetinalImage)
+            .join(Patient, RetinalImage.patient_id == Patient.id)
+            .filter(Patient.user_id == user_id)
+            .order_by(RetinalImage.created_at.desc())
+            .offset(skip)  # Bây giờ biến skip đã hợp lệ
+            .limit(limit)  # Bây giờ biến limit đã hợp lệ
+            .all()
+        )

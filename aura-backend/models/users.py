@@ -37,7 +37,7 @@ class Profile(Base):
     full_name = Column(String(255))
     phone = Column(String(20))
     avatar_url = Column(Text)
-    medical_info = Column(JSONB)  # Lưu tiền sử bệnh, dị ứng...
+    medical_info = Column(JSONB)  
 
     # Relationships
     user = relationship("User", back_populates="profile")

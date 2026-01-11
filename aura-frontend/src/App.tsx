@@ -14,6 +14,7 @@ import ProfilePage from './ProfilePage';
 import ProfileDr from './ProfileDr';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
+import DoctorAnalysis from './DoctorAnalysis';
 
 // --- HÀM HỖ TRỢ ĐỌC ROLE TỪ LOCAL STORAGE (GIỮ NGUYÊN) ---
 const getUserRoleFromStorage = () => {
@@ -78,6 +79,7 @@ const App: React.FC = () => {
                     <Route path="/admin" element={<DashboardAdmin />} />
                     <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
                     <Route path="/dashboarddr" element={<ProtectedRoute element={<DashboardDr />} />} />
+                    <Route path="/doctor/analysis/:id" element={<DoctorAnalysis />} />
                     <Route path="/profile-dr" element={<ProtectedRoute element={<ProfileDr />} />} />
                     <Route path="/upload" element={<ProtectedRoute element={<Upload />} />} />
                     <Route path="/analysis-result/:id" element={<ProtectedRoute element={<Analysis />} />} />

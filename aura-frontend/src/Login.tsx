@@ -40,7 +40,7 @@ const Login = () => {
     const loginWithGoogle = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/auth/google-login', {
+                const response = await fetch('http://localhost:8000/api/v1/auth/google-login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: tokenResponse.access_token }),
@@ -58,7 +58,7 @@ const Login = () => {
     // --- 3. LOGIC FACEBOOK (MỚI) ---
     const handleFacebookResponse = async (response: any) => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/v1/auth/facebook-login', {
+            const res = await fetch('http://localhost:8000/api/v1/auth/facebook-login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

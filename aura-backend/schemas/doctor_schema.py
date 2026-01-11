@@ -18,3 +18,12 @@ class PatientResponse(BaseModel):
 
 class MyPatientsResponse(BaseModel):
     patients: List[PatientResponse]
+
+class DoctorDiagnosisUpdate(BaseModel):
+    doctor_diagnosis: str          # Kết luận của bác sĩ
+    doctor_notes: Optional[str] = None # Ghi chú chi tiết
+
+class DoctorDiagnosisRequest(BaseModel):
+    doctor_diagnosis: str          # Sẽ lưu vào feedback_for_ai
+    doctor_notes: Optional[str] = ""
+    is_correct: bool = True        # Mặc định là AI đúng

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Any, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from models.enums import UserRole, UserStatus
 
 # --- Base & Profile Schemas ---
@@ -48,7 +48,7 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    age: Optional[Any] = None       # Để Any vì frontend có thể gửi string/int
+    date_of_birth: Optional[date] = None       # Để Any vì frontend có thể gửi string/int
     hometown: Optional[str] = None
     insurance_id: Optional[str] = None
     height: Optional[Any] = None
@@ -58,3 +58,21 @@ class UserProfileUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+class GoogleLoginSchema(BaseModel):
+    token: str
+
+class UserUpdateCredentials(BaseModel):
+    new_username: str
+    new_password: str
+
+class FacebookLoginSchema(BaseModel):
+    accessToken: str
+    userID: str
+
+class ForgotPasswordSchema(BaseModel):
+    email: EmailStr
+
+class ResetPasswordSchema(BaseModel):
+    token: str
+    new_password: str

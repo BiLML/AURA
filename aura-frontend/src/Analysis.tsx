@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-
 // Định nghĩa kiểu dữ liệu chuẩn cho Frontend
 interface MedicalRecord {
     id: number;
@@ -21,9 +20,6 @@ const AnalysisResult: React.FC = () => {
     const [data, setData] = useState<MedicalRecord | null>(null);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated'); 
-    const [isDoctor, setIsDoctor] = useState(false);
-    const [doctorNote, setDoctorNote] = useState('');
-    const [isSavingNote, setIsSavingNote] = useState(false);
 
     // --- HÀM MỚI: CHUẨN HÓA DỮ LIỆU (ĐÃ UPDATE CHO KHỚP BACKEND PYTHON) ---
     const normalizeData = (rawData: any): MedicalRecord => {
@@ -59,17 +55,12 @@ const AnalysisResult: React.FC = () => {
 
         return {
             id: rawData.id || 0,
-            
-            // Ưu tiên tìm risk_level (tên cột trong DB), sau đó đến diagnosis_result
-            ai_result: analysisData.risk_level || rawData.ai_result || rawData.diagnosis_result || "",
-            
+            ai_result: analysisData.risk_level || rawData.ai_result || rawData.diagnosis_result || "Unknown",
             ai_detailed_report: analysisData.ai_detailed_report || rawData.ai_detailed_report || rawData.detailed_risk || "",
-            
             annotated_image_url: analysisData.annotated_image_url || rawData.annotated_image_url || null,
             image_url: rawData.image_url || rawData.original_image_url || "",
-            
             upload_date: rawData.upload_date || rawData.created_at || new Date().toISOString(),
-            doctor_note: rawData.doctor_note || null,
+            doctor_note: rawData.doctor_diagnosis || rawData.doctor_note || analysisData.doctor_diagnosis || null,
             ai_analysis_status: rawData.ai_analysis_status || "COMPLETED"
         };
     };
@@ -93,160 +84,71 @@ const AnalysisResult: React.FC = () => {
     const fetchData = useCallback(async () => {
         const token = localStorage.getItem('token');
         
-        // 1. ƯU TIÊN DỮ LIỆU TỪ TRANG UPLOAD CHUYỂN SANG
+        // 1. Dữ liệu từ trang Upload chuyển sang
         if (location.state && location.state.result && !data) {
-            console.log("📥 Nhận dữ liệu từ Upload:", location.state.result);
-            // Chuẩn hóa dữ liệu ngay lập tức
             const normalized = normalizeData(location.state.result);
             setData(normalized);
             setLoading(false);
-            
-            // Nếu dữ liệu chuyển sang chưa có ID (ví dụ mới phân tích xong chưa lưu DB), 
-            // có thể bỏ qua bước check role hoặc check riêng.
+            return;
         }
 
-        try {
-            // Check Role Bác sĩ (giữ nguyên logic của bạn)
-            if (token) {
-                const userRes = await fetch('http://localhost:8000/api/v1/users/me', { 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                });
-                if (userRes.ok) {
-                    const userData = await userRes.json();
-                    const role = userData.role || (userData.user_info && userData.user_info.role) || '';
-                    setIsDoctor(role.toUpperCase() === 'DOCTOR');
-                }
-            }
-
-            // 2. NẾU KHÔNG CÓ DATA TỪ LOCATION, GỌI API LẤY CHI TIẾT
-            if (!location.state?.result && id) {
+        // 2. Gọi API lấy chi tiết
+        if (id) {
+            try {
                 const res = await fetch(`http://localhost:8000/api/v1/medical-records/${id}`, {
                     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                 });
-
                 if (res.ok) {
                     const resultRaw = await res.json();
-                    console.log("📥 Dữ liệu từ API:", resultRaw);
-                    const normalized = normalizeData(resultRaw); // Chuẩn hóa
-                    setData(normalized);
-                    if (normalized.doctor_note) setDoctorNote(normalized.doctor_note);
-                } else {
-                    console.error("Không tìm thấy hồ sơ");
+                    setData(normalizeData(resultRaw));
                 }
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
+            } catch (err) { console.error(err); } finally { setLoading(false); }
         }
-    }, [id, location.state]); // Bỏ data khỏi dependency để tránh loop
+    }, [id, location.state]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
-    const handleSaveDoctorNote = async () => {
-        if (!doctorNote.trim() || !id) return; // Cần ID để lưu
-        const token = localStorage.getItem('token');
-        setIsSavingNote(true);
-        try {
-            const res = await fetch(`http://localhost:8000/api/v1/records/${id}/note`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ doctor_note: doctorNote })
-            });
-            if (res.ok) {
-                alert("Đã lưu ghi chú bác sĩ!");
-                if (data) setData({ ...data, doctor_note: doctorNote });
-            } else {
-                alert("Lỗi khi lưu ghi chú.");
-            }
-        } catch (error) {
-            alert("Lỗi kết nối Server.");
-        } finally {
-            setIsSavingNote(false);
-        }
-    };
-
-    if (loading) return <div style={styles.loadingScreen}><div style={styles.spinner}></div></div>;
-    if (!data) return <div style={{padding: 40, textAlign: 'center'}}>Không tìm thấy dữ liệu hoặc đang chờ xử lý...</div>;
+    if (loading) return <div style={styles.loadingScreen}>Đang tải...</div>;
+    if (!data) return <div style={{padding: 40, textAlign: 'center'}}>Không tìm thấy dữ liệu.</div>;
 
     const severity = getSeverityInfo(data.ai_result);
-    
-    // Logic hiển thị ảnh an toàn hơn
-    const imageUrl = (viewMode === 'annotated' && data.annotated_image_url) 
-        ? data.annotated_image_url 
-        : data.image_url;
-    
-    // Fix lỗi Invalid Date
-    const formattedDate = !isNaN(Date.parse(data.upload_date)) 
-        ? new Date(data.upload_date).toLocaleString('vi-VN') 
-        : "Vừa xong";
+    const imageUrl = (viewMode === 'annotated' && data.annotated_image_url) ? data.annotated_image_url : data.image_url;
+    const formattedDate = new Date(data.upload_date).toLocaleString('vi-VN');
 
     return (
         <div style={styles.container}>
-            <button onClick={() => navigate(-1)} style={styles.backBtn}>&larr; Quay lại</button>
+            <button onClick={() => navigate('/dashboard')} style={styles.backBtn}>&larr; Quay lại</button>
             
             <div style={styles.card}>
                 <div style={styles.header}>
                     <div>
-                        <h2 style={{margin: 0, fontSize: '24px', color: '#333'}}>Kết quả phân tích AURA</h2>
-                        <p style={{margin: '5px 0 0 0', color: '#666', fontSize: '14px'}}>Mã hồ sơ: #{data.id || 'N/A'}</p>
+                        <h2 style={{margin: 0, color: '#333'}}>Kết quả phân tích AURA</h2>
+                        <p style={{margin: '5px 0 0 0', color: '#666'}}>Mã hồ sơ: #{data.id}</p>
                     </div>
-
                     <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
                         <span style={styles.dateBadge}>{formattedDate}</span>
-                        <span style={{
-                            ...styles.dateBadge, 
-                            backgroundColor: '#d4edda',
-                            color: '#155724'
-                        }}>
-                            {data.ai_analysis_status}
-                        </span>
                     </div>
                 </div>
 
                 <div style={styles.contentGrid}>
-                    {/* CỘT TRÁI: ẢNH */}
+                    {/* CỘT TRÁI: ẢNH (Giữ nguyên) */}
                     <div style={styles.leftColumn}>
                         <div style={styles.imageContainer}>
-                            {/* Thêm xử lý fallback nếu ảnh lỗi */}
-                            <img 
-                                src={imageUrl} 
-                                alt="Retina Scan" 
-                                style={styles.image} 
-                                onError={(e) => {e.currentTarget.src = 'https://via.placeholder.com/400?text=Image+Error'}}
-                            />
-                            
+                            <img src={imageUrl} alt="Scan" style={styles.image} onError={(e) => {e.currentTarget.src = 'https://via.placeholder.com/400'}}/>
                             {data.annotated_image_url && (
                                 <div style={styles.toggleContainer}>
-                                    <button 
-                                        onClick={() => setViewMode('original')}
-                                        style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}
-                                    >
-                                        Ảnh gốc
-                                    </button>
-                                    <button 
-                                        onClick={() => setViewMode('annotated')}
-                                        style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}
-                                    >
-                                        AI Chẩn đoán
-                                    </button>
+                                    <button onClick={() => setViewMode('original')} style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}>Ảnh gốc</button>
+                                    <button onClick={() => setViewMode('annotated')} style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}>AI Chẩn đoán</button>
                                 </div>
                             )}
                         </div>
-
                         {viewMode === 'annotated' && (
                             <div style={styles.legendBox}>
-                                <h4 style={{margin: '0 0 10px 0', fontSize: '13px', textTransform: 'uppercase', color: '#555'}}>Chú giải tổn thương:</h4>
                                 <div style={styles.legendGrid}>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết (Hemorrhages)</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết (Exudates)</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: '#00ff00'}}></span>Mạch máu (Vessels)</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Gai thị (Optic Disc)</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
                                 </div>
                             </div>
                         )}
@@ -256,59 +158,34 @@ const AnalysisResult: React.FC = () => {
                     <div style={styles.rightColumn}>
                         <div style={styles.resultBox}>
                             <label style={styles.label}>Tình trạng võng mạc:</label>
-                            <h1 style={{color: severity.color, margin: '5px 0 15px 0', fontSize: '28px'}}>
-                                {data.ai_result || "Đang phân tích..."}
-                            </h1>
-                            
+                            <h1 style={{color: severity.color, margin: '5px 0 15px 0'}}>{data.ai_result}</h1>
                             <div style={{backgroundColor: severity.bg, padding: '15px', borderRadius: '8px', borderLeft: `4px solid ${severity.color}`}}>
-                                <p style={{margin: 0, color: '#333', fontSize: '15px', fontWeight: '500'}}>
-                                    {severity.advice}
-                                </p>
+                                <p style={{margin: 0, fontWeight: '500'}}>{severity.advice}</p>
                             </div>
                         </div>
+
+                        {/* HIỂN THỊ KẾT LUẬN CỦA BÁC SĨ (READ-ONLY) */}
+                        {data.doctor_note ? (
+                            <div style={{marginTop: '10px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9'}}>
+                                <h4 style={{margin: '0 0 8px 0', fontSize: '15px', color: '#0d47a1'}}>👨‍⚕️ Kết luận của Bác sĩ:</h4>
+                                <p style={{margin: 0, fontSize: '15px', fontWeight: '500', color: '#1565c0'}}>
+                                    {data.doctor_note}
+                                </p>
+                            </div>
+                        ) : (
+                            <div style={{marginTop: '10px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px', border: '1px dashed #ccc', color: '#777', fontStyle: 'italic'}}>
+                                Chưa có đánh giá từ bác sĩ chuyên khoa.
+                            </div>
+                        )}
 
                         <div style={styles.analysisDetails}>
                             <h4 style={{color: '#0056b3', borderBottom: '1px solid #eee', paddingBottom: '8px', marginTop: 0}}>
-                                📊 Báo cáo phân tích rủi ro & Chi tiết:
+                                📊 Chi tiết phân tích AI:
                             </h4>
-                            <div style={{
-                                whiteSpace: 'pre-line', 
-                                lineHeight: '1.6', 
-                                color: '#444', 
-                                fontSize: '14px',
-                                maxHeight: '400px',
-                                overflowY: 'auto'
-                            }}>
-                                {data.ai_detailed_report || <i style={{color: '#888'}}>Đang tải báo cáo...</i>}
+                            <div style={{whiteSpace: 'pre-line', lineHeight: '1.6', color: '#444', fontSize: '14px', maxHeight: '300px', overflowY: 'auto'}}>
+                                {data.ai_detailed_report}
                             </div>
                         </div>
-
-                        {isDoctor && (
-                            <div style={styles.doctorArea}>
-                                <h4 style={{fontSize: '14px', marginBottom: '10px'}}>📝 Ghi chú của Bác sĩ:</h4>
-                                <textarea
-                                    value={doctorNote}
-                                    onChange={(e) => setDoctorNote(e.target.value)}
-                                    style={styles.textArea}
-                                    rows={3}
-                                    placeholder="Nhập chẩn đoán bổ sung..."
-                                />
-                                <button 
-                                    onClick={handleSaveDoctorNote} 
-                                    style={styles.saveBtn} 
-                                    disabled={isSavingNote}
-                                >
-                                    {isSavingNote ? 'Đang lưu...' : 'Lưu ghi chú'}
-                                </button>
-                            </div>
-                        )}
-                        
-                        {!isDoctor && data.doctor_note && (
-                            <div style={{marginTop: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px dashed #ccc'}}>
-                                <h4 style={{margin: '0 0 5px 0', fontSize: '14px'}}>👨‍⚕️ Lời dặn bác sĩ:</h4>
-                                <p style={{margin: 0, fontStyle: 'italic'}}>{data.doctor_note}</p>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

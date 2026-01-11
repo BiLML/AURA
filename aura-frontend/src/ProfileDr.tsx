@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUserMd, FaPhone, FaEnvelope, FaMapMarkerAlt, FaVenusMars, FaSave, FaArrowLeft, FaCamera, FaSpinner } from 'react-icons/fa';
+import { 
+    FaUserMd, FaPhone, FaEnvelope, FaMapMarkerAlt, 
+    FaVenusMars, FaSave, FaArrowLeft, FaCamera, 
+    FaSpinner, FaBirthdayCake, FaHome 
+} from 'react-icons/fa';
 
 const ProfileDr: React.FC = () => {
     const navigate = useNavigate();
@@ -11,87 +15,89 @@ const ProfileDr: React.FC = () => {
     const [message, setMessage] = useState({ type: '', content: '' });
     const [isSaving, setIsSaving] = useState(false);
 
-    // Dữ liệu profile
+    // 1. CẬP NHẬT STATE: Thêm hometown
     const [profile, setProfile] = useState({
-        username: '', // Sửa userName -> username (snake_case)
+        username: '', 
         full_name: '',
         email: '',
         phone: '',
+        date_of_birth: '', 
+        hometown: '', // Thêm trường quê quán
         gender: '',
         nationality: '',
         role: 'doctor'
     });
 
-    // --- 1. LẤY DỮ LIỆU TỪ SERVER ---
+    // --- LẤY DỮ LIỆU TỪ SERVER ---
     useEffect(() => {
-    const fetchProfile = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) { navigate('/login'); return; }
+        const fetchProfile = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) { navigate('/login'); return; }
 
-        try {
-            const res = await fetch('http://localhost:8000/api/v1/users/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                
-                // Xử lý dữ liệu phẳng hoặc lồng nhau
-                const info = data.user_info || data;
-                
-                // SỬA 1: Logic lấy profile an toàn (giống trang User)
-                const userProfile = info.profile || {};
-
-                // SỬA 2: Chuyển role về chữ hoa để so sánh chính xác
-                if (info.role?.toUpperCase() !== 'DOCTOR') {
-                    console.warn("User role:", info.role); // Debug nếu cần
-                    navigate('/dashboard'); 
-                    return;
-                }
-
-                setProfile({
-                    username: info.username || info.userName || '',
-                    // SỬA 3: Tìm full_name ở cả 2 nơi
-                    full_name: info.full_name || userProfile.full_name || '',
-                    email: info.email || '',
-                    phone: info.phone || userProfile.phone || '',
-                    gender: info.gender || userProfile.gender || 'Nam',
-                    nationality: info.nationality || userProfile.nationality || 'Việt Nam',
-                    role: info.role
+            try {
+                const res = await fetch('http://localhost:8000/api/v1/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-            } else {
-                if (res.status === 401) navigate('/login');
-            }
-        } catch (error) {
-            console.error("Lỗi tải hồ sơ:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    fetchProfile();
-}, [navigate]);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    const info = data.user_info || data;
+                    const userProfile = info.profile || {};
+                    const medical = userProfile.medical_info || {};
 
-    // --- 2. LƯU DỮ LIỆU ---
+                    if (info.role?.toUpperCase() !== 'DOCTOR') {
+                        navigate('/dashboard'); 
+                        return;
+                    }
+
+                    // 2. CẬP NHẬT LOGIC LẤY DATA
+                    setProfile({
+                        username: info.username || info.userName || '',
+                        full_name: info.full_name || userProfile.full_name || '',
+                        email: info.email || '',
+                        phone: info.phone || userProfile.phone || '',
+                        date_of_birth: info.date_of_birth || medical.date_of_birth || '', 
+                        // Lấy quê quán từ medical_info (khớp với logic Backend user_service)
+                        hometown: medical.hometown || info.hometown || '', 
+                        gender: info.gender || userProfile.gender || 'Nam',
+                        nationality: info.nationality || userProfile.nationality || 'Việt Nam',
+                        role: info.role
+                    });
+                } else {
+                    if (res.status === 401) navigate('/login');
+                }
+            } catch (error) {
+                console.error("Lỗi tải hồ sơ:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchProfile();
+    }, [navigate]);
+
+    // --- LƯU DỮ LIỆU ---
     const handleSave = async () => {
         const token = localStorage.getItem('token');
         setIsSaving(true);
         setMessage({ type: '', content: '' });
 
         try {
-            // SỬA: Endpoint update chuẩn là PUT /api/users/me
             const res = await fetch('http://localhost:8000/api/v1/users/me', {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}` 
                 },
+                // 3. GỬI DATA LÊN SERVER
                 body: JSON.stringify({
                     full_name: profile.full_name,
                     email: profile.email,
                     phone: profile.phone,
+                    date_of_birth: profile.date_of_birth,
+                    hometown: profile.hometown, // Gửi quê quán
                     gender: profile.gender,
                     nationality: profile.nationality
-                    // Không gửi username và role vì thường không cho sửa
                 })
             });
 
@@ -107,7 +113,6 @@ const ProfileDr: React.FC = () => {
             setMessage({ type: 'error', content: 'Lỗi kết nối server.' });
         } finally {
             setIsSaving(false);
-            // Tự tắt thông báo sau 3s
             setTimeout(() => setMessage({ type: '', content: '' }), 3000);
         }
     };
@@ -120,7 +125,7 @@ const ProfileDr: React.FC = () => {
 
     return (
         <div style={styles.container}>
-            {/* SIDEBAR MÀU TỐI (Chuẩn Bác sĩ) */}
+            {/* SIDEBAR */}
             <aside style={styles.sidebar}>
                 <div style={styles.logoArea}>
                     <img src="/logo.svg" alt="AURA" style={styles.logoImage}/>
@@ -157,6 +162,7 @@ const ProfileDr: React.FC = () => {
                         )}
 
                         <div style={styles.gridForm}>
+                            {/* Hàng 1 */}
                             <div style={styles.formGroup}>
                                 <label style={styles.label}><FaUserMd style={styles.icon}/> Tên đăng nhập </label>
                                 <input type="text" value={profile.username} disabled style={{...styles.input, backgroundColor: '#f0f2f5'}} />
@@ -173,6 +179,7 @@ const ProfileDr: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Hàng 2 */}
                             <div style={styles.formGroup}>
                                 <label style={styles.label}><FaEnvelope style={styles.icon}/> Email</label>
                                 <input 
@@ -195,6 +202,19 @@ const ProfileDr: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Hàng 3 */}
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}><FaBirthdayCake style={styles.icon}/> Ngày sinh</label>
+                                <input 
+                                    type="date" 
+                                    name="date_of_birth"
+                                    value={profile.date_of_birth} 
+                                    onChange={handleChange}
+                                    disabled={!isEditing} 
+                                    style={isEditing ? styles.inputActive : styles.input} 
+                                />
+                            </div>
+
                             <div style={styles.formGroup}>
                                 <label style={styles.label}><FaVenusMars style={styles.icon}/> Giới tính</label>
                                 <select 
@@ -208,6 +228,7 @@ const ProfileDr: React.FC = () => {
                                 </select>
                             </div>
 
+                            {/* Hàng 4: Quốc tịch & Quê quán */}
                             <div style={styles.formGroup}>
                                 <label style={styles.label}><FaMapMarkerAlt style={styles.icon}/> Quốc tịch</label>
                                 <input 
@@ -215,6 +236,18 @@ const ProfileDr: React.FC = () => {
                                     value={profile.nationality} onChange={handleChange}
                                     disabled={!isEditing} 
                                     style={isEditing ? styles.inputActive : styles.input} 
+                                />
+                            </div>
+
+                            {/* 4. UI: THÊM Ô QUÊ QUÁN */}
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}><FaHome style={styles.icon}/> Quê quán</label>
+                                <input 
+                                    type="text" name="hometown"
+                                    value={profile.hometown} onChange={handleChange}
+                                    disabled={!isEditing} 
+                                    style={isEditing ? styles.inputActive : styles.input} 
+                                    placeholder="Tỉnh/Thành phố..."
                                 />
                             </div>
                         </div>
@@ -239,226 +272,33 @@ const ProfileDr: React.FC = () => {
     );
 };
 
-// --- STYLES ---
+// --- STYLES (Giữ nguyên) ---
 const styles: { [key: string]: React.CSSProperties } = {
-    // SỬA LỖI: Phải có key 'container' bao quanh các thuộc tính này
-    container: { 
-        display: 'flex', 
-        width: '100vw', 
-        minHeight: '100vh', 
-        backgroundColor: '#f4f6f9', 
-        fontFamily: "'Segoe UI', sans-serif", 
-        position: 'fixed', 
-        top: 0, 
-        left: 0 
-    },
-
-    sidebar: { 
-        width: '260px', 
-        backgroundColor: '#34495e', 
-        color: 'white', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        padding: '30px 20px', 
-        alignItems: 'center', 
-        height: '100%' 
-    },
-
-    logoArea: { 
-        textAlign: 'center', 
-        marginBottom: '40px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center' 
-    },
-
-    logoImage: { 
-        width: '60px', 
-        marginBottom: '10px', 
-        filter: 'brightness(0) invert(1)' 
-    },
-
-    backBtn: { 
-        background: 'none', 
-        border: '1px solid #7f8c8d', 
-        padding: '10px 20px', 
-        color: '#ecf0f1', 
-        borderRadius: '5px', 
-        cursor: 'pointer', 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px', 
-        transition: '0.2s', 
-        width: '100%', 
-        justifyContent: 'center' 
-    },
-    
-    main: { 
-        flex: 1, 
-        padding: '40px', 
-        display: 'flex', 
-        justifyContent: 'center', 
-        overflowY: 'auto', 
-        height: '100%' 
-    },
-
-    profileCard: { 
-        backgroundColor: 'white', 
-        borderRadius: '16px', 
-        boxShadow: '0 4px 20px rgba(0,0,0,0.05)', 
-        width: '100%', 
-        maxWidth: '800px', 
-        height: 'fit-content' 
-    },
-    
-    cardHeader: { 
-        backgroundColor: '#fff', 
-        padding: '40px 20px 20px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        borderBottom: '1px solid #eee', 
-        position: 'relative' 
-    },
-
+    container: { display: 'flex', width: '100vw', minHeight: '100vh', backgroundColor: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif", position: 'fixed', top: 0, left: 0 },
+    sidebar: { width: '260px', backgroundColor: '#34495e', color: 'white', display: 'flex', flexDirection: 'column', padding: '30px 20px', alignItems: 'center', height: '100%' },
+    logoArea: { textAlign: 'center', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+    logoImage: { width: '60px', marginBottom: '10px', filter: 'brightness(0) invert(1)' },
+    backBtn: { background: 'none', border: '1px solid #7f8c8d', padding: '10px 20px', color: '#ecf0f1', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s', width: '100%', justifyContent: 'center' },
+    main: { flex: 1, padding: '40px', display: 'flex', justifyContent: 'center', overflowY: 'auto', height: '100%' },
+    profileCard: { backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', width: '100%', maxWidth: '800px', height: 'fit-content' },
+    cardHeader: { backgroundColor: '#fff', padding: '40px 20px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', borderBottom: '1px solid #eee', position: 'relative' },
     avatarWrapper: { position: 'relative' },
-    
-    avatar: { 
-        width: '100px', 
-        height: '100px', 
-        borderRadius: '50%', 
-        backgroundColor: '#e74c3c', 
-        color: 'white', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        fontSize: '40px', 
-        fontWeight: 'bold', 
-        border: '4px solid white', 
-        boxShadow: '0 4px 10px rgba(0,0,0,0.1)' 
-    },
-
-    cameraIcon: { 
-        position: 'absolute', 
-        bottom: '0', 
-        right: '0', 
-        backgroundColor: '#34495e', 
-        padding: '8px', 
-        borderRadius: '50%', 
-        cursor: 'pointer', 
-        border: '2px solid white' 
-    },
-
-    roleBadge: { 
-        backgroundColor: '#dff9fb', 
-        color: '#130f40', 
-        padding: '4px 12px', 
-        borderRadius: '20px', 
-        fontSize: '13px', 
-        fontWeight: '600' 
-    },
-
+    avatar: { width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#e74c3c', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', fontWeight: 'bold', border: '4px solid white', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' },
+    cameraIcon: { position: 'absolute', bottom: '0', right: '0', backgroundColor: '#34495e', padding: '8px', borderRadius: '50%', cursor: 'pointer', border: '2px solid white' },
+    roleBadge: { backgroundColor: '#dff9fb', color: '#130f40', padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '600' },
     formContainer: { padding: '40px' },
-    
-    sectionTitle: { 
-        fontSize: '18px', 
-        fontWeight: 'bold', 
-        color: '#2c3e50', 
-        marginBottom: '20px', 
-        borderLeft: '4px solid #e74c3c', 
-        paddingLeft: '10px' 
-    },
-
-    alert: { 
-        padding: '10px', 
-        borderRadius: '5px', 
-        marginBottom: '20px', 
-        textAlign: 'center', 
-        fontSize: '14px' 
-    },
-    
-    gridForm: { 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr', 
-        gap: '20px' 
-    },
-
-    formGroup: { 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '8px' 
-    },
-
-    label: { 
-        fontSize: '14px', 
-        color: '#7f8c8d', 
-        fontWeight: '600', 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px' 
-    },
-
+    sectionTitle: { fontSize: '18px', fontWeight: 'bold', color: '#2c3e50', marginBottom: '20px', borderLeft: '4px solid #e74c3c', paddingLeft: '10px' },
+    alert: { padding: '10px', borderRadius: '5px', marginBottom: '20px', textAlign: 'center', fontSize: '14px' },
+    gridForm: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' },
+    formGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    label: { fontSize: '14px', color: '#7f8c8d', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' },
     icon: { color: '#e74c3c' },
-    
-    input: { 
-        padding: '10px 15px', 
-        borderRadius: '8px', 
-        border: '1px solid #eee', 
-        fontSize: '15px', 
-        outline: 'none', 
-        color: '#555', 
-        backgroundColor: 'white' 
-    },
-
-    inputActive: { 
-        padding: '10px 15px', 
-        borderRadius: '8px', 
-        border: '1px solid #3498db', 
-        fontSize: '15px', 
-        outline: 'none', 
-        color: '#333', 
-        backgroundColor: '#fdfdfd' 
-    },
-
-    actionButtons: { 
-        marginTop: '30px', 
-        display: 'flex', 
-        justifyContent: 'flex-end', 
-        gap: '15px' 
-    },
-
-    editBtn: { 
-        padding: '10px 25px', 
-        borderRadius: '8px', 
-        border: 'none', 
-        backgroundColor: '#34495e', 
-        color: 'white', 
-        cursor: 'pointer', 
-        fontWeight: '600' 
-    },
-
-    saveBtn: { 
-        padding: '10px 25px', 
-        borderRadius: '8px', 
-        border: 'none', 
-        backgroundColor: '#e74c3c', 
-        color: 'white', 
-        cursor: 'pointer', 
-        fontWeight: '600', 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px' 
-    },
-
-    cancelBtn: { 
-        padding: '10px 25px', 
-        borderRadius: '8px', 
-        border: '1px solid #ccc', 
-        backgroundColor: 'white', 
-        color: '#666', 
-        cursor: 'pointer', 
-        fontWeight: '600' 
-    }
+    input: { padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', fontSize: '15px', outline: 'none', color: '#555', backgroundColor: 'white' },
+    inputActive: { padding: '10px 15px', borderRadius: '8px', border: '1px solid #3498db', fontSize: '15px', outline: 'none', color: '#333', backgroundColor: '#fdfdfd' },
+    actionButtons: { marginTop: '30px', display: 'flex', justifyContent: 'flex-end', gap: '15px' },
+    editBtn: { padding: '10px 25px', borderRadius: '8px', border: 'none', backgroundColor: '#34495e', color: 'white', cursor: 'pointer', fontWeight: '600' },
+    saveBtn: { padding: '10px 25px', borderRadius: '8px', border: 'none', backgroundColor: '#e74c3c', color: 'white', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' },
+    cancelBtn: { padding: '10px 25px', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: 'white', color: '#666', cursor: 'pointer', fontWeight: '600' }
 };
 
 // Animation Spinner
