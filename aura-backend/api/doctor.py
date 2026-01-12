@@ -83,7 +83,8 @@ def doctor_update_diagnosis(
         notes=payload.doctor_notes,
         is_correct=payload.is_correct, # Truyền biến này vào service
         doctor_id=current_user.id,
-        feedback=payload.feedback_for_ai
+        feedback=payload.feedback_for_ai,
+        ai_detailed_report=payload.ai_detailed_report
     )
     
     return {

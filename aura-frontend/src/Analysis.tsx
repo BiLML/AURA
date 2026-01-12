@@ -158,31 +158,53 @@ const AnalysisResult: React.FC = () => {
                     <div style={styles.rightColumn}>
                         <div style={styles.resultBox}>
                             <label style={styles.label}>Tình trạng võng mạc:</label>
+                            {/* Ưu tiên hiển thị kết quả chẩn đoán của bác sĩ nếu có sự khác biệt (thông qua ai_result đã được backend cập nhật hoặc trường riêng) */}
                             <h1 style={{color: severity.color, margin: '5px 0 15px 0'}}>{data.ai_result}</h1>
                             <div style={{backgroundColor: severity.bg, padding: '15px', borderRadius: '8px', borderLeft: `4px solid ${severity.color}`}}>
                                 <p style={{margin: 0, fontWeight: '500'}}>{severity.advice}</p>
                             </div>
                         </div>
 
-                        {/* HIỂN THỊ KẾT LUẬN CỦA BÁC SĨ (READ-ONLY) */}
-                        {data.doctor_note ? (
-                            <div style={{marginTop: '10px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9'}}>
-                                <h4 style={{margin: '0 0 8px 0', fontSize: '15px', color: '#0d47a1'}}>👨‍⚕️ Kết luận của Bác sĩ:</h4>
-                                <p style={{margin: 0, fontSize: '15px', fontWeight: '500', color: '#1565c0'}}>
+                        {/* PHẦN QUAN TRỌNG: Ghi chú của bác sĩ */}
+                        {data.doctor_note && (
+                            <div style={{
+                                marginTop: '15px', 
+                                padding: '20px', 
+                                backgroundColor: '#e3f2fd', 
+                                borderRadius: '8px', 
+                                border: '1px solid #90caf9',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '20px'}}>👨‍⚕️</span>
+                                    <h4 style={{margin: 0, fontSize: '16px', color: '#0d47a1', textTransform: 'uppercase'}}>Lời khuyên của Bác sĩ</h4>
+                                </div>
+                                <p style={{
+                                    margin: 0, 
+                                    fontSize: '15px', 
+                                    fontWeight: '500', 
+                                    color: '#1565c0', 
+                                    whiteSpace: 'pre-wrap', // Giữ định dạng xuống dòng của bác sĩ
+                                    lineHeight: '1.5'
+                                }}>
                                     {data.doctor_note}
                                 </p>
                             </div>
-                        ) : (
-                            <div style={{marginTop: '10px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px', border: '1px dashed #ccc', color: '#777', fontStyle: 'italic'}}>
-                                Chưa có đánh giá từ bác sĩ chuyên khoa.
-                            </div>
                         )}
 
+                        {/* Chi tiết phân tích (Cái này sẽ hiển thị nội dung bác sĩ đã sửa bên trang Doctor) */}
                         <div style={styles.analysisDetails}>
                             <h4 style={{color: '#0056b3', borderBottom: '1px solid #eee', paddingBottom: '8px', marginTop: 0}}>
-                                📊 Chi tiết phân tích AI:
+                                📊 Chi tiết báo cáo y khoa:
                             </h4>
-                            <div style={{whiteSpace: 'pre-line', lineHeight: '1.6', color: '#444', fontSize: '14px', maxHeight: '300px', overflowY: 'auto'}}>
+                            <div style={{
+                                whiteSpace: 'pre-line', 
+                                lineHeight: '1.6', 
+                                color: '#444', 
+                                fontSize: '14px', 
+                                maxHeight: '400px', // Tăng chiều cao để xem dễ hơn
+                                overflowY: 'auto'
+                            }}>
                                 {data.ai_detailed_report}
                             </div>
                         </div>

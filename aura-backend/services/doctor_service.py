@@ -69,7 +69,7 @@ class DoctorService:
             
         return {"patients": results}
 
-    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, feedback: str = None):
+    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, feedback: str = None, ai_detailed_report: str = None):
         """
         Lưu kết quả thẩm định. Có Try/Except để bắt lỗi DB.
         """
@@ -80,22 +80,16 @@ class DoctorService:
             
         # 2. Lấy Analysis Result an toàn
         analysis = None
-        raw_result = getattr(record, "analysis_result", None)
+        if record.analysis_result:
+            analysis = record.analysis_result
+        elif hasattr(record, "analysis_results") and record.analysis_results:
+             analysis = record.analysis_results[0]
         
-        if raw_result:
-            if isinstance(raw_result, list): 
-                if len(raw_result) > 0: analysis = raw_result[0]
-            else:
-                analysis = raw_result
-        
-        # Fallback (phòng hờ)
-        if not analysis and hasattr(record, "analysis_results"):
-             results = record.analysis_results
-             if results and isinstance(results, list) and len(results) > 0:
-                 analysis = results[0]
-            
         if not analysis:
              raise HTTPException(status_code=400, detail="Hồ sơ này chưa có kết quả AI để thẩm định")
+
+        if ai_detailed_report is not None:
+            analysis.ai_detailed_report = ai_detailed_report
 
         try:
             # 3. Tìm Validation cũ (Upsert)

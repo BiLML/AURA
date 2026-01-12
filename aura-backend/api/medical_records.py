@@ -120,14 +120,27 @@ def get_record_detail(
         analysis = record.analysis_result
     elif hasattr(record, "analysis_results") and record.analysis_results:
          analysis = record.analysis_results[0]
+    doctor_note = None
+    doctor_diagnosis = None
     
+    if analysis and analysis.doctor_validation:
+        # Lấy dữ liệu từ bảng validation
+        doctor_note = analysis.doctor_validation.doctor_notes
+        doctor_diagnosis = analysis.doctor_validation.doctor_confirm
+
     return {
         "id": str(record.id),
-        "ai_result": analysis.risk_level if analysis else "Đang phân tích...",
+        # Nếu bác sĩ đã chẩn đoán, ưu tiên hiển thị kết quả của bác sĩ
+        "ai_result": doctor_diagnosis if doctor_diagnosis else (analysis.risk_level if analysis else "Đang phân tích..."),
+        
+        # Đây là nội dung report (đã được bác sĩ edit và lưu đè ở bước PUT trên)
         "ai_detailed_report": analysis.ai_detailed_report if analysis else "Chưa có báo cáo chi tiết.",
+        
         "annotated_image_url": analysis.annotated_image_url if analysis else None,
         "image_url": record.image_url,
         "upload_date": record.created_at,
         "ai_analysis_status": "COMPLETED" if analysis else "PENDING",
-        "doctor_note": None 
+        
+        # Trả về ghi chú thật thay vì None
+        "doctor_note": doctor_note 
     }
