@@ -299,30 +299,92 @@ const Dashboard: React.FC = () => {
 
     // --- RENDER CONTENT ---
     const renderContent = () => {
-        // 1. FORM ĐĂNG KÝ
+        // --- 1. RENDER FORM ĐĂNG KÝ ---
         if (activeTab === 'clinic-register') {
             return (
                 <div style={styles.card}>
-                    <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaHospital style={{marginRight: 10}}/>Đăng ký Phòng khám</h2></div>
+                    <div style={styles.cardHeader}>
+                        <h2 style={styles.pageTitle}><FaHospital style={{marginRight: 10}}/>Đăng ký Phòng khám</h2>
+                    </div>
                     <div style={{padding: '25px'}}>
-                        <p style={{ color: '#666', marginBottom: '20px' }}>Vui lòng điền thông tin và tải lên giấy tờ chứng thực.</p>
+                        <p style={{ color: '#666', marginBottom: '20px' }}>Vui lòng điền thông tin và tải lên giấy tờ chứng thực (Giấy phép kinh doanh / CCHN).</p>
+                        
                         <form onSubmit={handleClinicSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                <div><label style={styles.formLabel}>Tên phòng khám *</label><input required type="text" style={styles.formInput} value={clinicForm.name} onChange={(e) => setClinicForm({...clinicForm, name: e.target.value})} /></div>
-                                <div><label style={styles.formLabel}>Mã số giấy phép *</label><input required type="text" style={styles.formInput} value={clinicForm.license} onChange={(e) => setClinicForm({...clinicForm, license: e.target.value})} /></div>
-                            </div>
-                            <div><label style={styles.formLabel}>Địa chỉ *</label><input required type="text" style={styles.formInput} value={clinicForm.address} onChange={(e) => setClinicForm({...clinicForm, address: e.target.value})} /></div>
-                            <div><label style={styles.formLabel}>Số điện thoại *</label><input required type="text" style={styles.formInput} value={clinicForm.phone} onChange={(e) => setClinicForm({...clinicForm, phone: e.target.value})} /></div>
-                            {/* Upload Section omitted for brevity but logic is same as before */}
-                            <div style={styles.uploadGrid}>
-                                <div style={styles.uploadBox}>
-                                    {previewImages.front ? <div style={styles.previewContainer}><img src={previewImages.front} alt="" style={styles.previewImage} /><button type="button" onClick={()=>removeImage('front')} style={styles.removeBtn}><FaTrash/></button></div> : <label style={styles.uploadLabel}><FaImage size={30} color="#007bff"/><span style={{marginTop:10, fontSize:13}}>Mặt trước</span><input type="file" accept="image/*" hidden onChange={(e)=>handleFileSelect(e,'front')}/></label>}
+                                <div>
+                                    <label style={styles.formLabel}>Tên phòng khám <span style={{color:'red'}}>*</span></label>
+                                    <input required type="text" style={styles.formInput} placeholder="Nhập tên phòng khám..." value={clinicForm.name} onChange={(e) => setClinicForm({...clinicForm, name: e.target.value})} />
                                 </div>
-                                <div style={styles.uploadBox}>
-                                    {clinicImages.back ? <div style={styles.previewContainer}><div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100%'}}><FaFileAlt size={30}/></div><button type="button" onClick={()=>removeImage('back')} style={styles.removeBtn}><FaTrash/></button></div> : <label style={styles.uploadLabel}><FaFileAlt size={30} color="#007bff"/><span style={{marginTop:10, fontSize:13}}>Mặt sau/PDF</span><input type="file" accept=".pdf,image/*" hidden onChange={(e)=>handleFileSelect(e,'back')}/></label>}
+                                 <div>
+                                    <label style={styles.formLabel}>Mã số giấy phép <span style={{color:'red'}}>*</span></label>
+                                    <input required type="text" style={styles.formInput} placeholder="GPKD/CCHN..." value={clinicForm.license} onChange={(e) => setClinicForm({...clinicForm, license: e.target.value})} />
                                 </div>
                             </div>
-                            <button type="submit" style={styles.primaryBtn} disabled={isSubmittingClinic}>{isSubmittingClinic ? 'Đang gửi...' : 'Gửi hồ sơ'}</button>
+
+                            <div>
+                                <label style={styles.formLabel}>Địa chỉ <span style={{color:'red'}}>*</span></label>
+                                <input required type="text" style={styles.formInput} placeholder="Số nhà, đường, phường/xã..." value={clinicForm.address} onChange={(e) => setClinicForm({...clinicForm, address: e.target.value})} />
+                            </div>
+                            
+                            <div>
+                                <label style={styles.formLabel}>Số điện thoại <span style={{color:'red'}}>*</span></label>
+                                <input required type="text" style={styles.formInput} placeholder="0912..." value={clinicForm.phone} onChange={(e) => setClinicForm({...clinicForm, phone: e.target.value})} />
+                            </div>
+
+                            {/* --- PHẦN UPLOAD ẢNH --- */}
+                            <div style={{marginTop: '10px'}}>
+                                <label style={styles.formLabel}>Ảnh chứng thực giấy tờ <span style={{color:'red'}}>*</span></label>
+                                <div style={styles.uploadGrid}>
+                                    <div style={styles.uploadBox}>
+                                        {previewImages.front ? (
+                                            <div style={styles.previewContainer}>
+                                                <img src={previewImages.front} alt="Front" style={styles.previewImage} />
+                                                <button type="button" onClick={() => removeImage('front')} style={styles.removeBtn}><FaTrash /></button>
+                                            </div>
+                                        ) : (
+                                            <label style={styles.uploadLabel}>
+                                                <FaImage size={30} color="#007bff" />
+                                                <span style={{marginTop: '10px', fontSize:'14px', color:'#666'}}>Ảnh mặt trước</span>
+                                                <input type="file" accept="image/*" hidden onChange={(e) => handleFileSelect(e, 'front')} />
+                                            </label>
+                                        )}
+                                    </div>
+
+                                    <div style={styles.uploadBox}>
+                                        {clinicImages.back ? (
+                                            <div style={styles.previewContainer}>
+                                                {clinicImages.back.type.startsWith('image/') ? (
+                                                    <img src={previewImages.back || ''} alt="Back" style={styles.previewImage} />
+                                                ) : (
+                                                    <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#555'}}>
+                                                        <FaFileAlt size={40} color="#6c757d" />
+                                                        <span style={{fontSize:'13px', marginTop:'10px', padding:'0 10px', textAlign:'center', wordBreak:'break-all'}}>
+                                                            {clinicImages.back.name}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <button type="button" onClick={() => removeImage('back')} style={styles.removeBtn}><FaTrash /></button>
+                                            </div>
+                                        ) : (
+                                            <label style={styles.uploadLabel}>
+                                                <FaFileAlt size={30} color="#007bff" />
+                                                <span style={{marginTop: '10px', fontSize:'14px', color:'#666'}}>Ảnh mặt sau/PDF</span>
+                                                <input type="file" accept='.pdf, .doc, .docx, .xls, .xlsx, .csv, image/*' hidden onChange={(e) => handleFileSelect(e, 'back')} />
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+                                <p style={{fontSize:'12px', color:'#999', marginTop:'8px'}}>* Định dạng hỗ trợ: JPG, PNG, PDF. Dung lượng tối đa 5MB.</p>
+                            </div>
+
+                            <div>
+                                <label style={styles.formLabel}>Giới thiệu ngắn</label>
+                                <textarea rows={3} style={{...styles.formInput, resize: 'vertical'}} placeholder="Mô tả về chuyên khoa, dịch vụ..." value={clinicForm.description} onChange={(e) => setClinicForm({...clinicForm, description: e.target.value})} />
+                            </div>
+
+                            <button type="submit" style={{...styles.primaryBtn, width: 'fit-content', opacity: isSubmittingClinic ? 0.7 : 1}} disabled={isSubmittingClinic}>
+                                {isSubmittingClinic ? 'Đang gửi hồ sơ...' : 'Gửi hồ sơ đăng ký'}
+                            </button>
                         </form>
                     </div>
                 </div>
