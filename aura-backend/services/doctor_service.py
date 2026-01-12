@@ -1,23 +1,21 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
-from datetime import datetime
 from fastapi import HTTPException
 
-from models.medical import DoctorValidation, AIAnalysisResult
+from models.medical import DoctorValidation
 from repositories.doctor_repo import DoctorRepository
 from repositories.medical_repo import MedicalRepository
 from schemas.doctor_schema import PatientResponse, LatestScan
+from models.users import User
 
 class DoctorService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = DoctorRepository(db)
         self.medical_repo = MedicalRepository(db)
-        
-        
 
     def get_my_patients(self, doctor_id: UUID):
-        # 1. Lấy danh sách bệnh nhân thô từ DB
         users = self.repo.get_assigned_patients(doctor_id)
         results = []
         for user in users:
@@ -25,20 +23,27 @@ class DoctorService:
             scan_data = None
 
             if latest_img:
-                # Xử lý an toàn nếu analysis_result bị None
                 ai_res = "Đang xử lý"
                 status = "PENDING"
-            
-                if latest_img.analysis_result:
-                    val = latest_img.analysis_result.doctor_validation
-                    if val and val.doctor_confirm:
-                        # Nếu bác sĩ đã chốt, lấy kết quả bác sĩ (VD: Normal)
-                        ai_res = val.doctor_confirm
-                    else:
-                        # Nếu chưa, lấy kết quả AI
-                        ai_res = latest_img.analysis_result.risk_level
-                    # Nếu model chưa có cột status, ta giả định có kết quả là COMPLETED
-                    status = "COMPLETED" 
+                
+                # Xử lý an toàn: Kiểm tra nếu analysis_result tồn tại
+                # Vì uselist=False, nó là object hoặc None. Nhưng ta kiểm tra kỹ.
+                analysis = getattr(latest_img, "analysis_result", None)
+                
+                if analysis:
+                    # Nếu cấu hình sai thành list, lấy phần tử đầu
+                    if isinstance(analysis, list) and len(analysis) > 0:
+                        analysis = analysis[0]
+                    
+                    if not isinstance(analysis, list):
+                        ai_res = analysis.risk_level
+                        status = "COMPLETED" # Giả định completed nếu có kết quả
+                        
+                        # Kiểm tra xem bác sĩ đã validate chưa
+                        # analysis.doctor_validation cũng là object (uselist=False)
+                        val = getattr(analysis, "doctor_validation", None)
+                        if val and val.doctor_confirm:
+                             ai_res = val.doctor_confirm
 
                 scan_data = LatestScan(
                     record_id=str(latest_img.id),
@@ -47,8 +52,6 @@ class DoctorService:
                     upload_date=latest_img.created_at
                 )
 
-            # 3. Map sang Schema
-            # Lấy thông tin profile nếu có
             full_name = user.username
             phone = None
             if user.profile:
@@ -65,50 +68,121 @@ class DoctorService:
             ))
             
         return {"patients": results}
-    
-    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID):
+
+    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, feedback: str = None):
         """
-        Lưu kết quả thẩm định vào bảng doctor_validations
+        Lưu kết quả thẩm định. Có Try/Except để bắt lỗi DB.
         """
-        # 1. Tìm Analysis ID từ Record ID
-        # (Vì bảng DoctorValidation nối với AIAnalysisResult, không phải RetinalImage)
+        # 1. Lấy record
         record = self.medical_repo.get_record_by_id(record_id)
         if not record:
             raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ")
             
+        # 2. Lấy Analysis Result an toàn
         analysis = None
-        if record.analysis_result:
-            analysis = record.analysis_result
-        # Logic dự phòng nếu analysis_result là list
-        elif hasattr(record, "analysis_results") and record.analysis_results:
-             analysis = record.analysis_results[0]
+        raw_result = getattr(record, "analysis_result", None)
+        
+        if raw_result:
+            if isinstance(raw_result, list): 
+                if len(raw_result) > 0: analysis = raw_result[0]
+            else:
+                analysis = raw_result
+        
+        # Fallback (phòng hờ)
+        if not analysis and hasattr(record, "analysis_results"):
+             results = record.analysis_results
+             if results and isinstance(results, list) and len(results) > 0:
+                 analysis = results[0]
             
         if not analysis:
              raise HTTPException(status_code=400, detail="Hồ sơ này chưa có kết quả AI để thẩm định")
 
-        # 2. Kiểm tra xem đã có Validation chưa (để Update hay Create)
-        validation = self.db.query(DoctorValidation).filter(
-            DoctorValidation.analysis_id == analysis.id
-        ).first()
+        try:
+            # 3. Tìm Validation cũ (Upsert)
+            validation = self.db.query(DoctorValidation).filter(
+                DoctorValidation.analysis_id == analysis.id
+            ).first()
 
-        if validation:
-            # UPDATE: Nếu đã có thì cập nhật lại
-            validation.doctor_id = doctor_id
-            validation.is_correct = is_correct
-            validation.doctor_confirm = diagnosis # Map 'doctor_diagnosis' vào cột 'doctor_confirm'
-            validation.doctor_notes = notes
-        else:
-            # CREATE: Nếu chưa có thì tạo mới
-            validation = DoctorValidation(
-                analysis_id=analysis.id,
-                doctor_id=doctor_id,
-                is_correct=is_correct,
-                doctor_confirm=diagnosis, 
-                doctor_notes=notes
-            )
-            self.db.add(validation)
+            if validation:
+                # UPDATE
+                validation.doctor_id = doctor_id
+                validation.is_correct = is_correct
+                validation.doctor_confirm = diagnosis 
+                validation.doctor_notes = notes
+                # Chỉ update feedback nếu có giá trị (để tránh ghi đè None vào dữ liệu cũ nếu muốn)
+                if feedback is not None:
+                    validation.feedback_for_ai = feedback
+            else:
+                # CREATE
+                validation = DoctorValidation(
+                    analysis_id=analysis.id,
+                    doctor_id=doctor_id,
+                    is_correct=is_correct,
+                    doctor_confirm=diagnosis, 
+                    doctor_notes=notes,
+                    feedback_for_ai=feedback
+                )
+                self.db.add(validation)
 
-        self.db.commit()
-        self.db.refresh(validation)
+            self.db.commit()
+            self.db.refresh(validation)
+            return validation
+
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            error_msg = str(e)
+            print(f"❌ DATABASE ERROR: {error_msg}") # Xem log terminal để biết lỗi chính xác
+            
+            # Gợi ý lỗi thường gặp cho người dùng
+            if "column" in error_msg and "does not exist" in error_msg:
+                 raise HTTPException(status_code=500, detail="Lỗi DB: Thiếu cột trong bảng doctor_validations. Hãy kiểm tra migration.")
+            
+            raise HTTPException(status_code=500, detail=f"Lỗi lưu dữ liệu: {error_msg}")
+        except Exception as e:
+            print(f"❌ UNKNOWN ERROR: {str(e)}")
+            raise HTTPException(status_code=500, detail="Lỗi không xác định từ Server.")
+            
+    # Giữ nguyên hàm get_report_detail cũ của bạn...
+    def get_report_detail(self, record_id: str, current_doctor_id: UUID):
+        record = self.medical_repo.get_record_by_id(record_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ")
+            
+        patient_name = "Unknown"
+        patient_id = "Unknown"
         
-        return validation
+        if record.patient:
+            patient_id = str(record.patient.user_id) 
+            if record.patient.user:
+                if record.patient.user.profile and record.patient.user.profile.full_name:
+                    patient_name = record.patient.user.profile.full_name
+                else:
+                    patient_name = record.patient.user.username
+
+        doctor_user = self.db.query(User).filter(User.id == current_doctor_id).first()
+        doctor_name = doctor_user.username if doctor_user else "Unknown"
+        if doctor_user and doctor_user.profile and doctor_user.profile.full_name:
+            doctor_name = doctor_user.profile.full_name
+
+        doctor_diagnosis = None
+        ai_result = "Unknown"
+        
+        # Xử lý an toàn như trên
+        analysis = getattr(record, "analysis_result", None)
+        if analysis and not isinstance(analysis, list):
+            ai_result = analysis.risk_level
+            # Check validation
+            val = getattr(analysis, "doctor_validation", None)
+            if val and not isinstance(val, list):
+                doctor_diagnosis = val.doctor_confirm
+
+        return {
+            "record_id": str(record.id),
+            "image_url": record.image_url,
+            "ai_result": ai_result,
+            "doctor_diagnosis": doctor_diagnosis,
+            "patient_name": patient_name,
+            "patient_id": patient_id,
+            "doctor_name": doctor_name,
+            "doctor_id": str(current_doctor_id)
+        }

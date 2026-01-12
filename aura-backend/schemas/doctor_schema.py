@@ -27,3 +27,4 @@ class DoctorDiagnosisRequest(BaseModel):
     doctor_diagnosis: str          # Sẽ lưu vào feedback_for_ai
     doctor_notes: Optional[str] = ""
     is_correct: bool = True        # Mặc định là AI đúng
+    feedback_for_ai: Optional[str] = None  # Phản hồi chi tiết cho AI

@@ -108,7 +108,7 @@ const DoctorAnalysis: React.FC = () => {
             const payload = {
                 doctor_diagnosis: finalDiagnosis, 
                 doctor_notes: internalNote,       
-                is_correct: isAiCorrect           
+                is_correct: isAiCorrect     
             };
             const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnose`, {
                 method: 'PUT',
@@ -133,8 +133,13 @@ const DoctorAnalysis: React.FC = () => {
     };
 
     const handleReportIssue = () => {
-        const reason = prompt("Nhập lý do báo cáo hồ sơ này:");
-        if (reason) alert("Đã gửi báo cáo cho Admin.");
+        navigate(`/doctor/report/${id}`, { 
+            state: { 
+                recordId: id,
+                aiResult: data?.ai_result,
+                imageUrl: data?.image_url
+            } 
+        });
     };
 
     if (loading) return <div>Đang tải...</div>;

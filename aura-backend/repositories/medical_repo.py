@@ -1,6 +1,7 @@
-from sqlalchemy.orm import Session
-from models.medical import Patient, RetinalImage, AIAnalysisResult
+from sqlalchemy.orm import Session, joinedload
+from models.medical import Patient, RetinalImage, AIAnalysisResult, DoctorValidation
 from models.enums import ImageType, EyeSide, RiskLevel
+from models.users import User, Profile
 from uuid import UUID
 
 class MedicalRepository:
@@ -74,7 +75,22 @@ class MedicalRepository:
 
     def get_record_by_id(self, record_id: str):
         # Lấy chi tiết một ảnh kèm kết quả phân tích
-        return self.db.query(RetinalImage).filter(RetinalImage.id == record_id).first()
+        return (
+            self.db.query(RetinalImage)
+            # 1. Load thông tin Bệnh nhân -> User -> Profile (để lấy tên)
+            .options(
+                joinedload(RetinalImage.patient)
+                .joinedload(Patient.user)
+                .joinedload(User.profile)
+            )
+            # 2. Load thông tin AI Analysis -> Doctor Validation (để lấy kết quả khám)
+            .options(
+                joinedload(RetinalImage.analysis_result)
+                .joinedload(AIAnalysisResult.doctor_validation)
+            )
+            .filter(RetinalImage.id == record_id)
+            .first()
+        )
     
     def get_by_patient_id(self, user_id: str, skip: int = 0, limit: int = 100):
         """

@@ -10,7 +10,7 @@ from models.enums import UserRole
 
 from services.doctor_service import DoctorService
 from services.medical_service import MedicalService
-from schemas.doctor_schema import MyPatientsResponse, DoctorDiagnosisUpdate
+from schemas.doctor_schema import MyPatientsResponse, DoctorDiagnosisUpdate, DoctorDiagnosisRequest
 from schemas.medical_schema import ImageResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -60,11 +60,6 @@ def get_patient_medical_history(
 
     return records
 
-class DoctorDiagnosisRequest(BaseModel):
-    doctor_diagnosis: str          # Sẽ lưu vào feedback_for_ai
-    doctor_notes: Optional[str] = ""
-    is_correct: bool = True        # Mặc định là AI đúng
-
 # ... (các imports khác) ...
 
 @router.put("/records/{record_id}/diagnose")
@@ -87,11 +82,28 @@ def doctor_update_diagnosis(
         diagnosis=payload.doctor_diagnosis,
         notes=payload.doctor_notes,
         is_correct=payload.is_correct, # Truyền biến này vào service
-        doctor_id=current_user.id
+        doctor_id=current_user.id,
+        feedback=payload.feedback_for_ai
     )
     
     return {
         "message": "Đã lưu thẩm định thành công",
         "record_id": record_id,
-        "is_correct": updated_validation.is_correct
+        "is_correct": updated_validation.is_correct,
+        "feedback_saved": bool(updated_validation.feedback_for_ai)
     }
+
+@router.get("/records/{record_id}/report-detail")
+def get_report_detail_api(
+    record_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    API lấy dữ liệu chi tiết (Tên BN, BS, KQ AI) để hiển thị lên trang Report
+    """
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(status_code=403, detail="Chỉ bác sĩ mới có quyền truy cập")
+        
+    service = DoctorService(db)
+    return service.get_report_detail(record_id, current_user.id)
