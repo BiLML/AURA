@@ -652,6 +652,7 @@ const DashboardDr: React.FC = () => {
                     {/* --- TAB CHAT --- */}
                     {activeTab === 'chat' && (
                         <div style={styles.messengerCard}>
+                            {/* PANEL DANH SÁCH CHAT BÊN TRÁI */}
                             <div style={styles.chatListPanel}>
                                 <div style={styles.chatHeaderLeft}>
                                     <h3 style={{margin:0, fontSize:'16px'}}>Tư vấn Trực tuyến</h3>
@@ -669,6 +670,8 @@ const DashboardDr: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* CỬA SỔ CHAT BÊN PHẢI */}
                             <div style={styles.chatWindowPanel}>
                                 {selectedChatId ? (
                                     <>
@@ -676,7 +679,7 @@ const DashboardDr: React.FC = () => {
                                             <h4 style={{margin:0}}>{chatData.find(c=>c.id===selectedChatId)?.display_name}</h4>
                                         </div>
                                         
-                                        {/* --- PHẦN HIỂN THỊ TIN NHẮN --- */}
+                                        {/* --- NỘI DUNG TIN NHẮN --- */}
                                         <div style={styles.messagesBody}>
                                             {currentMessages.map((m, i) => (
                                                 <div key={i} style={{
@@ -701,7 +704,7 @@ const DashboardDr: React.FC = () => {
                                                             {m.content}
                                                         </div>
 
-                                                        {/* Dòng hiển thị Thời gian & Trạng thái */}
+                                                        {/* Dòng hiển thị Thời gian & Trạng thái đã xem/gửi */}
                                                         <div style={{
                                                             display:'flex', alignItems:'center', gap:'4px', 
                                                             marginTop:'2px', marginBottom:'10px', 
@@ -730,8 +733,8 @@ const DashboardDr: React.FC = () => {
                                             ))}
                                             <div ref={messagesEndRef}/>
                                         </div>
-                                        {/* ----------------------------------------------------- */}
 
+                                        {/* --- KHUNG NHẬP LIỆU --- */}
                                         <form onSubmit={handleSendMessage} style={styles.chatInputArea}>
                                             <input style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/>
                                             <button type="submit" style={{border:'none', background:'none', cursor:'pointer'}}><FaPaperPlane color="#3498db" size={20}/></button>
@@ -1023,20 +1026,33 @@ const styles: {[key:string]: React.CSSProperties} = {
     searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '5px', width: '150px' },
     selectInput: { padding: '5px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' },
 
-    // Messenger & Modal
+// Thêm/Sửa các styles này vào biến `const styles = { ... }` của bạn:
+
+    // --- MESSENGER CONTAINER ---
     messengerCard: { display: 'flex', height: 'calc(100vh - 140px)', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', border:'1px solid #e1e4e8', overflow: 'hidden' },
     chatListPanel: { width: '300px', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa' },
     chatHeaderLeft: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#f9f9f9' },
     chatListScroll: { flex: 1, overflowY: 'auto' },
     chatListItem: { display: 'flex', alignItems: 'center', padding: '12px', cursor: 'pointer', gap: '10px', borderBottom:'1px solid #fcfcfc' },
+    
+    // --- AVATARS & INDICATORS ---
     avatarLarge: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#555' },
+    avatarMedium: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#65676b', fontSize:'14px' },
+    avatarSmall: { width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '8px', alignSelf: 'flex-end', marginBottom: '8px' },
     unreadDot: { width:'10px', height:'10px', borderRadius:'50%', background:'#3498db' },
-    chatWindowPanel: { flex: 1, display: 'flex', flexDirection: 'column' },
-    chatWindowHeader: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#fff' },
-    messagesBody: { flex: 1, padding: '20px', overflowY: 'auto', background:'#fdfdfd' },
+    unreadBlueDot: { width: '10px', height: '10px', backgroundColor: '#007bff', borderRadius: '50%' },
+
+    // --- CHAT WINDOW ---
+    chatWindowPanel: { flex: 1, display: 'flex', flexDirection: 'column', backgroundColor:'white' },
+    chatWindowHeader: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#fff', display: 'flex', alignItems: 'center', gap: '12px' },
+    messagesBody: { flex: 1, padding: '20px', overflowY: 'auto', background:'#fdfdfd', display: 'flex', flexDirection: 'column', gap: '5px' },
+    
+    // --- INPUT AREA ---
     chatInputArea: { padding: '15px 20px', borderTop: '1px solid #f0f0f0', display:'flex', gap:'10px', alignItems: 'center', flexShrink: 0},
-    messengerInput: { flex:1, padding:'10px', borderRadius:'20px', border:'1px solid #ddd', outline:'none' },
+    messengerInput: { flex:1, padding:'10px', borderRadius:'20px', border:'1px solid #ddd', outline:'none', backgroundColor: '#f0f2f5' },
     emptyChatState: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#999' },
+    
+    // --- MESSAGE BUBBLES (Phần quan trọng nhất) ---
     messageRow: {
         display: 'flex',
         marginBottom: '4px',
@@ -1045,9 +1061,9 @@ const styles: {[key:string]: React.CSSProperties} = {
     bubbleMe: {
         padding: '10px 16px',
         borderRadius: '18px 18px 4px 18px',
-        backgroundColor: '#3498db', // Màu xanh
+        backgroundColor: '#3498db', // (Đổi thành #007bff cho file dashboard.tsx nếu muốn màu xanh đậm hơn)
         color: 'white',
-        maxWidth: '65%',
+        maxWidth: '65%', // (hoặc 70%)
         fontSize: '14.5px',
         lineHeight: '1.5',
         boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
@@ -1056,9 +1072,9 @@ const styles: {[key:string]: React.CSSProperties} = {
     bubbleOther: {
         padding: '10px 16px',
         borderRadius: '18px 18px 18px 4px',
-        backgroundColor: '#f1f0f0', // Màu xám
-        color: '#1c1e21',
-        maxWidth: '65%',
+        backgroundColor: '#f1f0f0', // (hoặc #e4e6eb)
+        color: '#1c1e21', // (hoặc #050505)
+        maxWidth: '65%', // (hoặc 70%)
         fontSize: '14.5px',
         lineHeight: '1.5',
         boxShadow: '0 1px 2px rgba(0,0,0,0.1)',

@@ -392,10 +392,10 @@ const Dashboard: React.FC = () => {
         }
 
         // 2. CHAT
-        if (activeTab === 'messages') {
-            const currentPartner = chatData.find(c => c.id === selectedChatId);
+if (activeTab === 'messages') {
             return (
                 <div style={styles.messengerCard}>
+                    {/* LIST BÊN TRÁI */}
                     <div style={styles.chatListPanel}>
                         <div style={styles.chatHeaderLeft}><h2 style={{margin: 0, fontSize: '20px'}}>Tin nhắn</h2></div>
                         <div style={styles.chatListScroll}>
@@ -403,35 +403,81 @@ const Dashboard: React.FC = () => {
                                 <div key={msg.id} style={{...styles.chatListItem, backgroundColor: selectedChatId === msg.id ? '#ebf5ff' : 'transparent'}} onClick={() => openChat(msg.id)}>
                                     <div style={styles.avatarLarge}>{(msg.full_name || msg.sender || 'U').charAt(0).toUpperCase()}</div>
                                     <div style={{flex: 1, overflow: 'hidden'}}>
-                                        <div style={{fontWeight: msg.unread ? '800' : '500'}}>{msg.full_name || msg.sender}</div>
-                                        <div style={{fontSize: '13px', color: msg.unread ? '#000' : '#666'}}>{msg.preview}</div>
+                                        <div style={{display: 'flex', justifyContent: 'space-between'}}><span style={{fontWeight: msg.unread ? '800' : '500', fontSize: '15px', color: '#050505'}}>{msg.full_name || msg.sender}</span></div>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '5px'}}><p style={{margin: 0, fontSize: '13px', color: msg.unread ? '#050505' : '#65676b', fontWeight: msg.unread ? 'bold' : 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{msg.preview}</p><span style={{fontSize: '11px', color: '#65676b'}}>• {msg.time}</span></div>
                                     </div>
                                     {msg.unread && <div style={styles.unreadBlueDot}></div>}
                                 </div>
                             ))}
                         </div>
                     </div>
+                    
+                    {/* CỬA SỔ BÊN PHẢI */}
                     <div style={styles.chatWindowPanel}>
                         {selectedChatId ? (
                             <>
                                 <div style={styles.chatWindowHeader}>
-                                    <div style={styles.avatarMedium}>{(currentPartner?.full_name||'U').charAt(0).toUpperCase()}</div>
-                                    <div><b>{currentPartner?.full_name||currentPartner?.sender}</b></div>
+                                    <div style={styles.avatarMedium}>{(chatData.find(c => c.id === selectedChatId)?.full_name || chatData.find(c => c.id === selectedChatId)?.sender || '').charAt(0).toUpperCase()}</div>
+                                    <div style={{flex: 1}}><h4 style={{margin: 0, fontSize: '16px'}}>{chatData.find(c => c.id === selectedChatId)?.full_name || chatData.find(c => c.id === selectedChatId)?.sender}</h4><span style={{fontSize: '12px', color: '#65676b'}}>{selectedChatId === 'system' ? 'Hệ thống' : 'Bác sĩ'}</span></div>
                                 </div>
                                 <div style={styles.messagesBody}>
                                     {currentMessages.map((msg, idx) => (
-                                        <div key={idx} style={{...styles.messageRow, justifyContent: msg.is_me ? 'flex-end' : 'flex-start'}}>
-                                            <div style={msg.is_me ? styles.bubbleMe : styles.bubbleOther}>{msg.content}</div>
+                                        <div key={idx} style={{
+                                            ...styles.messageRow, 
+                                            justifyContent: msg.is_me ? 'flex-end' : 'flex-start'
+                                        }}>
+                                            {!msg.is_me && (
+                                                <div style={{
+                                                    ...styles.avatarSmall, 
+                                                    alignSelf: 'flex-end', 
+                                                    marginBottom: '20px',
+                                                    marginRight: '8px'
+                                                }}>
+                                                    {(chatData.find(c=>c.id===selectedChatId)?.sender || 'U').charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            
+                                            <div style={{display:'flex', flexDirection:'column', alignItems: msg.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
+                                                <div style={msg.is_me ? styles.bubbleMe : styles.bubbleOther}>
+                                                    {msg.content}
+                                                </div>
+                                                <div style={{
+                                                    display:'flex', alignItems:'center', gap:'4px', 
+                                                    marginTop:'2px', marginBottom:'10px', 
+                                                    fontSize:'11px', color:'#999',
+                                                    paddingRight: msg.is_me ? '5px' : '0',
+                                                    paddingLeft: !msg.is_me ? '5px' : '0'
+                                                }}>
+                                                    <span>{msg.time}</span>
+                                                    {msg.is_me && (
+                                                        <span style={{marginLeft:'2px', display:'flex', alignItems:'center'}}>
+                                                            {msg.is_read ? (
+                                                                <span title="Đã xem" style={{display:'flex', alignItems:'center', color: '#007bff'}}>
+                                                                    <FaCheckDouble size={10}/> 
+                                                                </span>
+                                                            ) : (
+                                                                <span title="Đã gửi" style={{color: '#ccc'}}>
+                                                                    <FaCheck size={10}/>
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
-                                    <div ref={messagesEndRef}/>
+                                    <div ref={messagesEndRef} />
                                 </div>
-                                <div style={styles.chatInputArea}>
-                                    <form onSubmit={handleSendMessage} style={{flex:1, display:'flex'}}><input style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/></form>
-                                    <FaPaperPlane onClick={handleSendMessage} size={20} color="#007bff" style={{cursor:'pointer'}}/>
-                                </div>
+                                {selectedChatId !== 'system' && (
+                                    <div style={styles.chatInputArea}>
+                                        <form onSubmit={handleSendMessage} style={{flex: 1, display: 'flex'}}><input type="text" placeholder="Nhắn tin..." value={newMessageText} onChange={(e) => setNewMessageText(e.target.value)} style={styles.messengerInput} /></form>
+                                        <div onClick={handleSendMessage} style={{cursor: 'pointer'}}><FaPaperPlane size={20} color="#007bff" /></div>
+                                    </div>
+                                )}
                             </>
-                        ) : <div style={styles.emptyChatState}><FaComments size={40} color="#ddd"/><p>Chọn hội thoại để bắt đầu</p></div>}
+                        ) : (
+                            <div style={styles.emptyChatState}><div style={{width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px'}}><FaComments size={40} color="#007bff"/></div><h3>Chào mừng đến với AURA Chat</h3><p>Chọn một cuộc trò chuyện để bắt đầu nhắn tin.</p></div>
+                        )}
                     </div>
                 </div>
             );
