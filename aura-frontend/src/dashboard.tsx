@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
     FaPaperPlane, FaTrash, FaImage, FaFileAlt, 
     FaHome, FaComments, FaHospital, FaCreditCard, 
-    FaBell, FaSignOutAlt, FaSearch, FaUserCircle, FaCamera, FaCheck, FaCheckDouble 
+    FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory 
 } from 'react-icons/fa';
 
 // --- Dashboard Component (USER / PATIENT) ---
@@ -13,11 +13,11 @@ const Dashboard: React.FC = () => {
     // --- STATE DỮ LIỆU ---
     const [userRole, setUserRole] = useState<string>('Guest');
     const [userName, setUserName] = useState<string>('');
-    const [_id, setUserId] = useState<string>('');
+    const [full_name, setFullName] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true); 
+    
     const [historyData, setHistoryData] = useState<any[]>([]);
     const [chatData, setChatData] = useState<any[]>([]); 
-    const [full_name, setFullName] = useState<string>('');
 
     // --- STATE CHAT ---
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -30,7 +30,6 @@ const Dashboard: React.FC = () => {
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showFabMenu, setShowFabMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [hasViewedNotifications, setHasViewedNotifications] = useState(false);
 
     // --- STATE FORM ĐĂNG KÝ PHÒNG KHÁM ---
     const [clinicForm, setClinicForm] = useState({
@@ -43,34 +42,27 @@ const Dashboard: React.FC = () => {
     const profileRef = useRef<HTMLDivElement>(null);
 
     // State ảnh upload
-    const [clinicImages, setClinicImages] = useState<{ front: File | null, back: File | null }>({ 
-        front: null, back: null 
-    });
-    const [previewImages, setPreviewImages] = useState<{ front: string | null, back: string | null }>({ 
-        front: null, back: null 
-    });
+    const [clinicImages, setClinicImages] = useState<{ front: File | null, back: File | null }>({ front: null, back: null });
+    const [previewImages, setPreviewImages] = useState<{ front: string | null, back: string | null }>({ front: null, back: null });
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
     const fetchChatData = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            // SỬA: localhost
             const res = await fetch('http://localhost:8000/api/v1/chats', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                const serverChats = data.chats || []; // Fallback mảng rỗng
-
+                const serverChats = data.chats || [];
+                
+                // Logic gộp tin nhắn ảo "Vừa xong"
                 setChatData(prevChats => {
-                    // Giữ nguyên logic sort của bạn
                     const prevMap = new Map(prevChats.map((c: any) => [c.id, c]));
                     const mergedChats = serverChats.map((sChat: any) => {
                         const pChat: any = prevMap.get(sChat.id);
-                        if (pChat && pChat.time === "Vừa xong" && sChat.preview !== pChat.preview) {
-                            return pChat; 
-                        }
+                        if (pChat && pChat.time === "Vừa xong" && sChat.preview !== pChat.preview) return pChat; 
                         return sChat;
                     });
                     return mergedChats.sort((a: any, b: any) => {
@@ -83,14 +75,11 @@ const Dashboard: React.FC = () => {
         } catch (error) { console.error("Lỗi chat:", error); }
     }, []);
 
-    // --- 2. HÀM TẢI LỊCH SỬ KHÁM (QUAN TRỌNG) ---
-// Trong file dashboard.tsx
-
+    // --- 2. HÀM TẢI LỊCH SỬ KHÁM ---
     const fetchMedicalRecords = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            // SỬA 1: Thêm dấu '/' ở cuối URL để tránh lỗi 307 Redirect
             const historyRes = await fetch('http://localhost:8000/api/v1/medical-records/', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -99,46 +88,35 @@ const Dashboard: React.FC = () => {
                 const rawData = await historyRes.json();
                 const list = Array.isArray(rawData) ? rawData : (rawData.items || rawData.history || []);
 
-                console.log("Dữ liệu gốc từ API:", list); // Giữ log để debug
-
                 const mappedHistory = list.map((item: any) => {
-                // 1. Ngày tháng
-                const rawDate = item.created_at || item.upload_date || new Date().toISOString();
-                
-                // 2. Lấy object kết quả (Do backend đã sửa trả về chuẩn field analysis_result)
-                const analysisData = item.analysis_result || {};
+                    const rawDate = item.created_at || item.upload_date || new Date().toISOString();
+                    const analysisData = item.analysis_result || {};
+                    const risk = analysisData.risk_level;
+                    
+                    let statusDisplay = "PENDING";
+                    let resultDisplay = "Đang phân tích...";
 
-                // 3. Xác định trạng thái và kết quả hiển thị
-                // Ưu tiên lấy risk_level từ analysis_result
-                const risk = analysisData.risk_level;
-                
-                let statusDisplay = "PENDING";
-                let resultDisplay = "Đang phân tích...";
+                    if (risk) {
+                        statusDisplay = "COMPLETED";
+                        resultDisplay = risk; 
+                    }
 
-                // Logic: Nếu có risk_level thì coi như đã xong
-                if (risk) {
-                    statusDisplay = "COMPLETED";
-                    resultDisplay = risk; 
-                }
-
-                return {
-                    id: item.id,
-                    rawTimestamp: new Date(rawDate).getTime(),
-                    date: new Date(rawDate).toLocaleDateString('vi-VN'),
-                    time: new Date(rawDate).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
-                    result: resultDisplay,
-                    status: statusDisplay,
-                    annotated_url: analysisData.annotated_image_url || null
-                };
-            });
-
-                // Sắp xếp mới nhất lên đầu
-                setHistoryData(mappedHistory.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                    return {
+                        id: item.id,
+                        rawTimestamp: new Date(rawDate).getTime(),
+                        date: new Date(rawDate).toLocaleDateString('vi-VN'),
+                        time: new Date(rawDate).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
+                        result: resultDisplay,
+                        status: statusDisplay,
+                        annotated_url: analysisData.annotated_image_url || null
+                    };
+                });
+                setHistoryData(mappedHistory.sort((a: any, b: any) => b.rawTimestamp - a.rawTimestamp));
             }
         } catch (err) { console.error("Lỗi cập nhật hồ sơ:", err); }
     }, []);
 
-    // --- 3. HÀM TẢI TIN NHẮN CHAT ---
+    // --- 3. HÀM CHAT ---
     const fetchMessageHistory = async (partnerId: string) => {
         const token = localStorage.getItem('token');
         if (!token) return null;
@@ -163,7 +141,6 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (token) {
             setChatData(prev => prev.map(c => c.id === partnerId ? { ...c, unread: false } : c));
-            // Sửa method thành POST hoặc PUT tùy backend chat của bạn
             await fetch(`http://localhost:8000/api/v1/chat/read/${partnerId}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -172,65 +149,27 @@ const Dashboard: React.FC = () => {
         fetchChatData(); 
     };
 
-    const checkRoleAndRedirect = useCallback(async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        try {
-            const res = await fetch('http://localhost:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` }});
-            if (res.ok) {
-                const data = await res.json();
-                // SỬA: Lấy role trực tiếp
-                const currentRole = data.role || (data.user_info && data.user_info.role);
-                
-                if (currentRole === 'clinic') {
-                     alert("🎉 Hồ sơ đã được duyệt! Chuyển hướng...");
-                     navigate('/clinic-dashboard', { replace: true });
-                }
-                if (currentRole !== userRole) setUserRole(currentRole);
-            }
-        } catch (e) {}
-    }, [navigate, userRole]);
-
-
-    // --- 4. GỬI TIN NHẮN ---
+    // --- 4. CÁC HÀM XỬ LÝ SỰ KIỆN KHÁC ---
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessageText.trim() || !selectedChatId) return;
-
         const textToSend = newMessageText;
         setNewMessageText(''); 
-
-        // Thay thế đoạn tạo tempMsg bằng đoạn này:
-
         const now = new Date();
-        // Lấy giờ phút và tự thêm số 0 đằng trước nếu < 10
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-        const tempMsg = {
-            id: Date.now().toString(),
-            content: textToSend,
-            is_me: true,
-            time: timeString, // <--- Dùng biến này thay vì toLocaleTimeString
-            is_read: false
-        };
+        const tempMsg = { id: Date.now().toString(), content: textToSend, is_me: true, time: timeString, is_read: false };
         setCurrentMessages(prev => [...prev, tempMsg]);
-
         setChatData(prevList => {
             const newList = [...prevList];
             const chatIndex = newList.findIndex(c => c.id === selectedChatId);
             if (chatIndex > -1) {
-                const updatedChat = { 
-                    ...newList[chatIndex], 
-                    preview: "Bạn: " + textToSend, 
-                    time: "Vừa xong",
-                    unread: false 
-                };
+                const updatedChat = { ...newList[chatIndex], preview: "Bạn: " + textToSend, time: "Vừa xong", unread: false };
                 newList.splice(chatIndex, 1);
                 newList.unshift(updatedChat);
             }
             return newList;
         });
-
         try {
             const token = localStorage.getItem('token');
             await fetch('http://localhost:8000/api/v1/chat/send', {
@@ -241,18 +180,13 @@ const Dashboard: React.FC = () => {
         } catch (err) { alert("Lỗi gửi tin!"); }
     };
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [currentMessages]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [currentMessages]);
 
-    // --- HÀM XỬ LÝ CHỌN ẢNH ---
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'back') => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             let objectUrl: string | null = null;
-            if (file.type.startsWith('image/')) {
-                 objectUrl = URL.createObjectURL(file);
-            }
+            if (file.type.startsWith('image/')) objectUrl = URL.createObjectURL(file);
             setClinicImages(prev => ({ ...prev, [type]: file }));
             setPreviewImages(prev => ({ ...prev, [type]: objectUrl }));
         }
@@ -263,111 +197,63 @@ const Dashboard: React.FC = () => {
         setPreviewImages(prev => ({ ...prev, [type]: null }));
     };
 
-    // --- HÀM ĐĂNG KÝ PHÒNG KHÁM ---
     const handleClinicSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmittingClinic(true);
         const token = localStorage.getItem('token');
-    
         try {
             const formData = new FormData();
-            
-            // 1. SỬA TÊN KEY CHO KHỚP VỚI BACKEND (api/clinic.py)
-            formData.append('name', clinicForm.name);       // Backend: name
-            formData.append('address', clinicForm.address); // Backend: address
-            formData.append('phone', clinicForm.phone);     // Backend: phone (đã map map với biến phone_number trong service)
-            
-            // 2. XỬ LÝ MÃ GIẤY PHÉP (Do DB chưa có cột license, ta ghép vào mô tả)
+            formData.append('name', clinicForm.name);
+            formData.append('address', clinicForm.address);
+            formData.append('phone', clinicForm.phone);
             const fullDescription = `Mã GP: ${clinicForm.license}. \n${clinicForm.description}`;
             formData.append('description', fullDescription);
+            if (clinicImages.front) formData.append('logo', clinicImages.front); 
+            else if (clinicImages.back) formData.append('logo', clinicImages.back);
 
-            // 3. XỬ LÝ FILE ẢNH
-            // Backend chỉ nhận 1 file có key là "logo". 
-            // Ta ưu tiên lấy ảnh mặt trước làm logo.
-            if (clinicImages.front) {
-                formData.append('logo', clinicImages.front); 
-            } else if (clinicImages.back) {
-                // Nếu không có mặt trước thì lấy mặt sau đỡ
-                formData.append('logo', clinicImages.back);
-            }
-
-            // Gọi API
             const res = await fetch('http://localhost:8000/api/v1/clinics/register', {
                 method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}` 
-                    // Lưu ý: KHÔNG ĐƯỢC set 'Content-Type': 'multipart/form-data' thủ công 
-                    // Fetch sẽ tự động set boundary cho FormData
-                },
+                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-
             const data = await res.json();
-
             if (res.ok) {
-                alert("Gửi yêu cầu đăng ký thành công! Vui lòng chờ Admin phê duyệt.");
-                // Reset form
+                alert("Gửi yêu cầu đăng ký thành công!");
                 setClinicForm({ name: '', address: '', phone: '', license: '', description: '' }); 
                 setClinicImages({ front: null, back: null });
                 setPreviewImages({ front: null, back: null });
-                
-                // Chuyển tab hoặc reload data nếu cần
                 setActiveTab('home');
-            } else {
-                // Hiển thị chi tiết lỗi trả về từ Backend
-                console.error("Lỗi Backend:", data);
-                alert(data.detail || "Có lỗi xảy ra, vui lòng kiểm tra lại thông tin.");
-            }
-        } catch (error) {
-            console.error("Lỗi đăng ký:", error);
-            alert("Lỗi kết nối server!");
-        } finally {
-            setIsSubmittingClinic(false);
-        }
+            } else { alert(data.detail || "Có lỗi xảy ra"); }
+        } catch (error) { alert("Lỗi kết nối server!"); } 
+        finally { setIsSubmittingClinic(false); }
     };
 
-    // --- 5. POLLING TỰ ĐỘNG ---
+    // --- 5. INITIALIZATION & POLLING ---
     useEffect(() => {
         const interval = setInterval(async () => {
-             // Chỉ poll khi tab đang active để tiết kiệm tài nguyên
              if (activeTab === 'messages') fetchChatData(); 
              if (activeTab === 'home') fetchMedicalRecords();
-             
              if (selectedChatId && selectedChatId !== 'system') {
                 const serverMsgs = await fetchMessageHistory(selectedChatId);
                 if (serverMsgs && serverMsgs.length > currentMessages.length) setCurrentMessages(serverMsgs);
              }
-             // Check role nâng hạng
-             if (userRole === 'USER') {
-                 checkRoleAndRedirect();
-             }
-        }, 5000); // Tăng lên 5s cho đỡ lag
+        }, 5000); 
         return () => clearInterval(interval);
-    }, [selectedChatId, fetchChatData, fetchMedicalRecords, currentMessages.length, userRole, checkRoleAndRedirect, activeTab]);
+    }, [selectedChatId, fetchChatData, fetchMedicalRecords, currentMessages.length, activeTab]);
 
-    // --- LOGIC KHỞI TẠO (GET /api/users/me) ---
     useEffect(() => {
         const initData = async () => {
             const token = localStorage.getItem('token');
             if (!token) { navigate('/login'); return; }
             try {
-                const userResponse = await fetch('http://localhost:8000/api/v1/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
+                const userResponse = await fetch('http://localhost:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!userResponse.ok) { handleLogout(); return; }
-                
                 const userData = await userResponse.json();
-                
-                // SỬA: Xử lý dữ liệu phẳng
-                // Nếu backend trả về phẳng: { username: '...', role: '...' }
-                // Nếu backend trả về lồng: { user_info: { ... } }
                 const info = userData.user_info || userData;
                 const userProfile = info.profile || {};
 
                 setUserName(info.username || info.userName || '');
                 setUserRole(info.role);
-                setUserId(info.id);
                 setFullName(userProfile.full_name || info.full_name || '');
                 
                 await fetchMedicalRecords(); 
@@ -388,58 +274,27 @@ const Dashboard: React.FC = () => {
     }, []);
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
-    
     const goToProfilePage = () => { setShowUserMenu(false); navigate('/profile'); };
     const goToUpload = () => navigate('/upload');
-    const goToHistory = () => navigate('/history');
-    
-    // SỬA: Link đúng tới trang chi tiết
     const goToDetail = (recordId: string) => navigate(`/analysis-result/${recordId}`);
     
-    const toggleNotifications = () => {
-        const newState = !showNotifications;
-        setShowNotifications(newState);
-        setShowUserMenu(false);
-        
-        if (newState) {
-            // Khi mở thông báo -> Lưu lại thời điểm hiện tại là "đã xem"
-            const now = new Date().getTime();
-            localStorage.setItem('last_viewed_notification', now.toString());
-            
-            // Cập nhật state để UI render lại ngay lập tức (ẩn chấm đỏ đi)
-            // Bạn có thể dùng một state dummy để trigger render nếu cần, 
-            // hoặc đơn giản là setHasViewedNotifications(true) như cũ để tạm ẩn.
-            setHasViewedNotifications(true); 
-        }
-    };
-
-    const getStatusColor = (status: string) => {
-        if (!status) return "#e67e22";
-        const s = status.toUpperCase();
-        if (s.includes("HOÀN THÀNH") || s.includes("COMPLETED")) return "#28a745"; 
-        if (s.includes("LỖI") || s.includes("FAILED")) return "#dc3545"; 
-        return "#e67e22"; // Pending
+    // Logic hiển thị màu sắc theo MỨC ĐỘ RỦI RO (Giống Clinic)
+    const getStatusColor = (result: string) => {
+        if (!result) return 'black';
+        const r = result.toLowerCase();
+        if (r.includes('nặng') || r.includes('severe') || r.includes('pdr')) return '#dc3545'; // Đỏ
+        if (r.includes('vừa') || r.includes('moderate')) return '#fd7e14'; // Cam
+        if (r.includes('bình thường') || r.includes('normal') || r.includes('không')) return '#28a745'; // Xanh
+        return '#007bff'; // Xanh dương (Mặc định)
     };
 
     const totalScans = historyData.length;
-    // SỬA logic đếm nguy cơ cao dựa trên ai_result mới
     const highRiskCount = historyData.filter(item => {
         const res = (item.result || "").toLowerCase();
         return res.includes('nặng') || res.includes('severe') || res.includes('moderate') || res.includes('pdr');
     }).length;
     
     const recentNotifications = historyData.slice(0, 5);
-    
-    // 1. Lấy thời gian chuẩn từ trường rawTimestamp (thay vì ghép chuỗi date + time dễ lỗi)
-    const latestNotificationTime = recentNotifications.length > 0 
-        ? recentNotifications[0].rawTimestamp 
-        : 0;
-
-    // 2. Lấy thời gian lần cuối người dùng bấm vào chuông
-    const lastViewedTime = parseInt(localStorage.getItem('last_viewed_notification') || '0');
-
-    // 3. So sánh
-    const showRedDot = latestNotificationTime > lastViewedTime;
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
 
     // --- RENDER CONTENT ---
@@ -536,7 +391,7 @@ const Dashboard: React.FC = () => {
             );
         }
 
-        // --- 2. RENDER CHAT ---
+        // 2. CHAT
         if (activeTab === 'messages') {
             const currentPartner = chatData.find(c => c.id === selectedChatId);
             return (
@@ -548,8 +403,8 @@ const Dashboard: React.FC = () => {
                                 <div key={msg.id} style={{...styles.chatListItem, backgroundColor: selectedChatId === msg.id ? '#ebf5ff' : 'transparent'}} onClick={() => openChat(msg.id)}>
                                     <div style={styles.avatarLarge}>{(msg.full_name || msg.sender || 'U').charAt(0).toUpperCase()}</div>
                                     <div style={{flex: 1, overflow: 'hidden'}}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between'}}><span style={{fontWeight: msg.unread ? '800' : '500', fontSize: '15px', color: '#050505'}}>{msg.full_name || msg.sender}</span></div>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '5px'}}><p style={{margin: 0, fontSize: '13px', color: msg.unread ? '#050505' : '#65676b', fontWeight: msg.unread ? 'bold' : 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{msg.preview}</p><span style={{fontSize: '11px', color: '#65676b'}}>• {msg.time}</span></div>
+                                        <div style={{fontWeight: msg.unread ? '800' : '500'}}>{msg.full_name || msg.sender}</div>
+                                        <div style={{fontSize: '13px', color: msg.unread ? '#000' : '#666'}}>{msg.preview}</div>
                                     </div>
                                     {msg.unread && <div style={styles.unreadBlueDot}></div>}
                                 </div>
@@ -560,79 +415,29 @@ const Dashboard: React.FC = () => {
                         {selectedChatId ? (
                             <>
                                 <div style={styles.chatWindowHeader}>
-                                    <div style={styles.avatarMedium}>{(currentPartner?.full_name || currentPartner?.sender || '').charAt(0).toUpperCase()}</div>
-                                    <div style={{flex: 1}}><h4 style={{margin: 0, fontSize: '16px'}}>{currentPartner?.full_name || currentPartner?.sender}</h4><span style={{fontSize: '12px', color: '#65676b'}}>{currentPartner?.id === 'system' ? 'Hệ thống' : 'Bác sĩ'}</span></div>
+                                    <div style={styles.avatarMedium}>{(currentPartner?.full_name||'U').charAt(0).toUpperCase()}</div>
+                                    <div><b>{currentPartner?.full_name||currentPartner?.sender}</b></div>
                                 </div>
                                 <div style={styles.messagesBody}>
                                     {currentMessages.map((msg, idx) => (
-                                        <div key={idx} style={{
-                                            ...styles.messageRow, 
-                                            justifyContent: msg.is_me ? 'flex-end' : 'flex-start'
-                                        }}>
-                                            {/* Avatar bên trái (người khác) */}
-                                            {!msg.is_me && (
-                                                <div style={{
-                                                    ...styles.avatarSmall, 
-                                                    alignSelf: 'flex-end', 
-                                                    marginBottom: '20px',
-                                                    marginRight: '8px'
-                                                }}>
-                                                    {(chatData.find(c=>c.id===selectedChatId)?.sender || 'U').charAt(0).toUpperCase()}
-                                                </div>
-                                            )}
-                                            
-                                            <div style={{display:'flex', flexDirection:'column', alignItems: msg.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
-                                                {/* Bong bóng chat */}
-                                                <div style={msg.is_me ? styles.bubbleMe : styles.bubbleOther}>
-                                                    {msg.content}
-                                                </div>
-
-                                                {/* Thời gian & Tick */}
-                                                <div style={{
-                                                    display:'flex', alignItems:'center', gap:'4px', 
-                                                    marginTop:'2px', marginBottom:'10px', 
-                                                    fontSize:'11px', color:'#999',
-                                                    paddingRight: msg.is_me ? '5px' : '0',
-                                                    paddingLeft: !msg.is_me ? '5px' : '0'
-                                                }}>
-                                                    <span>{msg.time}</span>
-                                                    
-                                                    {/* Chỉ hiện Tick cho tin nhắn của mình */}
-                                                    {msg.is_me && (
-                                                        <span style={{marginLeft:'2px', display:'flex', alignItems:'center'}}>
-                                                            {msg.is_read ? (
-                                                                <span title="Đã xem" style={{display:'flex', alignItems:'center', color: '#007bff'}}>
-                                                                    <FaCheckDouble size={10}/> 
-                                                                </span>
-                                                            ) : (
-                                                                <span title="Đã gửi" style={{color: '#ccc'}}>
-                                                                    <FaCheck size={10}/>
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                        <div key={idx} style={{...styles.messageRow, justifyContent: msg.is_me ? 'flex-end' : 'flex-start'}}>
+                                            <div style={msg.is_me ? styles.bubbleMe : styles.bubbleOther}>{msg.content}</div>
                                         </div>
                                     ))}
-                                    <div ref={messagesEndRef} />
+                                    <div ref={messagesEndRef}/>
                                 </div>
-                                {selectedChatId !== 'system' && (
-                                    <div style={styles.chatInputArea}>
-                                        <form onSubmit={handleSendMessage} style={{flex: 1, display: 'flex'}}><input type="text" placeholder="Nhắn tin..." value={newMessageText} onChange={(e) => setNewMessageText(e.target.value)} style={styles.messengerInput} /></form>
-                                        <div onClick={handleSendMessage} style={{cursor: 'pointer'}}><FaPaperPlane size={20} color="#007bff" /></div>
-                                    </div>
-                                )}
+                                <div style={styles.chatInputArea}>
+                                    <form onSubmit={handleSendMessage} style={{flex:1, display:'flex'}}><input style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/></form>
+                                    <FaPaperPlane onClick={handleSendMessage} size={20} color="#007bff" style={{cursor:'pointer'}}/>
+                                </div>
                             </>
-                        ) : (
-                            <div style={styles.emptyChatState}><div style={{width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px'}}><FaComments size={40} color="#007bff"/></div><h3>Chào mừng đến với AURA Chat</h3><p>Chọn một cuộc trò chuyện để bắt đầu nhắn tin.</p></div>
-                        )}
+                        ) : <div style={styles.emptyChatState}><FaComments size={40} color="#ddd"/><p>Chọn hội thoại để bắt đầu</p></div>}
                     </div>
                 </div>
             );
         }
         
-        // --- 3. PAYMENTS ---
+        // 3. PAYMENTS
         if (activeTab === 'payments') return (
             <div style={styles.card}>
                 <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10}}/>Thanh toán & Dịch vụ</h2></div>
@@ -640,20 +445,7 @@ const Dashboard: React.FC = () => {
             </div>
         );
 
-        // --- 4. HOME (EMPTY STATE) ---
-        if (historyData.length === 0 && activeTab === 'home') return (
-            <div style={styles.card}>
-                <div style={{...styles.emptyStateContainer, padding: '50px'}}>
-                    {/* <img src="/logo.svg" alt="Welcome" style={{ width: '100px', marginBottom: '20px' }} /> */}
-                    <FaUserCircle size={80} color="#ddd" style={{marginBottom: 20}}/>
-                    <h2>Chào mừng bạn đến với AURA!</h2>
-                    <p style={{color:'#666'}}>Bạn chưa có dữ liệu sàng lọc nào.</p>
-                    <button onClick={goToUpload} style={styles.primaryBtn}>Bắt đầu ngay</button>
-                </div>
-            </div>
-        );
-        
-        // --- 5. HOME (DASHBOARD) ---
+        // 4. HOME (DASHBOARD) - PHẦN QUAN TRỌNG ĐÃ ĐƯỢC FIX
         return (
             <div style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
                 {/* Stats Cards */}
@@ -665,27 +457,62 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* History Table */}
+                {/* --- History Table (Giao diện chuẩn Clinic) --- */}
                 <div style={styles.card}>
                     <div style={styles.cardHeader}>
-                        <h3 style={styles.pageTitle}>🕒 Lịch sử khám gần đây</h3>
-                        <button onClick={goToHistory} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontWeight: 'bold' }}>Xem tất cả &rarr;</button>
+                        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                            <h3 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/> Lịch sử Phân tích AI</h3>
+                            <span style={styles.badge}>{historyData.length} Ca khám</span>
+                        </div>
+                        <button onClick={goToUpload} style={{...styles.primaryBtn, display:'flex', alignItems:'center', gap:'8px', padding: '8px 15px', fontSize:'13px'}}>
+                            <FaCamera /> Phân tích mới
+                        </button>
                     </div>
+
                     <table style={styles.table}>
-                        <thead><tr><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Hành động</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th style={styles.th}>Thời gian</th>
+                                <th style={styles.th}>Hình ảnh</th>
+                                <th style={styles.th}>Kết quả AI</th>
+                                <th style={styles.th}>Trạng thái</th>
+                                <th style={styles.th}>Chi tiết</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            {historyData.map((item, i) => (
-                                <tr key={i} style={styles.tr}>
-                                    <td style={styles.td}>{item.date} <br/><small style={{color:'#999'}}>{item.time}</small></td>
-                                    <td style={styles.td}>
-                                        <span style={{color: getStatusColor(item.status), fontWeight:'bold'}}>
-                                            {item.status.includes('PENDING') || item.status.includes('Đang') ? 'Đang phân tích...' : item.result}
-                                        </span>
-                                        {(item.status.includes('PENDING') || item.status.includes('Đang')) && <span style={styles.spinner}> ⏳</span>}
+                            {historyData.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} style={styles.emptyCell}>
+                                        Chưa có dữ liệu phân tích nào. <br/>
+                                        <button onClick={goToUpload} style={{...styles.primaryBtn, marginTop:'10px', display:'inline-block', fontSize:'12px', padding:'5px 15px'}}>Bắt đầu ngay</button>
                                     </td>
-                                    <td style={styles.td}><button onClick={() => goToDetail(item.id)} style={{...styles.actionBtn, opacity: item.status.includes('PENDING') ? 0.6 : 1}}>Xem chi tiết</button></td>
                                 </tr>
-                            ))}
+                            ) : (
+                                historyData.map((item, i) => (
+                                    <tr key={i} style={styles.tr}>
+                                        <td style={styles.td}>{item.date}<br/><small style={{color:'#999'}}>{item.time}</small></td>
+                                        <td style={styles.td}>
+                                            {item.annotated_url ? (
+                                                <img src={item.annotated_url} alt="Scan" style={{width:'40px', height:'40px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}} />
+                                            ) : <div style={{width:'40px', height:'40px', background:'#f0f0f0', borderRadius:'4px', display:'flex', alignItems:'center', justifyContent:'center'}}><FaImage color="#ccc"/></div>}
+                                        </td>
+                                        <td style={styles.td}>
+                                            <span style={{color: getStatusColor(item.result), fontWeight:'bold'}}>
+                                                {item.status.includes('PENDING') ? 'Đang chờ...' : item.result}
+                                            </span>
+                                        </td>
+                                        <td style={styles.td}>
+                                            {(item.status.includes('PENDING') || item.status.includes('Đang')) ? 
+                                                <span style={styles.statusPending}><span className="spin">⏳</span> Đang xử lý</span> : 
+                                                <span style={styles.statusActive}>Hoàn tất</span>
+                                            }
+                                        </td>
+                                        <td style={styles.td}>
+                                            <button onClick={() => goToDetail(item.id)} style={styles.actionBtn}>Xem</button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -697,51 +524,24 @@ const Dashboard: React.FC = () => {
 
     return (
         <div style={styles.container}>
-            {/* SIDEBAR */}
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
-                    <div style={styles.logoRow}>
-                        {/* <img src="/logo.svg" alt="Logo" style={{width:'30px'}} /> */}
-                        <FaHome size={24} color="#007bff"/>
-                        <span style={styles.logoText}>AURA HEALTH</span>
-                    </div>
+                    <div style={styles.logoRow}><FaHome size={24} color="#007bff"/><span style={styles.logoText}>AURA HEALTH</span></div>
                     <div style={styles.clinicName}>Dành cho Bệnh nhân</div>
                 </div>
                 <nav style={styles.nav}>
-                    <div style={activeTab === 'home' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('home')}>
-                        <FaHome style={styles.menuIcon} /> Trang chủ
-                    </div>
-                    <div style={activeTab === 'messages' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('messages')}>
-                        <FaComments style={styles.menuIcon} /> Tin nhắn 
-                        {unreadMessagesCount > 0 && <span style={styles.badge}>{unreadMessagesCount}</span>}
-                    </div>
-                    <div style={activeTab === 'clinic-register' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('clinic-register')}>
-                        <FaHospital style={styles.menuIcon} /> Đăng ký Phòng khám
-                    </div>
-                    <div style={activeTab === 'payments' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('payments')}>
-                        <FaCreditCard style={styles.menuIcon} /> Thanh toán
-                    </div>
+                    <div style={activeTab === 'home' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('home')}><FaHome style={styles.menuIcon} /> Trang chủ</div>
+                    <div style={activeTab === 'messages' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('messages')}><FaComments style={styles.menuIcon} /> Tin nhắn {unreadMessagesCount > 0 && <span style={styles.badgeRed}>{unreadMessagesCount}</span>}</div>
+                    <div style={activeTab === 'clinic-register' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('clinic-register')}><FaHospital style={styles.menuIcon} /> Đăng ký Phòng khám</div>
+                    <div style={activeTab === 'payments' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('payments')}><FaCreditCard style={styles.menuIcon} /> Thanh toán</div>
                 </nav>
-                <div style={styles.sidebarFooter}>
-                     <button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button>
-                </div>
+                <div style={styles.sidebarFooter}><button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button></div>
             </aside>
-
-            {/* MAIN CONTENT */}
             <main style={styles.main}>
                 <header style={styles.header}>
-                    <div style={styles.searchBox}>
-                        <FaSearch color="#999" />
-                        <input type="text" placeholder="Tìm kiếm hồ sơ..." style={styles.searchInput} />
-                    </div>
-                    
                     <div style={styles.headerRight}>
-                        {/* Notifications */}
                         <div style={{position:'relative'}} ref={notificationRef}>
-                             <button style={styles.iconBtn} onClick={toggleNotifications}>
-                                <FaBell color="#555" size={18}/>
-                                {showRedDot && <span style={styles.bellBadge}></span>}
-                             </button>
+                             <button style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}><FaBell color="#555" size={18}/></button>
                              {showNotifications && (
                                 <div style={styles.notificationDropdown}>
                                     <div style={styles.dropdownHeader}>Thông báo</div>
@@ -749,35 +549,23 @@ const Dashboard: React.FC = () => {
                                 </div>
                             )}
                         </div>
-
-                        {/* Profile */}
                         <div style={{ position: 'relative' }} ref={profileRef}>
-                        <div 
-                            style={styles.profileBox} 
-                            onClick={() => setShowUserMenu(!showUserMenu)}
-                            >
-                            <div style={styles.avatarCircle}>{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
-                            <span style={styles.userNameText}>{full_name || userName || 'User'}</span>
-                        </div>
-                        {showUserMenu && (
-                            <div style={styles.dropdownMenu}>
-                                <div style={{padding:'15px', borderBottom:'1px solid #eee'}}>
-                                    <strong>{full_name}</strong><br/><small style={{color:'#666'}}>{userRole}
-                                    </small></div>
-                                <button style={styles.dropdownItem} onClick={goToProfilePage}><FaUserCircle style={{marginRight:8}}/> Hồ sơ cá nhân</button>
-                                <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
+                            <div style={styles.profileBox} onClick={() => setShowUserMenu(!showUserMenu)}>
+                                <div style={styles.avatarCircle}>{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
+                                <span style={styles.userNameText}>{full_name || userName || 'User'}</span>
                             </div>
-                        )}
+                            {showUserMenu && (
+                                <div style={styles.dropdownMenu}>
+                                    <div style={{padding:'15px', borderBottom:'1px solid #eee'}}><strong>{full_name}</strong><br/><small style={{color:'#666'}}>{userRole}</small></div>
+                                    <button style={styles.dropdownItem} onClick={goToProfilePage}><FaUserCircle style={{marginRight:8}}/> Hồ sơ cá nhân</button>
+                                    <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            </header>
-
-                <div style={styles.contentBody}>
-                    {renderContent()}
-                </div>
+                </header>
+                <div style={styles.contentBody}>{renderContent()}</div>
             </main>
-            
-            {/* FAB BUTTON */}
             <div style={styles.fabContainer}>
                 {showFabMenu && <div style={styles.fabMenu}><button style={styles.fabMenuItem} onClick={goToUpload}><FaCamera style={{marginRight:10}}/> Tải ảnh mới</button></div>}
                 <button style={styles.fabButton} onClick={() => setShowFabMenu(!showFabMenu)}>{showFabMenu ? '✕' : '+'}</button>
@@ -786,13 +574,10 @@ const Dashboard: React.FC = () => {
     );
 };
 
-// --- STYLES (Giữ nguyên, chỉ đảm bảo tính đồng bộ) ---
+// --- STYLES ---
 const styles: { [key: string]: React.CSSProperties } = {
-    // Layout
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555' },
-    
-    // Sidebar
     sidebar: { width: '260px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%' },
     sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #f0f0f0' },
     logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px' },
@@ -804,22 +589,14 @@ const styles: { [key: string]: React.CSSProperties } = {
     menuIcon: { marginRight: '12px' },
     sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
     logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    badge: { marginLeft: 'auto', backgroundColor: '#dc3545', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' },
-
-    // Main Content
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
-    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px' },
-    searchBox: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: '8px', padding: '8px 15px', width: '350px', border: '1px solid #eee' },
-    searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '10px', width: '100%' },
+    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 30px' },
     headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
     profileBox: { display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' },
     avatarCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '14px', fontWeight:'600' },
     userNameText: { fontSize:'14px', fontWeight:'600', color: '#333' },
     iconBtn: { background:'none', border:'none', cursor:'pointer', position:'relative', padding:'5px' },
-    bellBadge: { position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', backgroundColor: '#dc3545', borderRadius: '50%' },
     contentBody: { padding: '30px', flex: 1, overflowY: 'auto' },
-
-    // Cards & Tables (Unified)
     card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow:'hidden', marginBottom:'20px' },
     cardHeader: { padding:'20px 25px', borderBottom:'1px solid #f0f0f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
     pageTitle: { fontSize: '16px', margin: 0, display:'flex', alignItems:'center', color: '#333' },
@@ -829,15 +606,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     td: { padding: '15px 25px', verticalAlign: 'middle', color:'#333' },
     actionBtn: { background: '#fff', border: '1px solid #007bff', color: '#007bff', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' },
     primaryBtn: { padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight:'600' },
-    
-    // Dropdowns
     notificationDropdown: { position: 'absolute', top: '40px', right: '-10px', width: '300px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 1100, border:'1px solid #eee' },
     notificationItem: { padding: '12px', borderBottom: '1px solid #eee', cursor: 'pointer', fontSize:'13px', color:'#333' },
-    dropdownMenu: { position: 'absolute', top: '60px', right: '30px', width: '220px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #eee' },
+    dropdownMenu: { position: 'absolute', top: '60px', right: '0', width: '220px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #eee' },
     dropdownHeader: { padding: '10px 15px', borderBottom: '1px solid #eee', fontWeight: 'bold', fontSize: '13px', backgroundColor: '#f8f9fa', color: '#333' },
     dropdownItem: { display: 'flex', alignItems:'center', width: '100%', padding: '10px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#333', fontSize:'14px' },
-
-    // Forms
     formLabel: { display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333', fontSize: '14px' },
     formInput: { width: '100%', padding: '10px 15px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', outline: 'none', transition: 'border 0.2s', boxSizing: 'border-box', background:'#fff' },
     uploadGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '10px' },
@@ -846,8 +619,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     previewContainer: { width: '100%', height: '100%', position: 'relative' },
     previewImage: { width: '100%', height: '100%', objectFit: 'cover' },
     removeBtn: { position: 'absolute', top: '10px', right: '10px', backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems:'center',justifyContent:'center',color:'#dc3545',boxShadow:'0 2px 5px rgba(0, 0, 0, 0.2)' },
-
-    // Chat Interface
     messengerCard: { display: 'flex', height: 'calc(100vh - 140px)', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow: 'hidden' },
     chatListPanel: { width: '320px', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' },
     chatHeaderLeft: { padding: '20px', borderBottom: '1px solid #f0f0f0' },
@@ -859,49 +630,25 @@ const styles: { [key: string]: React.CSSProperties } = {
     chatWindowHeader: { padding: '15px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px' },
     avatarMedium: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#65676b', fontSize:'14px' },
     messagesBody: { flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '5px' },
-    avatarSmall: { width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '8px', alignSelf: 'flex-end', marginBottom: '8px' },
     chatInputArea: { padding: '15px', display: 'flex', alignItems: 'center', gap: '12px', borderTop: '1px solid #f0f0f0' },
     messengerInput: { flex: 1, backgroundColor: '#f0f2f5', border: 'none', borderRadius: '20px', padding: '10px 16px', fontSize: '14px', outline: 'none' },
     emptyChatState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999', textAlign: 'center' },
-    messageRow: {
-        display: 'flex',
-        marginBottom: '4px',
-        width: '100%'
-    },
-    bubbleMe: {
-        padding: '10px 16px',
-        borderRadius: '18px 18px 4px 18px',
-        backgroundColor: '#007bff',
-        color: 'white',
-        maxWidth: '70%',
-        fontSize: '14.5px',
-        lineHeight: '1.5',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-        wordWrap: 'break-word' as 'break-word'
-    },
-    bubbleOther: {
-        padding: '10px 16px',
-        borderRadius: '18px 18px 18px 4px',
-        backgroundColor: '#e4e6eb',
-        color: '#050505',
-        maxWidth: '70%',
-        fontSize: '14.5px',
-        lineHeight: '1.5',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-        wordWrap: 'break-word' as 'break-word'
-    },
-    // FAB
+    messageRow: { display: 'flex', marginBottom: '4px', width: '100%' },
+    bubbleMe: { padding: '10px 16px', borderRadius: '18px 18px 4px 18px', backgroundColor: '#007bff', color: 'white', maxWidth: '70%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
+    bubbleOther: { padding: '10px 16px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#e4e6eb', color: '#050505', maxWidth: '70%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
     fabContainer: { position: 'fixed', bottom: '30px', right: '30px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', zIndex: 2000 },
     fabButton: { width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', fontSize: '24px', border: 'none', boxShadow: '0 4px 10px rgba(0,123,255,0.4)', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
     fabMenu: { marginBottom: '15px', backgroundColor: 'white', borderRadius: '12px', padding: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
     fabMenuItem: { padding: '10px 15px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', display:'flex', alignItems:'center', fontSize:'14px', color:'#333' },
-    spinner: { display: 'inline-block', animation: 'spin 2s linear infinite' },
-    emptyStateContainer: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', borderRadius: '16px', padding: '40px' },
+    badge: { background:'#eef2ff', color:'#007bff', padding:'4px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'600' },
+    badgeRed: { marginLeft: 'auto', backgroundColor: '#dc3545', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' },
+    statusActive: { background: '#d4edda', color: '#155724', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' },
+    statusPending: { background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', display:'flex', alignItems:'center', gap:'5px', width:'fit-content' },
+    emptyCell: { textAlign: 'center', padding: '40px', color: '#999', fontStyle: 'italic' },
 };
 
-// Keyframes
 const styleSheet = document.createElement("style");
-styleSheet.innerText = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+styleSheet.innerText = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`;
 document.head.appendChild(styleSheet);
 
 export default Dashboard;

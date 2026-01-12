@@ -399,10 +399,12 @@ const DashboardDr: React.FC = () => {
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
                     <div style={styles.logoRow}>
-                        {/* <img src="/logo.svg" alt="Logo" style={{width:'30px', filter: 'brightness(0) invert(1)'}} /> */}
-                        <FaUserMd size={24} color="#fff" />
+                        {/* Đổi màu icon sang xanh #007bff cho nổi trên nền trắng */}
+                        <FaUserMd size={24} color="#007bff" />
                         <span style={styles.logoText}>AURA DOCTOR</span>
                     </div>
+                    {/* Thêm dòng subtitle */}
+                    <div style={styles.clinicName}>Dành cho Bác sĩ</div>
                 </div>
                 <nav style={styles.nav}>
                     <div style={activeTab === 'home' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('home')}>
@@ -428,10 +430,6 @@ const DashboardDr: React.FC = () => {
             {/* MAIN CONTENT */}
             <main style={styles.main}>
                 <header style={styles.header}>
-                    <div style={styles.headerLeft}>
-                        <h2 style={{margin:0, fontSize:'18px'}}>Chào Bác sĩ, {full_name || userName} 👋</h2>
-                        {totalPending > 0 && <span style={styles.headerAlert}>Bạn có {totalPending} ca cần xem xét</span>}
-                    </div>
                     <div style={styles.headerRight}>
                          <div style={{position:'relative'}} ref={notificationRef}>
                             <button style={styles.iconBtn} onClick={() => setShowNotifications(!showNotifications)}>
@@ -454,8 +452,20 @@ const DashboardDr: React.FC = () => {
                             </div>
                             {showUserMenu && (
                                 <div style={styles.dropdownMenu}>
-                                    <button style={styles.dropdownItem} onClick={() => navigate('/profile-dr')}><FaUserMd style={{marginRight:8}}/> Hồ sơ</button>
-                                    <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
+                                    {/* Thêm phần Header hiển thị tên và quyền giống bên Bệnh nhân */}
+                                    <div style={{padding:'15px', borderBottom:'1px solid #eee'}}>
+                                        <strong style={{color:'#333', fontSize:'14px'}}>{full_name || userName}</strong>
+                                        <br/>
+                                        <small style={{color:'#666', fontSize:'12px'}}>{userRole}</small>
+                                    </div>
+
+                                    {/* Các nút chức năng */}
+                                    <button style={styles.dropdownItem} onClick={() => navigate('/profile-dr')}>
+                                        <FaUserMd style={{marginRight:8}}/> Hồ sơ cá nhân
+                                    </button>
+                                    <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}>
+                                        <FaSignOutAlt style={{marginRight:8}}/> Đăng xuất
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -934,22 +944,41 @@ const styles: {[key:string]: React.CSSProperties} = {
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555' },
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
     
-    // Sidebar (Doctor Theme: Dark Blue)
-    sidebar: { width: '260px', backgroundColor: '#34495e', display: 'flex', flexDirection: 'column', height: '100%' },
-    sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #2c3e50' },
-    logoRow: { display:'flex', alignItems:'center', gap:'10px' },
-    logoText: { fontWeight: '800', fontSize: '18px', color: '#fff' },
+// Sidebar (Đã chuyển sang Light Theme giống Patient)
+    sidebar: { width: '260px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%' },
+    
+    sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #f0f0f0' },
+    
+    logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom: '5px' }, // Thêm marginBottom
+    
+    logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b' }, // Đổi màu chữ sang đen
+    
+    clinicName: { fontSize:'13px', color:'#666', marginLeft:'35px' }, // Style mới cho dòng 'Dành cho Bác sĩ'
+    
     nav: { flex: 1, padding: '20px 0', overflowY: 'auto' },
-    menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#ecf0f1', display:'flex', alignItems:'center', transition:'0.2s' },
-    menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', backgroundColor: '#2c3e50', color: '#fff', borderLeft: '4px solid #3498db', display:'flex', alignItems:'center' },
+    
+    menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#555', display:'flex', alignItems:'center', transition:'0.2s' },
+    
+    // Style Active: Nền xanh nhạt, chữ xanh đậm, Border nằm bên PHẢI
+    menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
+    
     menuIcon: { marginRight: '12px' },
-    sidebarFooter: { padding: '20px', borderTop: '1px solid #2c3e50' },
-    logoutBtn: { width: '100%', padding: '10px', background: '#c0392b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    badge: { marginLeft: 'auto', backgroundColor: '#e74c3c', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' },
-
+    
+    sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
+    
+    // Nút đăng xuất màu đỏ nhạt giống bên Patient
+    logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
     // Main
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
-    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px' },
+    header: { 
+    height: '70px', 
+    backgroundColor: '#fff', 
+    borderBottom: '1px solid #e1e4e8', 
+    display: 'flex', 
+    justifyContent: 'flex-end', // <--- SỬA DÒNG NÀY (Cũ là 'space-between')
+    alignItems: 'center', 
+    padding: '0 30px' 
+},
     headerLeft: { display:'flex', alignItems:'center', gap:'15px' },
     headerAlert: { background:'#fdecea', color:'#e74c3c', padding:'5px 10px', borderRadius:'20px', fontSize:'12px', fontWeight:'bold' },
     headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
