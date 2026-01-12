@@ -86,8 +86,6 @@ const DoctorReport: React.FC = () => {
             // Map với DoctorValidation model: feedback_for_ai & is_correct
             const payload = {
                 doctor_diagnosis: info?.current_doctor_diagnosis || info?.ai_diagnosis, // Giữ nguyên chẩn đoán
-                doctor_notes: "REPORT: " + feedbackContent, // Đánh dấu đây là report
-                is_correct: isAiCorrect,
                 feedback_for_ai: feedbackContent // Trường quan trọng để Admin huấn luyện lại AI
             };
 
@@ -180,32 +178,6 @@ const DoctorReport: React.FC = () => {
                     <h3 style={{...styles.cardTitle, color: '#dc3545'}}>Nội dung báo cáo</h3>
                     
                     {/* Xác nhận tính đúng đắn */}
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>Theo đánh giá chuyên môn của bác sĩ, AI nhận diện:</label>
-                        <div style={styles.radioGroup}>
-                            <label style={isAiCorrect ? styles.radioSelected : styles.radioBtn}>
-                                <input 
-                                    type="radio" 
-                                    name="ai_correct" 
-                                    checked={isAiCorrect === true} 
-                                    onChange={() => setIsAiCorrect(true)}
-                                    style={{marginRight: 8}}
-                                />
-                                Chính xác (AI Đúng)
-                            </label>
-                            <label style={!isAiCorrect ? styles.radioSelectedError : styles.radioBtn}>
-                                <input 
-                                    type="radio" 
-                                    name="ai_correct" 
-                                    checked={isAiCorrect === false} 
-                                    onChange={() => setIsAiCorrect(false)}
-                                    style={{marginRight: 8}}
-                                />
-                                Không chính xác (AI Sai)
-                            </label>
-                        </div>
-                    </div>
-
                     {/* Text area nhập liệu */}
                     <div style={styles.formGroup}>
                         <label style={styles.label}>

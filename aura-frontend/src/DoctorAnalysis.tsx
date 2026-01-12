@@ -32,6 +32,9 @@ const DoctorAnalysis: React.FC = () => {
     const [internalNote, setInternalNote] = useState('');          
     const [isSaving, setIsSaving] = useState(false);
 
+    const [reportContent, setReportContent] = useState(''); 
+
+
     // --- 1. FETCH DATA ---
     const normalizeData = (rawData: any): MedicalRecord => {
         const analysisData = rawData.analysis_result || rawData.ai_analysis_result || rawData;
@@ -68,8 +71,14 @@ const DoctorAnalysis: React.FC = () => {
                 const normalized = normalizeData(resultRaw);
                 setData(normalized);
                 
+                // --- LOAD DỮ LIỆU CŨ VÀO STATE ĐỂ HIỂN THỊ LẠI ---
                 if (normalized.doctor_note) setInternalNote(normalized.doctor_note);
+                
+                // Nếu backend trả về kết quả bác sĩ đã lưu trước đó thì ưu tiên lấy, nếu không lấy của AI
                 setFinalDiagnosis(normalized.ai_result); 
+                
+                // Load nội dung report vào State chỉnh sửa
+                setReportContent(normalized.ai_detailed_report);
             }
         } catch (err) {
             console.error(err);
@@ -93,6 +102,7 @@ const DoctorAnalysis: React.FC = () => {
             document.exitFullscreen();
         }
     };
+    
 
     // --- 2. XỬ LÝ LƯU ---
     const handleSubmitDiagnosis = async () => {
@@ -108,7 +118,8 @@ const DoctorAnalysis: React.FC = () => {
             const payload = {
                 doctor_diagnosis: finalDiagnosis, 
                 doctor_notes: internalNote,       
-                is_correct: isAiCorrect     
+                is_correct: isAiCorrect,
+                ai_detailed_report: reportContent // <--- THÊM TRƯỜNG NÀY
             };
             const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnose`, {
                 method: 'PUT',
@@ -199,11 +210,24 @@ const DoctorAnalysis: React.FC = () => {
                         </div>
                     )}
                     
+                    {/* --- CẬP NHẬT PHẦN CHI TIẾT AI THÀNH EDITABLE TEXTAREA --- */}
                     <div style={styles.detailsBox}>
-                        <h4>Chi tiết AI:</h4>
-                        <p style={{whiteSpace: 'pre-wrap', fontSize: '13px', color: '#555'}}>
-                            {data.ai_detailed_report}
-                        </p>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
+                            <h4 style={{margin: 0}}>Chi tiết phân tích (Có thể chỉnh sửa):</h4>
+                            <span style={{fontSize: '11px', color: '#666', fontStyle: 'italic'}}>Bác sĩ có thể sửa lại nội dung này</span>
+                        </div>
+                        <textarea
+                            style={{
+                                ...styles.textarea, 
+                                height: '200px', 
+                                fontFamily: 'Consolas, monospace', // Font dễ nhìn cho báo cáo kỹ thuật
+                                fontSize: '13px',
+                                lineHeight: '1.5'
+                            }}
+                            value={reportContent}
+                            onChange={(e) => setReportContent(e.target.value)}
+                            placeholder="Nội dung báo cáo chi tiết..."
+                        />
                     </div>
                 </div>
 
