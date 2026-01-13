@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from core.database import get_db
 from models.users import User 
+from models.enums import UserRole  
 
 # Cấu hình Secret Key (Đảm bảo giống file .env nếu có)
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -74,4 +75,37 @@ def get_current_active_user(
     # if current_user.status == "suspended":
     #     raise HTTPException(status_code=400, detail="Inactive user")
     
+    return current_user
+
+def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Chỉ cho phép Admin truy cập.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập bị từ chối: Cần quyền Quản trị viên (Admin)"
+        )
+    return current_user
+
+def get_current_doctor(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Chỉ cho phép Bác sĩ (hoặc Admin) truy cập.
+    """
+    if current_user.role != UserRole.DOCTOR and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập bị từ chối: Chỉ dành cho Bác sĩ"
+        )
+    return current_user
+
+def get_current_clinic(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Chỉ cho phép Phòng khám (hoặc Admin) truy cập.
+    """
+    if current_user.role != UserRole.CLINIC and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập bị từ chối: Chỉ dành cho Phòng khám"
+        )
     return current_user

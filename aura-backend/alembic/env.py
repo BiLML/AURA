@@ -33,6 +33,7 @@ from models.medical import (
 )  # [Fix] Đã sửa từ medical_record -> medical
 from models.billing import ServicePackage, Subscription
 from models.chat import Message
+from models.system_config import SystemConfig
 # Nếu có thêm model mới, hãy thêm vào đây
 # ----------------------------------------------------------------------
 

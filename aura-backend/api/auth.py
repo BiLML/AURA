@@ -8,6 +8,7 @@ from core.security import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from services.user_service import UserService
 from schemas.user_schema import UserCreate, UserResponse, GoogleLoginSchema, FacebookLoginSchema, ForgotPasswordSchema, ResetPasswordSchema
 
+from models.enums import UserStatus
 
 
 router = APIRouter()
@@ -28,6 +29,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tài khoản hoặc mật khẩu không chính xác",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
