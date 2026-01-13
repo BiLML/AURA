@@ -74,19 +74,24 @@ class MedicalRepository:
         return self.db.query(RetinalImage).offset(skip).limit(limit).all()
 
     def get_record_by_id(self, record_id: str):
-        # Lấy chi tiết một ảnh kèm kết quả phân tích
+        """
+        Lấy chi tiết hồ sơ với đầy đủ thông tin liên kết (Bệnh nhân, Bác sĩ, Profile).
+        Dùng joinedload để tránh lỗi lazy loading khi truy cập relationship.
+        """
         return (
             self.db.query(RetinalImage)
-            # 1. Load thông tin Bệnh nhân -> User -> Profile (để lấy tên)
+            # 1. Load thông tin Bệnh nhân: Image -> Patient -> User -> Profile
             .options(
                 joinedload(RetinalImage.patient)
                 .joinedload(Patient.user)
                 .joinedload(User.profile)
             )
-            # 2. Load thông tin AI Analysis -> Doctor Validation (để lấy kết quả khám)
+            # 2. Load thông tin Kết quả & Bác sĩ: Image -> Analysis -> Validation -> Doctor -> Profile
             .options(
                 joinedload(RetinalImage.analysis_result)
                 .joinedload(AIAnalysisResult.doctor_validation)
+                .joinedload(DoctorValidation.doctor) # <--- THÊM MỚI: Load User bác sĩ
+                .joinedload(User.profile)            # <--- THÊM MỚI: Load Profile bác sĩ
             )
             .filter(RetinalImage.id == record_id)
             .first()
@@ -100,8 +105,12 @@ class MedicalRepository:
             self.db.query(RetinalImage)
             .join(Patient, RetinalImage.patient_id == Patient.id)
             .filter(Patient.user_id == user_id)
+            .options(
+                joinedload(RetinalImage.analysis_result)
+                .joinedload(AIAnalysisResult.doctor_validation)
+            )
             .order_by(RetinalImage.created_at.desc())
-            .offset(skip)  # Bây giờ biến skip đã hợp lệ
-            .limit(limit)  # Bây giờ biến limit đã hợp lệ
+            .offset(skip)
+            .limit(limit)
             .all()
         )

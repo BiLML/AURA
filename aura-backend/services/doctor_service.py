@@ -1,9 +1,9 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
 from fastapi import HTTPException
 
-from models.medical import DoctorValidation
+from models.medical import DoctorValidation, AIAnalysisResult
 from repositories.doctor_repo import DoctorRepository
 from repositories.medical_repo import MedicalRepository
 from schemas.doctor_schema import PatientResponse, LatestScan
@@ -180,3 +180,56 @@ class DoctorService:
             "doctor_name": doctor_name,
             "doctor_id": str(current_doctor_id)
         }
+    
+    def get_all_feedback_for_admin(self):
+        """
+        Lấy danh sách feedback từ bác sĩ để hiển thị dashboard Admin.
+        """
+        # 1. Query bảng DoctorValidation
+        # Sử dụng joinedload để lấy luôn thông tin User (Bác sĩ) và Analysis (Kết quả AI) trong 1 câu lệnh (Tránh N+1 query)
+        validations = (
+            self.db.query(DoctorValidation)
+            .options(
+                joinedload(DoctorValidation.doctor).joinedload(User.profile), # Load bác sĩ -> profile
+                joinedload(DoctorValidation.analysis)  # Load kết quả AI
+            )
+            .order_by(DoctorValidation.created_at.desc()) # Sắp xếp mới nhất (cần cột created_at ở Bước 1)
+            .all()
+        )
+        
+        results = []
+        for val in validations:
+            # A. Lấy tên bác sĩ từ relationship 'doctor' trong model
+            doctor_name = "Unknown"
+            if val.doctor: 
+                # Ưu tiên lấy full_name trong profile, nếu không có thì lấy username
+                if val.doctor.profile and val.doctor.profile.full_name:
+                    doctor_name = val.doctor.profile.full_name
+                else:
+                    doctor_name = val.doctor.username
+
+            # B. Lấy kết quả AI từ relationship 'analysis'
+            ai_result = "N/A"
+            if val.analysis:
+                ai_result = val.analysis.risk_level
+
+            # C. Map dữ liệu trả về cho Frontend
+            results.append({
+                "id": str(val.id),
+                "created_at": val.created_at, 
+                "doctor_name": doctor_name,
+                "doctor_id": str(val.doctor_id),
+                
+                "ai_result": ai_result,
+                "doctor_diagnosis": val.doctor_confirm, # Model dùng 'doctor_confirm'
+                
+                # Frontend dùng 'notes' để hiển thị cột lý do
+                # Ưu tiên hiển thị feedback gửi AI, nếu ko có thì lấy ghi chú bác sĩ
+                "notes": val.feedback_for_ai if val.feedback_for_ai else val.doctor_notes,
+                
+                # Frontend dùng check này để hiện badge Xanh/Đỏ
+                "accuracy": "CORRECT" if val.is_correct else "INCORRECT"
+            })
+            
+        return {"reports": results}
+    

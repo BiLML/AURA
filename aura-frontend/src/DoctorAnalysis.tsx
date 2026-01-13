@@ -196,7 +196,7 @@ const DoctorAnalysis: React.FC = () => {
                     </div>
                     
                     <div style={styles.aiResultBox}>
-                        <span style={styles.aiLabel}>AI Đánh giá:</span>
+                        <span style={styles.aiLabel}>Đánh giá:</span>
                         <span style={styles.aiValue}>{data.ai_result}</span>
                     </div>
                     {viewMode === 'annotated' && (
@@ -213,7 +213,7 @@ const DoctorAnalysis: React.FC = () => {
                     {/* --- CẬP NHẬT PHẦN CHI TIẾT AI THÀNH EDITABLE TEXTAREA --- */}
                     <div style={styles.detailsBox}>
                         <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                            <h4 style={{margin: 0}}>Chi tiết phân tích (Có thể chỉnh sửa):</h4>
+                            <h4 style={{margin: 0}}>Tham số (Có thể chỉnh sửa):</h4>
                             <span style={{fontSize: '11px', color: '#666', fontStyle: 'italic'}}>Bác sĩ có thể sửa lại nội dung này</span>
                         </div>
                         <textarea
@@ -275,7 +275,7 @@ const DoctorAnalysis: React.FC = () => {
                     </div>
 
                     <div style={styles.section}>
-                        <label style={styles.label}>Ghi chú chuyên môn:</label>
+                        <label style={styles.label}>Ghi chú:</label>
                         <textarea
                             style={styles.textarea}
                             rows={6}

@@ -61,7 +61,9 @@ const ClinicDashboard: React.FC = () => {
     ]);
 
     // --- STATE AI ANALYSIS & UPLOAD ---
-    const [aiHistory, setAiHistory] = useState<any[]>([]);
+    const [aiSubTab, setAiSubTab] = useState<'clinic' | 'patient'>('clinic'); // <--- State Tab Mới
+    const [clinicHistory, setClinicHistory] = useState<any[]>([]);            // <--- List 1
+    const [patientHistory, setPatientHistory] = useState<any[]>([]);          // <--- List 2
     
     // --- STATE MODALS QUẢN LÝ ---
     const [showAssignModal, setShowAssignModal] = useState(false);
@@ -110,35 +112,30 @@ const fetchAiHistory = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-        const res = await fetch('http://localhost:8000/api/v1/medical-records/clinic-history', {
+        const res = await fetch('http://localhost:8000/api/v1/clinics/medical-records/clinic-history-split', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {
-            const data = await res.json();
-            
-            // Backend trả về list trực tiếp
-            const list = Array.isArray(data) ? data : (data.history || []);
-            
-            const mappedHistory = list.map((item: any) => ({
-                id: item.id,
-                // Format ngày tháng
-                date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : "Vừa xong",
-                time: item.created_at ? new Date(item.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : "",
+                const data = await res.json();
                 
-                // QUAN TRỌNG: Lấy tên bệnh nhân. 
-                // Nếu backend chưa join bảng User, nó có thể null -> hiển thị tạm ID hoặc placeholder
-                patient_name: item.user ? item.user.full_name : (item.patient_name || `Bệnh nhân #${item.user_id}`),
-                
-                image_url: item.image_url,
-                result: item.ai_result || "Đang xử lý...", 
-                status: item.ai_analysis_status || "PENDING"
-            }));
-            
-            setAiHistory(mappedHistory);
-        }
-    } catch (error) { console.error("Lỗi tải lịch sử AI:", error); }
-}, []);
+                // Helper format
+                const mapData = (list: any[]) => list.map((item: any) => ({
+                    id: item.id,
+                    date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : "N/A",
+                    time: item.created_at ? new Date(item.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : "",
+                    patient_name: item.patient_name,
+                    image_url: item.image_url,
+                    result: item.ai_result || "Đang xử lý...", 
+                    status: item.ai_analysis_status || "PENDING",
+                    uploader: item.uploader_name
+                }));
+
+                setClinicHistory(mapData(data.clinic_uploads || []));
+                setPatientHistory(mapData(data.patient_uploads || []));
+            }
+        } catch (error) { console.error("Lỗi tải lịch sử AI:", error); }
+    }, []);
 
     // --- INITIAL LOAD & POLLING ---
     useEffect(() => {
@@ -301,7 +298,10 @@ const handleAddExistingDoctor = async (doctorId: string) => {
     // Filter Warning Patients
     const warningPatients = patients.filter(p => {
         const res = (p.latest_scan?.ai_result || "").toLowerCase();
-        return res.includes('nặng') || res.includes('severe') || res.includes('pdr') || res.includes('moderate');
+        
+        // CHỈNH SỬA: Chỉ lấy trường hợp Nặng (Severe) và Tăng sinh (PDR)
+        // Đã loại bỏ 'moderate' (Trung bình) và 'mild' (Nhẹ) khỏi danh sách cảnh báo đỏ
+        return res.includes('nặng') || res.includes('severe') || res.includes('pdr');
     });
 
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={30} /> &nbsp; Đang tải dữ liệu phòng khám...</div>;
@@ -413,25 +413,47 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                     )}
 
                     {/* --- TAB 2: PHÂN TÍCH AI --- */}
-                    {activeMenu === 'ai' && (
+{activeMenu === 'ai' && (
                         <div style={styles.card}>
                             <div style={styles.cardHeader}>
-                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                    <h2 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/>Lịch sử Phân tích AI</h2>
-                                    <span style={styles.badge}>{aiHistory.length} Ca khám</span>
+                                <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+                                    <h2 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/>Lịch sử Phân tích</h2>
+                                    
+                                    {/* --- SUB TABS SWITCHER --- */}
+                                    <div style={{display:'flex', background:'#f1f3f5', padding:'4px', borderRadius:'8px'}}>
+                                        <button 
+                                            onClick={() => setAiSubTab('clinic')}
+                                            style={aiSubTab === 'clinic' ? styles.tabActive : styles.tabInactive}
+                                        >
+                                            Phòng khám thực hiện ({clinicHistory.length})
+                                        </button>
+                                        <button 
+                                            onClick={() => setAiSubTab('patient')}
+                                            style={aiSubTab === 'patient' ? styles.tabActive : styles.tabInactive}
+                                        >
+                                            Bệnh nhân tự tải ({patientHistory.length})
+                                        </button>
+                                    </div>
+                                    {/* ------------------------- */}
                                 </div>
-                                <button 
-                                    onClick={() => navigate('/upload')} 
-                                    style={{...styles.primaryBtn, display:'flex', alignItems:'center', gap:'8px'}}>
-                                    <FaCamera /> Phân tích
-                                </button>
+
+                                {/* Nút phân tích chỉ hiện ở Tab Clinic */}
+                                {aiSubTab === 'clinic' && (
+                                    <button 
+                                        onClick={() => navigate('/upload')} 
+                                        style={{...styles.primaryBtn, display:'flex', alignItems:'center', gap:'8px'}}>
+                                        <FaCamera /> Phân tích Mới
+                                    </button>
+                                )}
                             </div>
 
+                            {/* --- TABLE CONTENT --- */}
                             <table style={styles.table}>
                                 <thead>
                                     <tr>
                                         <th style={styles.th}>Thời gian</th>
-                                        <th style={styles.th}>Bệnh nhân</th>
+                                        <th style={styles.th}>Phòng khám</th>
+                                        {aiSubTab === 'clinic' && <th style={styles.th}>Người thực hiện</th>}
                                         <th style={styles.th}>Hình ảnh</th>
                                         <th style={styles.th}>Kết quả AI</th>
                                         <th style={styles.th}>Trạng thái</th>
@@ -439,13 +461,23 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {aiHistory.length === 0 ? (
-                                        <tr><td colSpan={6} style={styles.emptyCell}>Chưa có dữ liệu phân tích nào.</td></tr>
+                                    {(aiSubTab === 'clinic' ? clinicHistory : patientHistory).length === 0 ? (
+                                        <tr><td colSpan={7} style={styles.emptyCell}>Chưa có dữ liệu phân tích nào.</td></tr>
                                     ) : (
-                                        aiHistory.map((item) => (
+                                        (aiSubTab === 'clinic' ? clinicHistory : patientHistory).map((item) => (
                                             <tr key={item.id} style={styles.tr}>
                                                 <td style={styles.td}>{item.date}<br/><small style={{color:'#999'}}>{item.time}</small></td>
                                                 <td style={styles.td}><b>{item.patient_name}</b></td>
+                                                
+                                                {/* Cột người thực hiện chỉ hiện ở Tab Clinic */}
+                                                {aiSubTab === 'clinic' && (
+                                                    <td style={styles.td}>
+                                                        <span style={{background:'#e3f2fd', color:'#0d47a1', padding:'2px 8px', borderRadius:'4px', fontSize:'11px'}}>
+                                                            {item.uploader}
+                                                        </span>
+                                                    </td>
+                                                )}
+
                                                 <td style={styles.td}>
                                                     <img src={item.image_url} alt="Scan" style={{width:'40px', height:'40px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}} />
                                                 </td>
@@ -459,7 +491,7 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                                                     }
                                                 </td>
                                                 <td style={styles.td}>
-                                                    <button onClick={() => navigate(`/analysis-result/${item.id}`)} style={styles.actionBtn}>Xem</button>
+                                                    <button onClick={() => navigate(`/clinic/analysis/${item.id}`)} style={styles.actionBtn}>Xem</button>
                                                 </td>
                                             </tr>
                                         ))
@@ -520,10 +552,8 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                                 </table>
                             </div>
                             <div style={styles.card}>
-                                <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaFileExport style={{marginRight: 10}}/>Xuất Báo cáo</h2></div>
+                                <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaFileExport style={{marginRight: 10}}/>Tổng hợp dữ liệu rủi ro</h2></div>
                                 <div style={{padding: '25px'}}>
-                                    <p style={{color: '#555', marginBottom: '20px'}}>Tải xuống danh sách bệnh nhân và kết quả chẩn đoán dưới dạng file Excel/CSV.</p>
-                                    <button onClick={exportToCSV} style={{...styles.primaryBtn, display:'flex', alignItems:'center', gap:'10px'}}><FaFileExport/> Tải xuống (.CSV)</button>
                                 </div>
                             </div>
                         </div>
@@ -632,6 +662,9 @@ const styles: {[key:string]: React.CSSProperties} = {
     uploadBox: { border: '2px dashed #ccd0d5', borderRadius: '8px', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', position: 'relative' },
     uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', width: '100%', height: '100%', justifyContent: 'center' },
     removeImgBtn: { position: 'absolute', top: 5, right: 5, background: 'rgba(255,255,255,0.8)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer', color: 'red' },
+    tabActive: { padding: '6px 15px', background: '#007bff', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' },
+    tabInactive: { padding: '6px 15px', background: 'transparent', color: '#555', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px' },
+
 };
 
 // CSS Animation for Spinner

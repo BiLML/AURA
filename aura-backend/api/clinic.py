@@ -192,3 +192,23 @@ def update_clinic_status(
         return {"message": f"Đã cập nhật trạng thái: {body.status}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/medical-records/clinic-history-split")
+def get_history_split(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    service = ClinicService(db)
+    return service.get_clinic_ai_history_split(current_user.id)
+
+@router.get("/medical-records/{record_id}/detail")
+def get_clinic_record_detail_api(
+    record_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role not in [UserRole.CLINIC, UserRole.ADMIN, UserRole.DOCTOR]:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xem chi tiết hồ sơ này")
+
+    service = ClinicService(db)
+    data = service.get_clinic_record_detail(record_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ")
+    return data

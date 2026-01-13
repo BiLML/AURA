@@ -28,7 +28,6 @@ const Dashboard: React.FC = () => {
     // State giao diện
     const [activeTab, setActiveTab] = useState<string>('home');
     const [showUserMenu, setShowUserMenu] = useState(false);
-    const [showFabMenu, setShowFabMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
 
     // --- STATE FORM ĐĂNG KÝ PHÒNG KHÁM ---
@@ -612,10 +611,6 @@ if (activeTab === 'messages') {
                 </header>
                 <div style={styles.contentBody}>{renderContent()}</div>
             </main>
-            <div style={styles.fabContainer}>
-                {showFabMenu && <div style={styles.fabMenu}><button style={styles.fabMenuItem} onClick={goToUpload}><FaCamera style={{marginRight:10}}/> Tải ảnh mới</button></div>}
-                <button style={styles.fabButton} onClick={() => setShowFabMenu(!showFabMenu)}>{showFabMenu ? '✕' : '+'}</button>
-            </div>
         </div>
     );
 };

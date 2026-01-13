@@ -16,6 +16,7 @@ import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
 import DoctorAnalysis from './DoctorAnalysis';
 import DoctorReport from './DoctorReport';
+import ClinicAnalysisResult from './ClinicAnalysisResult';
 
 // --- HÀM HỖ TRỢ ĐỌC ROLE TỪ LOCAL STORAGE (GIỮ NGUYÊN) ---
 const getUserRoleFromStorage = () => {
@@ -58,7 +59,7 @@ const DefaultRedirect: React.FC = () => {
         return <Navigate to="/dashboarddr" replace />;
     }
 
-    if (role === 'clinic_owner') {
+    if (role === 'clinic') {
         return <Navigate to="/clinic-dashboard" replace />;
     }
     
@@ -80,6 +81,7 @@ const App: React.FC = () => {
                     <Route path="/admin" element={<DashboardAdmin />} />
                     <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
                     <Route path="/dashboarddr" element={<ProtectedRoute element={<DashboardDr />} />} />
+                    <Route path="/clinic/analysis/:id" element={<ProtectedRoute element={<ClinicAnalysisResult />} />} />                    
                     <Route path="/doctor/analysis/:id" element={<DoctorAnalysis />} />
                     <Route path="/doctor/report/:id" element={<DoctorReport />} />
                     <Route path="/profile-dr" element={<ProtectedRoute element={<ProfileDr />} />} />

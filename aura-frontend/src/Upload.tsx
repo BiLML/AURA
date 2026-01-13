@@ -207,7 +207,7 @@ const Upload: React.FC = () => {
                         <img src="/logo.svg" alt="Logo" style={{width:'30px'}} />
                         <span style={styles.logoText}>AI SCANNER</span>
                     </div>
-                    <div style={styles.clinicName}>{['clinic', 'doctor'].includes(role) ? 'Dành cho Bác sĩ' : 'Cá nhân'}</div>
+                    <div style={styles.clinicName}>{['clinic', 'doctor'].includes(role) ? 'Dành cho Phòng khám' : 'Cá nhân'}</div>
                 </div>
                 {renderSidebarNav()}
                 <div style={styles.sidebarFooter}>

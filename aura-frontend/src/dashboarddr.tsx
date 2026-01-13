@@ -60,7 +60,6 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            // SỬA: localhost
             const res = await fetch('http://localhost:8000/api/v1/reports/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -79,8 +78,6 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) { alert("Vui lòng đăng nhập lại"); return; }
 
-        // 1. Lấy record_id từ patientId đang chọn
-        // (Form chọn Patient, nhưng API cần Record ID của lần khám mới nhất)
         const selectedP = patientsData.find(p => String(p.id) === String(reportForm.patientId));
         const recordId = selectedP?.latest_scan?.record_id;
 
@@ -90,7 +87,6 @@ const DashboardDr: React.FC = () => {
         }
 
         try {
-            // GỌI ĐÚNG API PUT MÀ BẠN ĐÃ VIẾT TRONG DOCTOR.PY
             const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${recordId}/diagnose`, { 
                 method: 'PUT', 
                 headers: { 
@@ -98,12 +94,10 @@ const DashboardDr: React.FC = () => {
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    // Chỉ gửi 2 trường mà Backend (DoctorDiagnosisUpdate) yêu cầu
                     doctor_diagnosis: reportForm.doctorDiagnosis,
-                    doctor_notes: reportForm.notes
-                    
-                    // Lưu ý: Các trường 'accuracy', 'aiResult' chỉ để hiển thị UI, 
-                    // không cần gửi lên nếu Backend không nhận.
+                    doctor_notes: reportForm.notes,
+                    feedback_for_ai: reportForm.notes, // Gửi thêm trường này để Admin xem được feedback
+                    is_correct: reportForm.accuracy === 'CORRECT' // Gửi trạng thái đúng/sai
                 })
             });
 
@@ -112,8 +106,6 @@ const DashboardDr: React.FC = () => {
                 setShowReportModal(false);
                 setReportForm({ ...reportForm, doctorDiagnosis: '', notes: '' });
                 
-                // Refresh lại dữ liệu để cập nhật bảng bên ngoài
-                // (Gọi lại fetchPatients hoặc reload page tùy bạn)
                 const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (patientsRes.ok) { 
                     const data = await patientsRes.json(); 
@@ -180,25 +172,17 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            // SỬA: Endpoint /api/records/patient/{id}
             const res = await fetch(`http://localhost:8000/api/v1/doctor/patients/${patientId}/history`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                // SỬA: Mapping dữ liệu mới
                 const records = (Array.isArray(data) ? data : []).map((r: any) => {
-                    
-                    // 1. Xử lý hiển thị kết quả (Ưu tiên bác sĩ sửa -> AI -> Mặc định)
                     let displayResult = "Đang phân tích...";
-                    
-                    // Nếu có object analysis_result (từ schema ImageResponse)
                     if (r.analysis_result) {
-                        // Nếu bác sĩ đã chẩn đoán (nếu backend có trả về field này trong analysis_result)
                         if (r.analysis_result.doctor_diagnosis) {
                              displayResult = r.analysis_result.doctor_diagnosis;
                         } 
-                        // Nếu không thì lấy kết quả AI
                         else if (r.analysis_result.risk_level) {
                             displayResult = r.analysis_result.risk_level;
                         }
@@ -206,15 +190,11 @@ const DashboardDr: React.FC = () => {
 
                     return {
                         id: r.id,
-                        // 2. Sửa tên trường ngày: dùng 'created_at' thay vì 'upload_date'
                         date: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : 'N/A',
                         result: displayResult,
-                        // Kiểm tra status dựa trên việc có kết quả hay chưa
                         status: r.analysis_result ? "COMPLETED" : "PENDING"
                     };
                 });
-                // ------------------------------------------
-
                 setHistoryRecords(records); 
             }
         } catch (error) { 
@@ -254,14 +234,13 @@ const DashboardDr: React.FC = () => {
         const textToSend = newMessageText;
         setNewMessageText(''); 
         const now = new Date();
-        // Lấy giờ phút và tự thêm số 0 đằng trước nếu < 10
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
         const tempMsg = {
             id: Date.now().toString(),
             content: textToSend,
             is_me: true,
-            time: timeString, // <--- Dùng biến này thay vì toLocaleTimeString
+            time: timeString,
             is_read: false
         };
         setCurrentMessages(prev => [...prev, tempMsg]);
@@ -287,12 +266,10 @@ const DashboardDr: React.FC = () => {
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [currentMessages]);
 
-    // Polling
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token) return;
         const interval = setInterval(async () => {
-             // Chỉ gọi khi cần thiết
              if (activeTab === 'chat') fetchChatData(token); 
              if (selectedChatId) {
                 const serverMsgs = await fetchMessageHistory(selectedChatId);
@@ -302,7 +279,6 @@ const DashboardDr: React.FC = () => {
         return () => clearInterval(interval);
     }, [selectedChatId, fetchChatData, currentMessages.length, activeTab]);
 
-    // INIT DATA
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token) { navigate('/login'); return; }
@@ -325,7 +301,6 @@ const DashboardDr: React.FC = () => {
                 setFullName(userProfile.full_name || info.full_name || '');
                 setUserRole(info.role);
 
-                // Fetch patients
                 const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (patientsRes.ok) { 
                     const data = await patientsRes.json(); 
@@ -335,19 +310,17 @@ const DashboardDr: React.FC = () => {
             } catch (error) { console.error(error); } finally { setIsLoading(false); }
         };
         initData();
-    }, []); // eslint-disable-line
+    }, []); 
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
 
-    // --- HELPER DATA & LOGIC ---
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length;
     
-    // SỬA: Logic lọc hồ sơ cần xử lý (Pending) dựa trên trường ai_result mới
     const pendingRecords = patientsData
         .filter(p => {
             if (!p.latest_scan) return false;
-            const res = (p.latest_scan.ai_result || "").toLowerCase(); // SỬA: ai_result
-            const status = (p.latest_scan.ai_analysis_status || "").toUpperCase(); // SỬA: ai_analysis_status
+            const res = (p.latest_scan.ai_result || "").toLowerCase();
+            const status = (p.latest_scan.ai_analysis_status || "").toUpperCase();
             
             const isHighRisk = res.includes('nặng') || res.includes('severe') || res.includes('moderate') || res.includes('pdr');
             const isCompleted = status === 'COMPLETED';
@@ -357,18 +330,17 @@ const DashboardDr: React.FC = () => {
         .map(p => ({ 
             id: p.latest_scan.record_id || '', 
             patientName: p.full_name || p.userName, 
-            date: new Date(p.latest_scan.upload_date).toLocaleDateString('vi-VN'), // SỬA: format date
-            aiResult: p.latest_scan.ai_result, // SỬA: ai_result
+            date: new Date(p.latest_scan.upload_date).toLocaleDateString('vi-VN'),
+            aiResult: p.latest_scan.ai_result,
             status: 'Chờ Bác sĩ' 
         }));
 
     const totalPending = pendingRecords.length;
 
-    // --- TÍNH TOÁN BIỂU ĐỒ ---
     const chartData = (() => {
         let severe = 0, moderate = 0, mild = 0, safe = 0;
         patientsData.forEach(p => {
-            const res = (p.latest_scan?.ai_result || '').toLowerCase(); // SỬA: ai_result
+            const res = (p.latest_scan?.ai_result || '').toLowerCase();
             if (res.includes('nặng') || res.includes('severe')) severe++;
             else if (res.includes('trung bình') || res.includes('moderate')) moderate++;
             else if (res.includes('nhẹ') || res.includes('mild')) mild++;
@@ -378,7 +350,6 @@ const DashboardDr: React.FC = () => {
         return { severe, moderate, mild, safe, max };
     })();
 
-    // --- HÀM XỬ LÝ BÁO CÁO ---
     const handleOpenReport = () => {
         setReportForm({
             patientId: '', 
@@ -390,7 +361,6 @@ const DashboardDr: React.FC = () => {
         setShowReportModal(true);
     };
 
-    // --- RENDER ---
     if (isLoading) return <div style={styles.loading}>Đang tải dữ liệu Bác sĩ...</div>;
 
     return (
@@ -399,11 +369,9 @@ const DashboardDr: React.FC = () => {
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
                     <div style={styles.logoRow}>
-                        {/* Đổi màu icon sang xanh #007bff cho nổi trên nền trắng */}
                         <FaUserMd size={24} color="#007bff" />
                         <span style={styles.logoText}>AURA DOCTOR</span>
                     </div>
-                    {/* Thêm dòng subtitle */}
                     <div style={styles.clinicName}>Dành cho Bác sĩ</div>
                 </div>
                 <nav style={styles.nav}>
@@ -452,14 +420,11 @@ const DashboardDr: React.FC = () => {
                             </div>
                             {showUserMenu && (
                                 <div style={styles.dropdownMenu}>
-                                    {/* Thêm phần Header hiển thị tên và quyền giống bên Bệnh nhân */}
                                     <div style={{padding:'15px', borderBottom:'1px solid #eee'}}>
                                         <strong style={{color:'#333', fontSize:'14px'}}>{full_name || userName}</strong>
                                         <br/>
                                         <small style={{color:'#666', fontSize:'12px'}}>{userRole}</small>
                                     </div>
-
-                                    {/* Các nút chức năng */}
                                     <button style={styles.dropdownItem} onClick={() => navigate('/profile-dr')}>
                                         <FaUserMd style={{marginRight:8}}/> Hồ sơ cá nhân
                                     </button>
@@ -479,8 +444,8 @@ const DashboardDr: React.FC = () => {
                         <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                             {/* 1. GRID: THỐNG KÊ & BIỂU ĐỒ */}
                             <div style={styles.statsGrid}>
-                                {/* Cột Trái: Cards */}
-                                <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+                                {/* Cột Trái: Cards (ĐÃ SỬA: Thêm height 100% để lấp đầy) */}
+                                <div style={{display:'flex', flexDirection:'column', gap:'20px', height: '100%'}}>
                                     <div style={styles.statCard}>
                                         <div style={styles.statIconBox}><FaUsers color="#3498db" size={24}/></div>
                                         <div>
@@ -499,47 +464,57 @@ const DashboardDr: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Cột Phải: Biểu đồ CSS */}
+                                {/* Cột Phải: Biểu đồ CSS với trục tọa độ (GIỮ NGUYÊN CODE CHUẨN) */}
                                 <div style={styles.chartCard}>
                                     <div style={styles.cardHeader}>
                                         <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:8}}/> Phân bố Mức độ rủi ro</h3>
                                     </div>
-                                    <div style={styles.chartContainer}>
-                                        {/* Bar: Safe */}
-                                        <div style={styles.barGroup}>
-                                            <div style={{height: '100%', display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-                                                <div style={{...styles.bar, height: `${(chartData.safe / chartData.max) * 100}%`, background: '#2ecc71'}}>
-                                                    <span style={styles.barValue}>{chartData.safe}</span>
+                                    
+                                    <div style={styles.chartBody}>
+                                        <div style={styles.yAxis}>
+                                            {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((val) => (
+                                                <div key={val} style={styles.yAxisLabel}>
+                                                    {val}
                                                 </div>
-                                            </div>
-                                            <div style={styles.barLabel}>Bình thường</div>
+                                            ))}
                                         </div>
-                                        {/* Bar: Mild */}
-                                        <div style={styles.barGroup}>
-                                            <div style={{height: '100%', display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-                                                <div style={{...styles.bar, height: `${(chartData.mild / chartData.max) * 100}%`, background: '#f1c40f'}}>
-                                                    <span style={styles.barValue}>{chartData.mild}</span>
+
+                                        <div style={styles.plotArea}>
+                                            <div style={styles.gridContainer}>
+                                                {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((val) => (
+                                                    <div key={val} style={styles.gridLine}></div>
+                                                ))}
+                                            </div>
+
+                                            <div style={styles.barsContainer}>
+                                                <div style={styles.barColumn}>
+                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.safe, 100)}%`, background: '#2ecc71'}}>
+                                                        <span style={styles.barValueTop}>{chartData.safe}</span>
+                                                    </div>
+                                                    <div style={styles.xAxisLabel}>Bình thường</div>
+                                                </div>
+
+                                                <div style={styles.barColumn}>
+                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.mild, 100)}%`, background: '#f1c40f'}}>
+                                                        <span style={styles.barValueTop}>{chartData.mild}</span>
+                                                    </div>
+                                                    <div style={styles.xAxisLabel}>Nhẹ</div>
+                                                </div>
+
+                                                <div style={styles.barColumn}>
+                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.moderate, 100)}%`, background: '#e67e22'}}>
+                                                        <span style={styles.barValueTop}>{chartData.moderate}</span>
+                                                    </div>
+                                                    <div style={styles.xAxisLabel}>Trung bình</div>
+                                                </div>
+
+                                                <div style={styles.barColumn}>
+                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.severe, 100)}%`, background: '#e74c3c'}}>
+                                                        <span style={styles.barValueTop}>{chartData.severe}</span>
+                                                    </div>
+                                                    <div style={styles.xAxisLabel}>Nặng</div>
                                                 </div>
                                             </div>
-                                            <div style={styles.barLabel}>Nhẹ</div>
-                                        </div>
-                                        {/* Bar: Moderate */}
-                                        <div style={styles.barGroup}>
-                                            <div style={{height: '100%', display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-                                                <div style={{...styles.bar, height: `${(chartData.moderate / chartData.max) * 100}%`, background: '#e67e22'}}>
-                                                    <span style={styles.barValue}>{chartData.moderate}</span>
-                                                </div>
-                                            </div>
-                                            <div style={styles.barLabel}>Trung bình</div>
-                                        </div>
-                                        {/* Bar: Severe */}
-                                        <div style={styles.barGroup}>
-                                            <div style={{height: '100%', display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-                                                <div style={{...styles.bar, height: `${(chartData.severe / chartData.max) * 100}%`, background: '#e74c3c'}}>
-                                                    <span style={styles.barValue}>{chartData.severe}</span>
-                                                </div>
-                                            </div>
-                                            <div style={styles.barLabel}>Nặng</div>
                                         </div>
                                     </div>
                                 </div>
@@ -562,7 +537,6 @@ const DashboardDr: React.FC = () => {
                                                     <td style={styles.td}>{item.date}</td>
                                                     <td style={styles.td}><span style={{color:'#e74c3c', fontWeight:'bold'}}>{item.aiResult}</span></td>
                                                     <td style={styles.td}>
-                                                        {/* SỬA: Link tới AnalysisResult (thay vì /result/) */}
                                                         <button onClick={() => navigate(`/doctor/analysis/${item.id}`)} style={styles.primaryBtnSm}>
                                                             <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
                                                         </button>
@@ -601,7 +575,7 @@ const DashboardDr: React.FC = () => {
                                 <tbody>
                                     {patientsData.filter(p => {
                                         const matchName = (p.full_name||p.userName).toLowerCase().includes(searchTerm.toLowerCase());
-                                        const res = (p.latest_scan?.ai_result || '').toLowerCase(); // SỬA: ai_result
+                                        const res = (p.latest_scan?.ai_result || '').toLowerCase();
                                         let matchRisk = true;
                                         if (riskFilter === 'ALL') {
                                             matchRisk = true;
@@ -652,7 +626,6 @@ const DashboardDr: React.FC = () => {
                     {/* --- TAB CHAT --- */}
                     {activeTab === 'chat' && (
                         <div style={styles.messengerCard}>
-                            {/* PANEL DANH SÁCH CHAT BÊN TRÁI */}
                             <div style={styles.chatListPanel}>
                                 <div style={styles.chatHeaderLeft}>
                                     <h3 style={{margin:0, fontSize:'16px'}}>Tư vấn Trực tuyến</h3>
@@ -671,7 +644,6 @@ const DashboardDr: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* CỬA SỔ CHAT BÊN PHẢI */}
                             <div style={styles.chatWindowPanel}>
                                 {selectedChatId ? (
                                     <>
@@ -679,14 +651,12 @@ const DashboardDr: React.FC = () => {
                                             <h4 style={{margin:0}}>{chatData.find(c=>c.id===selectedChatId)?.display_name}</h4>
                                         </div>
                                         
-                                        {/* --- NỘI DUNG TIN NHẮN --- */}
                                         <div style={styles.messagesBody}>
                                             {currentMessages.map((m, i) => (
                                                 <div key={i} style={{
                                                     ...styles.messageRow, 
                                                     justifyContent: m.is_me ? 'flex-end' : 'flex-start'
                                                 }}>
-                                                    {/* Avatar người đối diện */}
                                                     {!m.is_me && (
                                                         <div style={{
                                                             width:'28px', height:'28px', borderRadius:'50%', 
@@ -699,12 +669,9 @@ const DashboardDr: React.FC = () => {
                                                     )}
                                                     
                                                     <div style={{display:'flex', flexDirection:'column', alignItems: m.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
-                                                        {/* Bong bóng chat */}
                                                         <div style={m.is_me ? styles.bubbleMe : styles.bubbleOther}>
                                                             {m.content}
                                                         </div>
-
-                                                        {/* Dòng hiển thị Thời gian & Trạng thái đã xem/gửi */}
                                                         <div style={{
                                                             display:'flex', alignItems:'center', gap:'4px', 
                                                             marginTop:'2px', marginBottom:'10px', 
@@ -734,7 +701,6 @@ const DashboardDr: React.FC = () => {
                                             <div ref={messagesEndRef}/>
                                         </div>
 
-                                        {/* --- KHUNG NHẬP LIỆU --- */}
                                         <form onSubmit={handleSendMessage} style={styles.chatInputArea}>
                                             <input style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/>
                                             <button type="submit" style={{border:'none', background:'none', cursor:'pointer'}}><FaPaperPlane color="#3498db" size={20}/></button>
@@ -751,12 +717,10 @@ const DashboardDr: React.FC = () => {
                     {activeTab === 'reports' && (
                         <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                             
-                            {/* Card 1: Thống kê & Nút tạo báo cáo */}
                             <div style={styles.card}>
                                 <div style={styles.cardHeader}>
                                     <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:8}}/> Thống kê & Phản hồi chuyên môn</h3>
                                     
-                                    {/* NÚT TẠO BÁO CÁO MỚI */}
                                     <button style={styles.primaryBtnSm} onClick={handleOpenReport}>
                                         <FaEdit style={{marginRight:5}}/> Viết báo cáo / Góp ý AI
                                     </button>
@@ -781,7 +745,6 @@ const DashboardDr: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Card 2: Danh sách báo cáo đã gửi */}
                             <div style={styles.card}>
                                 <div style={styles.cardHeader}>
                                     <h3 style={styles.pageTitle}><FaFileAlt style={{marginRight:8}}/> Lịch sử Báo cáo gửi Admin</h3>
@@ -828,7 +791,6 @@ const DashboardDr: React.FC = () => {
                         </div>
                         <form onSubmit={submitReport} style={{padding:'20px'}}>
                             
-                            {/* Chọn bệnh nhân */}
                             <div style={{marginBottom:'15px'}}>
                                 <label style={styles.label}>Chọn Bệnh nhân:</label>
                                 <select 
@@ -837,7 +799,6 @@ const DashboardDr: React.FC = () => {
                                     onChange={e => {
                                         const selectedId = e.target.value;
                                         const selectedPatient = patientsData.find(p => p.id === parseInt(selectedId));
-                                        // Tự động lấy kết quả AI mới nhất
                                         const aiRes = selectedPatient?.latest_scan?.ai_result || 'Chưa có kết quả AI';
 
                                         setReportForm({
@@ -855,7 +816,6 @@ const DashboardDr: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* HIỂN THỊ KẾT QUẢ AI */}
                             {reportForm.patientId && (
                                 <div style={{marginBottom:'15px', background:'#f0f8ff', padding:'10px', borderRadius:'6px', border:'1px dashed #3498db'}}>
                                     <div style={{fontSize:'12px', color:'#555'}}>🤖 AI Chẩn đoán:</div>
@@ -863,7 +823,6 @@ const DashboardDr: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Đánh giá AI */}
                             <div style={{marginBottom:'15px'}}>
                                 <label style={styles.label}>Đánh giá kết quả AI:</label>
                                 <div style={{display:'flex', gap:'20px', marginTop:'5px'}}>
@@ -878,7 +837,6 @@ const DashboardDr: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Chẩn đoán của Bác sĩ */}
                             <div style={{marginBottom:'15px'}}>
                                 <label style={styles.label}>Chẩn đoán của Bác sĩ (Ground Truth):</label>
                                 <input 
@@ -890,7 +848,6 @@ const DashboardDr: React.FC = () => {
                                 />
                             </div>
 
-                            {/* Ghi chú */}
                             <div style={{marginBottom:'20px'}}>
                                 <label style={styles.label}>Ghi chú chi tiết / Đề xuất:</label>
                                 <textarea 
@@ -912,7 +869,6 @@ const DashboardDr: React.FC = () => {
                 </div>
             </main>
 
-            {/* MODAL HISTORY */}
             {showHistoryModal && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modalContent}>
@@ -942,46 +898,25 @@ const DashboardDr: React.FC = () => {
     );
 };
 
-// --- STYLES (Đồng bộ với hệ thống nhưng giữ màu chủ đạo Bác sĩ #34495e) ---
+// --- STYLES ---
 const styles: {[key:string]: React.CSSProperties} = {
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555' },
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
     
-// Sidebar (Đã chuyển sang Light Theme giống Patient)
     sidebar: { width: '260px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%' },
-    
     sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #f0f0f0' },
-    
-    logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom: '5px' }, // Thêm marginBottom
-    
-    logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b' }, // Đổi màu chữ sang đen
-    
-    clinicName: { fontSize:'13px', color:'#666', marginLeft:'35px' }, // Style mới cho dòng 'Dành cho Bác sĩ'
-    
+    logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom: '5px' },
+    logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b' },
+    clinicName: { fontSize:'13px', color:'#666', marginLeft:'35px' },
     nav: { flex: 1, padding: '20px 0', overflowY: 'auto' },
-    
     menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#555', display:'flex', alignItems:'center', transition:'0.2s' },
-    
-    // Style Active: Nền xanh nhạt, chữ xanh đậm, Border nằm bên PHẢI
     menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
-    
     menuIcon: { marginRight: '12px' },
-    
     sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    
-    // Nút đăng xuất màu đỏ nhạt giống bên Patient
     logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    // Main
+    
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
-    header: { 
-    height: '70px', 
-    backgroundColor: '#fff', 
-    borderBottom: '1px solid #e1e4e8', 
-    display: 'flex', 
-    justifyContent: 'flex-end', // <--- SỬA DÒNG NÀY (Cũ là 'space-between')
-    alignItems: 'center', 
-    padding: '0 30px' 
-},
+    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 30px' },
     headerLeft: { display:'flex', alignItems:'center', gap:'15px' },
     headerAlert: { background:'#fdecea', color:'#e74c3c', padding:'5px 10px', borderRadius:'20px', fontSize:'12px', fontWeight:'bold' },
     headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
@@ -993,7 +928,6 @@ const styles: {[key:string]: React.CSSProperties} = {
     
     contentBody: { padding: '30px', flex: 1, overflowY: 'auto' },
 
-    // Components (Cards, Tables)
     card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow:'hidden', marginBottom:'20px' },
     cardHeader: { padding:'20px 25px', borderBottom:'1px solid #f0f0f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
     pageTitle: { fontSize: '16px', margin: 0, display:'flex', alignItems:'center', color: '#333' },
@@ -1003,92 +937,151 @@ const styles: {[key:string]: React.CSSProperties} = {
     td: { padding: '15px 25px', verticalAlign: 'middle', color:'#333' },
     emptyCell: { textAlign: 'center', padding: '30px', color: '#999', fontStyle: 'italic' },
     
-    // Stats & Chart
-    statsGrid: { display:'grid', gridTemplateColumns:'1fr 2fr', gap:'20px', marginBottom:'20px' },
-    statCard: { background:'white', padding:'20px', borderRadius:'12px', boxShadow:'0 2px 10px rgba(0,0,0,0.03)', display:'flex', alignItems:'center', gap:'15px', border:'1px solid #eaeaea' },
+    // --- STATS & CHART (ĐÃ SỬA) ---
+    statsGrid: { display:'grid', gridTemplateColumns:'1fr 2fr', gap:'20px', marginBottom:'20px', alignItems: 'stretch' }, // alignItems: stretch để cột trái bằng cột phải
+    statCard: { 
+        background:'white', 
+        padding:'20px', 
+        borderRadius:'12px', 
+        boxShadow:'0 2px 10px rgba(0,0,0,0.03)', 
+        display:'flex', 
+        alignItems:'center', 
+        gap:'15px', 
+        border:'1px solid #eaeaea',
+        flex: 1 // Quan trọng: Để card tự giãn lấp đầy chiều cao
+    },
     statIconBox: { width:'50px', height:'50px', borderRadius:'12px', background:'#eaf2f8', display:'flex', alignItems:'center', justifyContent:'center' },
     statLabel: { fontSize:'13px', color:'#666', marginBottom:'5px' },
     statValue: { fontSize:'24px', fontWeight:'bold', color:'#333' },
     
-    chartCard: { background:'white', borderRadius:'12px', boxShadow:'0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', display:'flex', flexDirection:'column' },
-    chartContainer: { padding:'20px 40px', display:'flex', justifyContent:'space-between', alignItems:'flex-end', height:'180px' },
-    barGroup: { display:'flex', flexDirection:'column', alignItems:'center', height:'100%', width:'15%' },
-    bar: { width:'100%', borderRadius:'4px 4px 0 0', position:'relative', transition:'height 0.5s' },
-    barValue: { position:'absolute', top:'-20px', width:'100%', textAlign:'center', fontSize:'12px', fontWeight:'bold', color:'#333' },
+    // Chart Container
+    chartCard: { 
+        background:'white', 
+        borderRadius:'12px', 
+        boxShadow:'0 2px 10px rgba(0,0,0,0.03)', 
+        border:'1px solid #eaeaea', 
+        display:'flex', 
+        flexDirection:'column',
+        height: '320px'
+    },
+    chartBody: {
+        display: 'flex',
+        padding: '20px',
+        flex: 1,
+        alignItems: 'stretch'
+    },
+    yAxis: {
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        paddingRight: '10px',
+        borderRight: '1px solid #eee',
+        color: '#999',
+        fontSize: '11px',
+        textAlign: 'right',
+        minWidth: '30px',
+        paddingBottom: '20px'
+    },
+    yAxisLabel: {
+        height: '0px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        transform: 'translateY(50%)'
+    },
+    plotArea: {
+        flex: 1,
+        position: 'relative',
+        marginLeft: '10px',
+        display: 'flex',
+        flexDirection: 'column'
+    },
+    gridContainer: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        zIndex: 0
+    },
+    gridLine: {
+        width: '100%',
+        borderBottom: '1px dashed #eee',
+        height: '0px'
+    },
+    barsContainer: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 1,
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        paddingBottom: '20px'
+    },
+    barColumn: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        height: '100%',
+        width: '15%',
+        position: 'relative'
+    },
+    barFill: {
+        width: '100%',
+        borderRadius: '4px 4px 0 0',
+        position: 'relative',
+        transition: 'height 0.5s ease-in-out',
+        minHeight: '0px'
+    },
+    barValueTop: {
+        position: 'absolute',
+        top: '-20px',
+        width: '100%',
+        textAlign: 'center',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        color: '#333'
+    },
+    xAxisLabel: {
+        marginTop: '10px',
+        fontSize: '12px',
+        color: '#666',
+        fontWeight: '600',
+        textAlign: 'center',
+        position: 'absolute',
+        bottom: '-25px',
+        width: '150%'
+    },
     barLabel: { marginTop:'10px', fontSize:'12px', color:'#666', textAlign:'center' },
 
-    // Buttons
     primaryBtnSm: { background: '#3498db', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', display:'flex', alignItems:'center' },
     actionBtn: { background: '#fff', border: '1px solid #3498db', color: '#3498db', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
 
-    // Inputs
     searchBox: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: '6px', padding: '5px 10px', border: '1px solid #ddd' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '5px', width: '150px' },
     selectInput: { padding: '5px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' },
 
-// Thêm/Sửa các styles này vào biến `const styles = { ... }` của bạn:
-
-    // --- MESSENGER CONTAINER ---
     messengerCard: { display: 'flex', height: 'calc(100vh - 140px)', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', border:'1px solid #e1e4e8', overflow: 'hidden' },
     chatListPanel: { width: '300px', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa' },
     chatHeaderLeft: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#f9f9f9' },
     chatListScroll: { flex: 1, overflowY: 'auto' },
     chatListItem: { display: 'flex', alignItems: 'center', padding: '12px', cursor: 'pointer', gap: '10px', borderBottom:'1px solid #fcfcfc' },
-    
-    // --- AVATARS & INDICATORS ---
     avatarLarge: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#555' },
-    avatarMedium: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#65676b', fontSize:'14px' },
-    avatarSmall: { width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '8px', alignSelf: 'flex-end', marginBottom: '8px' },
     unreadDot: { width:'10px', height:'10px', borderRadius:'50%', background:'#3498db' },
-    unreadBlueDot: { width: '10px', height: '10px', backgroundColor: '#007bff', borderRadius: '50%' },
 
-    // --- CHAT WINDOW ---
     chatWindowPanel: { flex: 1, display: 'flex', flexDirection: 'column', backgroundColor:'white' },
     chatWindowHeader: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#fff', display: 'flex', alignItems: 'center', gap: '12px' },
     messagesBody: { flex: 1, padding: '20px', overflowY: 'auto', background:'#fdfdfd', display: 'flex', flexDirection: 'column', gap: '5px' },
     
-    // --- INPUT AREA ---
     chatInputArea: { padding: '15px 20px', borderTop: '1px solid #f0f0f0', display:'flex', gap:'10px', alignItems: 'center', flexShrink: 0},
     messengerInput: { flex:1, padding:'10px', borderRadius:'20px', border:'1px solid #ddd', outline:'none', backgroundColor: '#f0f2f5' },
     emptyChatState: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#999' },
     
-    // --- MESSAGE BUBBLES (Phần quan trọng nhất) ---
-    messageRow: {
-        display: 'flex',
-        marginBottom: '4px',
-        width: '100%'
-    },
-    bubbleMe: {
-        padding: '10px 16px',
-        borderRadius: '18px 18px 4px 18px',
-        backgroundColor: '#3498db', // (Đổi thành #007bff cho file dashboard.tsx nếu muốn màu xanh đậm hơn)
-        color: 'white',
-        maxWidth: '65%', // (hoặc 70%)
-        fontSize: '14.5px',
-        lineHeight: '1.5',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-        wordWrap: 'break-word' as 'break-word'
-    },
-    bubbleOther: {
-        padding: '10px 16px',
-        borderRadius: '18px 18px 18px 4px',
-        backgroundColor: '#f1f0f0', // (hoặc #e4e6eb)
-        color: '#1c1e21', // (hoặc #050505)
-        maxWidth: '65%', // (hoặc 70%)
-        fontSize: '14.5px',
-        lineHeight: '1.5',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-        wordWrap: 'break-word' as 'break-word'
-    },
-    timestamp: {
-        fontSize: '10px',
-        color: '#999',
-        marginTop: '4px',
-        marginLeft: '5px',
-        marginRight: '5px'
-    },
+    messageRow: { display: 'flex', marginBottom: '4px', width: '100%' },
+    bubbleMe: { padding: '10px 16px', borderRadius: '18px 18px 4px 18px', backgroundColor: '#3498db', color: 'white', maxWidth: '65%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
+    bubbleOther: { padding: '10px 16px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#f1f0f0', color: '#1c1e21', maxWidth: '65%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
     
-    // Dropdowns & Modals
     notificationDropdown: { position: 'absolute', top: '40px', right: '-10px', width: '300px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 1100, border:'1px solid #eee' },
     dropdownMenu: { position: 'absolute', top: '50px', right: '0', width: '160px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #eee' },
     dropdownHeader: { padding: '10px', background:'#f8f9fa', fontSize:'13px', fontWeight:'bold', borderBottom:'1px solid #eee' },

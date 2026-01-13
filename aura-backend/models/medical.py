@@ -61,8 +61,8 @@ class DoctorValidation(Base):
     is_correct = Column(Boolean)
     doctor_notes = Column(Text)
     feedback_for_ai = Column(Text)
-
     doctor_confirm = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     # Relationships
     analysis = relationship("AIAnalysisResult", back_populates="doctor_validation")
     doctor = relationship("User", back_populates="doctor_validations")
