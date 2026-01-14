@@ -142,10 +142,10 @@ const ProfilePage: React.FC = () => {
                 </div>
                 <nav style={styles.nav}>
                     <div style={styles.menuItemActive}><FaUser style={styles.menuIcon} /> Hồ sơ cá nhân</div>
-                    <div style={styles.menuItem} onClick={handleBack}><FaArrowLeft style={styles.menuIcon} /> Quay lại Dashboard</div>
+                    
                 </nav>
                 <div style={styles.sidebarFooter}>
-                    <button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button>
+                    <button onClick={handleBack} style={styles.backBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Quay lại</button>
                 </div>
             </aside>
 
@@ -277,8 +277,7 @@ const styles: {[key:string]: React.CSSProperties} = {
     menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
     menuIcon: { marginRight: '12px' },
     sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px' },
-    main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
+    backBtn: { width: '100%', padding: '12px 15px', background: '#eef2ff', color: '#007bff', border: '1px solid transparent', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: '600', transition: 'all 0.2s ease', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },    main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
     header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px' },
     headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
     profileBox: { display:'flex', alignItems:'center', gap:'10px' },
