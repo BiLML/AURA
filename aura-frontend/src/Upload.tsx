@@ -193,7 +193,6 @@ const Upload: React.FC = () => {
             <nav style={styles.nav}>
                 <div style={styles.menuItem} onClick={goBack}><FaHome style={styles.menuIcon} /> Trang chủ</div>
                 <div style={styles.menuItemActive}><FaImages style={styles.menuIcon} /> Tải ảnh mới</div>
-                <div style={styles.menuItem} onClick={goBack}><FaArrowLeft style={styles.menuIcon} /> Quay lại</div>
             </nav>
         );
     };
