@@ -211,7 +211,9 @@ const Upload: React.FC = () => {
                 </div>
                 {renderSidebarNav()}
                 <div style={styles.sidebarFooter}>
-                    <button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button>
+                    <button onClick={goBack} style={styles.sidebarBackBtn}>
+                        <FaArrowLeft style={{marginRight:'8px'}}/> Quay lại
+                    </button>
                 </div>
             </aside>
 
@@ -357,7 +359,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
     menuIcon: { marginRight: '12px' },
     sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px' },
+    sidebarBackBtn: { width: '100%', padding: '10px', background: '#e9ecef', color: '#333', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight: '600', transition: '0.2s'},
 
     // Main
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
