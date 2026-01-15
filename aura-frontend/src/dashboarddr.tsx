@@ -208,7 +208,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return null;
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/chat/history/${partnerId}`, {
+            const res = await fetch(`http://localhost:8000/api/v1/chats/history/${partnerId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -223,7 +223,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (token) {
             setChatData(prev => prev.map(c => c.id === partnerId ? { ...c, unread: false } : c));
-            await fetch(`http://localhost:8000/api/v1/chat/read/${partnerId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }});
+            await fetch(`http://localhost:8000/api/v1/chats/read/${partnerId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }});
             fetchChatData(token);
         }
     };
@@ -256,7 +256,7 @@ const DashboardDr: React.FC = () => {
         });
         try {
             const token = localStorage.getItem('token');
-            await fetch('http://localhost:8000/api/v1/chat/send', {
+            await fetch('http://localhost:8000/api/v1/chats/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ receiver_id: selectedChatId, content: textToSend })
