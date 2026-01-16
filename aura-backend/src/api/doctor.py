@@ -15,29 +15,35 @@ from schemas.medical_schema import ImageResponse
 from pydantic import BaseModel
 from typing import Optional
 
+from infrastructure.repositories.doctor_repo import DoctorRepository
+from infrastructure.repositories.medical_repo import MedicalRepository
+
+from api.medical_records import get_medical_service
 
 router = APIRouter()
 
+
+def get_doctor_service(db: Session = Depends(get_db)) -> DoctorService:
+    doc_repo = DoctorRepository(db)
+    med_repo = MedicalRepository(db)
+    return DoctorService(doctor_repo=doc_repo, medical_repo=med_repo, db=db)
+
+
 @router.get("/my-patients", response_model=MyPatientsResponse)
 def get_my_assigned_patients(
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    service: DoctorService = Depends(get_doctor_service) # Inject
 ):
-    """
-    Lấy danh sách bệnh nhân của bác sĩ đang đăng nhập.
-    """
     if current_user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=403, detail="Chỉ bác sĩ mới có quyền truy cập")
-        
-    service = DoctorService(db)
     return service.get_my_patients(current_user.id)
 
 # --- THÊM MỚI: API LẤY LỊCH SỬ KHÁM CỦA BỆNH NHÂN (DÀNH CHO BÁC SĨ) ---
 @router.get("/patients/{patient_id}/history", response_model=List[ImageResponse])
 def get_patient_medical_history(
     patient_id: str,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    medical_service: MedicalService = Depends(get_medical_service)
 ):
     """
     Bác sĩ xem lịch sử các lần upload/phân tích của một bệnh nhân cụ thể.
@@ -55,19 +61,18 @@ def get_patient_medical_history(
 
     # 3. Gọi MedicalService để lấy dữ liệu
     # (Tái sử dụng hàm get_records_by_user đã viết sẵn bên MedicalService)
-    medical_service = MedicalService(db)
     records = medical_service.get_records_by_user(user_id=p_uuid)
 
     return records
 
 # ... (các imports khác) ...
 
-@router.put("/records/{record_id}/diagnose")
-def doctor_update_diagnosis(
+@router.post("/records/{record_id}/diagnosis")
+def submit_diagnosis(
     record_id: str,
-    payload: DoctorDiagnosisRequest, 
-    db: Session = Depends(get_db),
+    payload: DoctorDiagnosisRequest,
     current_user: User = Depends(get_current_active_user),
+    service: DoctorService = Depends(get_doctor_service) # <--- Inject vào đây
 ):
     """
     Bác sĩ thẩm định kết quả AI -> Lưu vào bảng DoctorValidation
@@ -75,8 +80,6 @@ def doctor_update_diagnosis(
     if current_user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=403, detail="Chỉ bác sĩ mới có quyền chẩn đoán")
 
-    service = DoctorService(db)
-    
     updated_validation = service.update_diagnosis(
         record_id=record_id,
         diagnosis=payload.doctor_diagnosis,
@@ -97,8 +100,8 @@ def doctor_update_diagnosis(
 @router.get("/records/{record_id}/report-detail")
 def get_report_detail_api(
     record_id: str,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    service: DoctorService = Depends(get_doctor_service)
 ):
     """
     API lấy dữ liệu chi tiết (Tên BN, BS, KQ AI) để hiển thị lên trang Report
@@ -106,5 +109,4 @@ def get_report_detail_api(
     if current_user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=403, detail="Chỉ bác sĩ mới có quyền truy cập")
         
-    service = DoctorService(db)
     return service.get_report_detail(record_id, current_user.id)

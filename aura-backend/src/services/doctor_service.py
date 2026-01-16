@@ -4,16 +4,16 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from models.medical import DoctorValidation, AIAnalysisResult
-from repositories.doctor_repo import DoctorRepository
-from repositories.medical_repo import MedicalRepository
+from domain.models.idoctor_repository import IDoctorRepository
+from domain.models.imedical_repository import IMedicalRepository
 from schemas.doctor_schema import PatientResponse, LatestScan
 from models.users import User
 
 class DoctorService:
-    def __init__(self, db: Session):
+    def __init__(self, doctor_repo: IDoctorRepository, medical_repo: IMedicalRepository, db: Session):
         self.db = db
-        self.repo = DoctorRepository(db)
-        self.medical_repo = MedicalRepository(db)
+        self.repo = doctor_repo      # Gán Interface vào biến self.repo
+        self.medical_repo = medical_repo # Gán Interface vào biến self.medical_repo
 
     def get_my_patients(self, doctor_id: UUID):
         users = self.repo.get_assigned_patients(doctor_id)

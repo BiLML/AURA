@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import UploadFile, HTTPException
 from datetime import datetime 
 # Import Repository và Model
-from repositories.medical_repo import MedicalRepository
+from domain.models.imedical_repository import IMedicalRepository
 from models.enums import EyeSide
 
 # Cấu hình Cloudinary
@@ -20,9 +20,8 @@ cloudinary.config(
 )
 
 class MedicalService:
-    def __init__(self, db: Session):
-        self.repo = MedicalRepository(db)
-        # Lấy URL của AI Service từ biến môi trường (đã set trong docker-compose)
+    def __init__(self, repo: IMedicalRepository): 
+        self.repo = repo
         self.ai_service_url = os.getenv("AI_SERVICE_URL", "http://ai_service:8001/analyze")
 
     def upload_and_analyze(self, user_id: UUID, file: UploadFile, eye_side: str): # eye_side là str cho linh hoạt

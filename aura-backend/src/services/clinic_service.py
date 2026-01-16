@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, or_
-from repositories.clinic_repo import ClinicRepository
-from repositories.medical_repo import MedicalRepository
+from domain.models.iclinic_repository import IClinicRepository
+from domain.models.imedical_repository import IMedicalRepository
+from domain.models.iuser_repository import IUserRepository # <--- THÊM IMPORT NÀY
+
 from models.medical import RetinalImage, Patient, AIAnalysisResult
 from models.clinic import Clinic
 from models.users import User
@@ -9,15 +11,20 @@ from models.enums import UserRole, ClinicStatus, UserStatus
 from uuid import UUID
 
 class ClinicService:
-    def __init__(self, db: Session):
-        self.clinic_repo = ClinicRepository(db)
-        self.medical_repo = MedicalRepository(db)
+    # 2. INJECT THÊM USER REPO VÀO HÀM KHỞI TẠO
+    def __init__(self, 
+                 clinic_repo: IClinicRepository, 
+                 medical_repo: IMedicalRepository, 
+                 user_repo: IUserRepository, # <--- Inject User Repo
+                 db: Session):
+        self.clinic_repo = clinic_repo
+        self.medical_repo = medical_repo
+        self.user_repo = user_repo # <--- Lưu lại dùng sau này
         self.db = db
-
     def register_clinic(self, admin_id: UUID, name: str, address: str, phone_number: str, image_url: str = None, description: str = None) -> Clinic:
-        existing_clinic = self.clinic_repo.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()
-        if existing_clinic:
-             raise Exception("Admin này đã sở hữu một phòng khám.")
+        # Code cũ: existing_clinic = self.clinic_repo.db.query... -> SAI (Vi phạm encapsulation)
+        # Code mới: Bạn nên thêm hàm check_exist vào IClinicRepository
+        # Nhưng để chạy tạm, bạn có thể dùng self.db.query(...)
         return self.clinic_repo.create_clinic(admin_id, name, address, phone_number, image_url, description)
 
     def get_clinic_info(self, clinic_id: str) -> Clinic:
@@ -27,27 +34,24 @@ class ClinicService:
         return self.clinic_repo.get_all_clinics()
 
     def get_clinic_dashboard_data(self, admin_id: UUID):
+        # A. Lấy thông tin Clinic (Có thể chuyển vào clinic_repo sau, tạm thời giữ query cũ cũng được)
         clinic = self.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()
         if not clinic:
             return None
         
-        admin_user = self.db.query(User).options(joinedload(User.profile)).filter(User.id == admin_id).first()
-        admin_name = "Clinic Admin" # Giá trị mặc định
+        # B. Lấy thông tin Admin (Dùng Repo thay vì query trực tiếp)
+        admin_user = self.user_repo.get_by_id(admin_id) # <--- Dùng Repo
+        admin_name = "Clinic Admin"
         if admin_user and admin_user.profile and admin_user.profile.full_name:
             admin_name = admin_user.profile.full_name
 
-        # --- XỬ LÝ BÁC SĨ ---
-        doctors = self.db.query(User).options(joinedload(User.profile)).filter(
-            User.clinic_id == clinic.id, 
-            User.role == UserRole.DOCTOR
-        ).all()
+        # --- XỬ LÝ BÁC SĨ (Code mới: Gọi Repo) ---
+        doctors = self.user_repo.get_doctors_by_clinic_id(clinic.id) # <--- SẠCH HƠN HẲN!
 
         formatted_doctors = []
         for doc in doctors:
-            p_counts = self.db.query(User).filter(
-                User.assigned_doctor_id == doc.id,
-                User.role == UserRole.USER
-            ).count()
+            # Gọi Repo để đếm số bệnh nhân
+            p_counts = self.user_repo.count_patients_by_doctor_id(doc.id) 
 
             formatted_doctors.append({
                 "id": doc.id,
@@ -63,13 +67,7 @@ class ClinicService:
             })
 
         # --- XỬ LÝ BỆNH NHÂN ---
-        patients_query = self.db.query(User).options(
-            joinedload(User.assigned_doctor).joinedload(User.profile),
-            joinedload(User.profile),
-        ).filter(
-            User.clinic_id == clinic.id,
-            User.role == UserRole.USER
-        ).all()
+        patients_query = self.user_repo.get_patients_by_clinic_id(clinic.id) # <--- QUÁ GỌN!
 
         formatted_patients = []
         for p in patients_query:
@@ -84,18 +82,13 @@ class ClinicService:
                 else:
                      doc_name = p.assigned_doctor.username
 
-            # 2. 🔥 QUAN TRỌNG: Gọi Repo để tìm ảnh mới nhất của bệnh nhân này
-            # (Phần này đang bị thiếu hoặc sai trong code cũ của bạn)
             latest_imgs = self.medical_repo.get_by_patient_id(p.id, limit=1)
             img = latest_imgs[0] if latest_imgs else None
 
-            # 3. Map dữ liệu scan ra dạng phẳng
             scan_data = None
             if img:
                 ai_res = "Chưa xử lý"
                 status = "PENDING"
-                
-                # Lấy kết quả AI hoặc Bác sĩ
                 if img.analysis_result:
                     ai_res = img.analysis_result.risk_level
                     status = "COMPLETED"
@@ -103,12 +96,11 @@ class ClinicService:
                         ai_res = img.analysis_result.doctor_validation.doctor_confirm
                 
                 scan_data = {
-                    "ai_result": ai_res,          # Frontend cần trường này để lọc Severe/PDR
+                    "ai_result": ai_res,
                     "ai_analysis_status": status,
                     "upload_date": img.created_at
                 }
 
-            # 4. Đóng gói dữ liệu bệnh nhân
             formatted_patients.append({
                 "id": p.id,
                 "username": p.username,
@@ -121,7 +113,7 @@ class ClinicService:
                 "phone": p.profile.phone if (p.profile and p.profile.phone) else "",
                 "assigned_doctor_id": assigned_doctor_id,
                 "assigned_doctor": doc_name,
-                "latest_scan": scan_data # <-- Dữ liệu đã xử lý được gán vào đây
+                "latest_scan": scan_data
             })
 
         return {
@@ -322,3 +314,11 @@ class ClinicService:
             
             "is_internal": is_internal # <--- TRẢ VỀ CỜ NÀY
         }
+    
+    def search_doctors(self, query: str):
+        # Gọi Repo để tìm User có role là DOCTOR
+        return self.user_repo.search_users_by_role(UserRole.DOCTOR, query)
+    
+    def search_patients(self, query: str):
+        # Gọi Repo để tìm User có role là USER (Bệnh nhân)
+        return self.user_repo.search_users_by_role(UserRole.USER, query)

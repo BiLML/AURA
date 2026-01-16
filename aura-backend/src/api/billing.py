@@ -8,20 +8,25 @@ from services.billing_service import BillingService
 from schemas.billing_schema import PackageResponse, SubscriptionResponse, SubscribeRequest
 from models.users import User
 
+from infrastructure.repositories.billing_repo import BillingRepository
+
 router = APIRouter()
 
-@router.get("/packages", response_model=list[PackageResponse])
-def list_packages(db: Session = Depends(get_db)):
-    service = BillingService(db)
+def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
+    repo = BillingRepository(db)
+    return BillingService(billing_repo=repo, db=db)
+
+@router.get("/packages")
+def list_packages(
+    service: BillingService = Depends(get_billing_service)): # <--- Inject
     return service.list_service_packages()
 
 @router.post("/subscribe", response_model=SubscriptionResponse)
 def subscribe(
     req: SubscribeRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: BillingService = Depends(get_billing_service)
 ):
-    service = BillingService(db)
     try:
         return service.subscribe_user(current_user.id, req.package_id)
     except ValueError as e:
@@ -30,8 +35,7 @@ def subscribe(
 @router.get("/my-subscription")
 def check_credits(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: BillingService = Depends(get_billing_service)
 ):
-    service = BillingService(db)
     credits = service.check_credits(current_user.id)
     return {"credits_left": credits}

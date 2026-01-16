@@ -6,12 +6,15 @@ from models.enums import UserRole, UserStatus
 from models.system_config import SystemConfig # Import model mới
 from uuid import UUID
 
+from domain.models.iuser_repository import IUserRepository
+
 class AdminService:
-    def __init__(self, db: Session):
+    def __init__(self, user_repo: IUserRepository, db: Session):
+        self.user_repo = user_repo
         self.db = db
 
     def get_user_by_id(self, user_id: UUID) -> User:
-        user = self.db.query(User).filter(User.id == user_id).first()
+        user = self.user_repo.get_by_id(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
         return user

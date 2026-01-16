@@ -1,13 +1,15 @@
 from sqlalchemy.orm import Session
-from repositories.chat_repo import ChatRepository
-from repositories.user_repo import UserRepository
+from domain.models.ichat_repository import IChatRepository
+from domain.models.iuser_repository import IUserRepository
 from schemas.chat_schema import MessageCreate, ChatPreview
 import uuid
 from datetime import timedelta
 
 class ChatService:
-    def __init__(self, db: Session):
-        self.repo = ChatRepository(db)
+    def __init__(self, chat_repo: IChatRepository, user_repo: IUserRepository, db: Session):
+        self.repo = chat_repo
+        self.user_repo = user_repo # Lưu UserRepo để dùng sau
+        self.db = db
 
     def send_message(self, current_user_id: uuid.UUID, msg_in: MessageCreate):
         try:
@@ -23,8 +25,7 @@ class ChatService:
 
     def get_recent_chats(self, current_user_id: uuid.UUID) -> list[ChatPreview]:
         # 1. Lấy user hiện tại để check xem có bác sĩ phân công không
-        user_repo = UserRepository(self.repo.db) # Tận dụng db session
-        current_user = user_repo.get_by_id(current_user_id)
+        current_user = self.user_repo.get_by_id(current_user_id)
         
         # 2. Lấy toàn bộ tin nhắn thô
         raw_messages = self.repo.get_all_by_user(current_user_id)

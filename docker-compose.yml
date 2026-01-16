@@ -19,7 +19,7 @@ services:
       context: ./aura-backend
       dockerfile: Dockerfile
     container_name: aura_ai_core
-    command: python ai_service/main.py 
+    command: python src/ai_service/main.py
     ports:
       - "8001:8001"
     env_file:
@@ -44,6 +44,7 @@ services:
       # Ghi đè biến môi trường để đảm bảo kết nối đúng trong Docker
       - DATABASE_URL=postgresql://aura_user:aura_password@postgres_db:5432/aura_db
       - AI_SERVICE_URL=http://ai_service:8001/analyze 
+      - PYTHONPATH=/app/src
     volumes:
       - ./aura-backend:/app
 

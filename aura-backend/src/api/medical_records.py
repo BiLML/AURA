@@ -1,15 +1,27 @@
 # api/v1/medical_records.py
-from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
-from models.users import User
+from typing import List
+
 from core.database import get_db
 from core.security import get_current_user
-from services.medical_service import MedicalService
+from models.users import User
+from models.enums import UserRole
 from schemas.medical_schema import ImageResponse
-from models.enums import EyeSide, UserRole
+
+# 1. IMPORT SERVICE VÀ REPO THỰC
+from services.medical_service import MedicalService
+from infrastructure.repositories.medical_repo import MedicalRepository
 
 router = APIRouter()
+
+
+# 2. HÀM DEPENDENCY ĐỂ KHỞI TẠO SERVICE
+def get_medical_service(db: Session = Depends(get_db)) -> MedicalService:
+    # Bước A: Tạo Repo thực
+    repo = MedicalRepository(db)
+    # Bước B: Tiêm vào Service (Service nhận Interface, ta đưa Class thực vào là OK)
+    return MedicalService(repo=repo)
 
 # 1. API UPLOAD & PHÂN TÍCH
 @router.post("/analyze", response_model=ImageResponse, status_code=201)
@@ -17,15 +29,15 @@ def analyze_retina(
     eye_side: str = Form("left"),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    # Thay vì tự khởi tạo, hãy nhờ FastAPI lấy hộ Service đã được lắp ráp
+    service: MedicalService = Depends(get_medical_service) 
 ):
     if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận file ảnh (jpg, png)")
 
-    medical_service = MedicalService(db)
-    
     try:
-        result = medical_service.upload_and_analyze(
+        # Gọi Service trực tiếp, không cần truyền db nữa
+        result = service.upload_and_analyze(
             user_id=current_user.id,
             file=file,
             eye_side=eye_side 
@@ -46,37 +58,29 @@ def analyze_retina(
     except Exception as e:
         print(f"Lỗi Upload: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 # 2. API LẤY DANH SÁCH (Của user đang login)
 @router.get("/", response_model=List[ImageResponse])
 def get_my_records(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: MedicalService = Depends(get_medical_service) # <--- Inject Service
 ):
-    medical_service = MedicalService(db)
     if current_user.role in [UserRole.DOCTOR, UserRole.ADMIN, UserRole.CLINIC]:
-        return medical_service.get_all_records(skip=skip, limit=limit)
-    return medical_service.get_records_by_user(user_id=current_user.id, skip=skip, limit=limit)
+        return service.get_all_records(skip=skip, limit=limit)
+    return service.get_records_by_user(user_id=current_user.id, skip=skip, limit=limit)
 
 # --- 3. API LỊCH SỬ PHÒNG KHÁM (QUAN TRỌNG: PHẢI ĐẶT TRƯỚC {record_id}) ---
 @router.get("/clinic-history")
 def get_clinic_history_records(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: MedicalService = Depends(get_medical_service)
 ):
-    """
-    API lấy lịch sử khám cho Dashboard Phòng khám.
-    Trả về danh sách hồ sơ của tất cả bệnh nhân thuộc phòng khám/bác sĩ đó.
-    """
-    medical_service = MedicalService(db)
-    
-    # Nếu là Clinic Admin hoặc Bác sĩ, cho phép xem hết
     if current_user.role in [UserRole.CLINIC, UserRole.DOCTOR, UserRole.ADMIN]:
-        records = medical_service.get_all_records(limit=50) 
+        records = service.get_all_records(limit=50) 
     else:
-        records = medical_service.get_records_by_user(user_id=current_user.id)
+        records = service.get_records_by_user(user_id=current_user.id)
 
     # Format dữ liệu trả về cho khớp với Frontend ClinicDashboard
     results = []
@@ -104,11 +108,9 @@ def get_clinic_history_records(
 def get_record_detail(
     record_id: str, 
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: MedicalService = Depends(get_medical_service)
 ):
-    medical_service = MedicalService(db)
-    record = medical_service.get_record_by_id(record_id)
-    
+    record = service.get_record_by_id(record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ")
          

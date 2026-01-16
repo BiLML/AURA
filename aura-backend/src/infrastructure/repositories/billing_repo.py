@@ -1,16 +1,22 @@
 from sqlalchemy.orm import Session
-from models.billing import ServicePackage, Subscription
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import List, Optional
 
-class BillingRepository:
+# Import Interface
+from domain.models.ibilling_repository import IBillingRepository
+
+# Import Models
+from models.billing import ServicePackage, Subscription
+
+class BillingRepository(IBillingRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all_packages(self):
+    def get_all_packages(self) -> List[ServicePackage]:
         return self.db.query(ServicePackage).all()
 
-    def get_active_subscription(self, user_id: UUID):
+    def get_active_subscription(self, user_id: UUID) -> Optional[Subscription]:
         # Lấy gói đăng ký còn hạn
         now = datetime.utcnow().date()
         return self.db.query(Subscription).filter(
@@ -18,9 +24,8 @@ class BillingRepository:
             Subscription.expired_at >= now
         ).first()
 
-    def create_subscription(self, user_id: UUID, package_id: UUID, days: int, credits: int):
+    def create_subscription(self, user_id: UUID, package_id: UUID, days: int, credits: int) -> Subscription:
         # Tính ngày hết hạn
-        from datetime import timedelta
         expired_date = datetime.utcnow().date() + timedelta(days=days)
 
         sub = Subscription(

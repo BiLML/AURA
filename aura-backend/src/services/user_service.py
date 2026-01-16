@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from repositories.user_repo import UserRepository
+from domain.models.iuser_repository import IUserRepository
 from models.users import User, Profile
 from models.enums import UserRole
 from schemas.user_schema import UserCreate, UserLogin, UserProfileUpdate, UserUpdateCredentials
@@ -30,9 +30,10 @@ conf = ConnectionConfig(
 )
 
 class UserService:
-    def __init__(self, db: Session):
-        self.user_repo = UserRepository(db)
-        self.db = db
+    # [SỬA] Inject IUserRepository vào đây
+    def __init__(self, user_repo: IUserRepository, db: Session):
+        self.user_repo = user_repo
+        self.db = db # Vẫn giữ db để commit transaction trong service
     def register_user(self, user_data: UserCreate):
         # 1. CHECK TRÙNG USERNAME
         if self.user_repo.get_by_username(user_data.username):

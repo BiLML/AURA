@@ -6,8 +6,15 @@ from services.user_service import UserService
 from schemas.user_schema import UserResponse, UserProfileUpdate, UserUpdateCredentials
 from models.users import User
 from models.enums import UserRole
+from infrastructure.repositories.user_repo import UserRepository
+
 
 router = APIRouter()
+
+
+def get_user_service(db: Session = Depends(get_db)) -> UserService:
+    repo = UserRepository(db)
+    return UserService(user_repo=repo, db=db) # Nhớ truyền cả db vì init của UserService vẫn còn giữ db
 
 @router.get("/me", response_model=UserResponse)
 def read_users_me(current_user = Depends(get_current_user)):
@@ -18,19 +25,14 @@ def read_users_me(current_user = Depends(get_current_user)):
 def update_my_profile(
     update_data: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    service: UserService = Depends(get_user_service) # Inject
 ):
-    user_service = UserService(db)
-    # Gọi hàm update vừa viết bên service
-    return user_service.update_user_profile(user_id=current_user.id, update_data=update_data)
+    return service.update_user_profile(user_id=current_user.id, update_data=update_data)
 
-# --- THÊM API NÀY ---
 @router.put("/set-username")
 def set_username_endpoint(
     data: UserUpdateCredentials,
-    current_user: User = Depends(get_current_user), # Bắt buộc phải đăng nhập mới đổi được
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service) # Inject
 ):
-    user_service = UserService(db)
-    # Gọi service xử lý logic
-    return user_service.set_username_password(user_id=current_user.id, data=data)
+    return service.set_username_password(user_id=current_user.id, data=data)

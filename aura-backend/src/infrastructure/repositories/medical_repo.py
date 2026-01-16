@@ -1,19 +1,27 @@
 from sqlalchemy.orm import Session, joinedload
-from models.medical import Patient, RetinalImage, AIAnalysisResult, DoctorValidation
-from models.enums import ImageType, EyeSide, RiskLevel
-from models.users import User, Profile
 from uuid import UUID
+from typing import List, Optional
 
-class MedicalRepository:
+# --- 1. IMPORT INTERFACE TỪ DOMAIN ---
+# Đây là bước quan trọng nhất để kết nối "Luật chơi" (Domain) với "Cách chơi" (Infrastructure)
+from domain.models.imedical_repository import IMedicalRepository
+
+# Import Models (Giữ nguyên như cũ)
+from models.medical import Patient, RetinalImage, AIAnalysisResult, DoctorValidation
+from models.enums import ImageType, EyeSide
+from models.users import User
+
+# --- 2. KẾ THỪA INTERFACE ---
+class MedicalRepository(IMedicalRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    # --- Phần xử lý Bệnh nhân (Patient) ---
-    def get_patient_by_user_id(self, user_id: UUID):
+    # --- Triển khai các hàm đã định nghĩa trong Interface ---
+
+    def get_patient_by_user_id(self, user_id: UUID) -> Optional[Patient]:
         return self.db.query(Patient).filter(Patient.user_id == user_id).first()
 
-    def create_patient_record(self, user_id: UUID, dob=None, gender=None):
-        # Kiểm tra nếu chưa có hồ sơ thì tạo mới
+    def create_patient_record(self, user_id: UUID, dob=None, gender=None) -> Patient:
         patient = self.get_patient_by_user_id(user_id)
         if not patient:
             patient = Patient(user_id=user_id, dob=dob, gender=gender)
@@ -22,8 +30,7 @@ class MedicalRepository:
             self.db.refresh(patient)
         return patient
 
-    # --- Phần xử lý Ảnh (RetinalImage) ---
-    def save_image(self, patient_id: UUID, uploader_id: UUID, image_url: str, eye_side: EyeSide):
+    def save_image(self, patient_id: UUID, uploader_id: UUID, image_url: str, eye_side: EyeSide) -> RetinalImage:
         new_image = RetinalImage(
             patient_id=patient_id,
             uploader_id=uploader_id,
@@ -36,23 +43,18 @@ class MedicalRepository:
         self.db.refresh(new_image)
         return new_image
 
-    def get_image_by_id(self, image_id: str):
+    def get_image_by_id(self, image_id: str) -> Optional[RetinalImage]:
         return self.db.query(RetinalImage).filter(RetinalImage.id == image_id).first()
 
-    # --- Phần xử lý Kết quả AI (AIAnalysisResult) ---
-    def save_analysis_result(self, image_id: UUID, risk_level: str, vessel_data: dict, annotated_url: str, report_content: str = None):
+    def save_analysis_result(self, image_id: UUID, risk_level: str, vessel_data: dict, annotated_url: str, report_content: str = None) -> AIAnalysisResult:
         try:
-            # Giả sử Model của bạn là AIAnalysisResult
             new_result = AIAnalysisResult(
                 image_id=image_id,
                 risk_level=risk_level,
-                # Nếu database của bạn chưa có cột report_content, 
-                # hãy nhét nó vào một cột text hiện có hoặc bỏ qua tạm thời
                 vessel_details=vessel_data, 
                 annotated_image_url=annotated_url,
-                ai_detailed_report=report_content, # ✅ Lưu báo cáo chi tiết
+                ai_detailed_report=report_content,
                 ai_version="v1.0-onnx"
-                # chi_tiet_bao_cao=report_content # Kiểm tra lại tên cột trong Model của bạn
             )
             self.db.add(new_result)
             self.db.commit()
@@ -60,47 +62,36 @@ class MedicalRepository:
             return new_result
         except Exception as e:
             self.db.rollback()
-            print(f"❌ Repo Error: {e}")
+            # Có thể log error tại đây
             raise e
 
-    # File: repositories/medical_repo.py
-
-    def get_records_by_uploader(self, user_id: UUID, skip: int = 0, limit: int = 100):
-        # Trả về danh sách ảnh do User này tải lên
+    def get_records_by_uploader(self, user_id: UUID, skip: int = 0, limit: int = 100) -> List[RetinalImage]:
         return self.db.query(RetinalImage).filter(RetinalImage.uploader_id == user_id).offset(skip).limit(limit).all()
 
-    def get_all_records(self, skip: int = 0, limit: int = 100):
-        # Trả về toàn bộ ảnh trong hệ thống (cho bác sĩ/admin)
+    def get_all_records(self, skip: int = 0, limit: int = 100) -> List[RetinalImage]:
         return self.db.query(RetinalImage).offset(skip).limit(limit).all()
 
-    def get_record_by_id(self, record_id: str):
-        """
-        Lấy chi tiết hồ sơ với đầy đủ thông tin liên kết (Bệnh nhân, Bác sĩ, Profile).
-        Dùng joinedload để tránh lỗi lazy loading khi truy cập relationship.
-        """
+    def get_record_by_id(self, record_id: str) -> Optional[RetinalImage]:
         return (
             self.db.query(RetinalImage)
-            # 1. Load thông tin Bệnh nhân: Image -> Patient -> User -> Profile
+            # Load thông tin Bệnh nhân
             .options(
                 joinedload(RetinalImage.patient)
                 .joinedload(Patient.user)
                 .joinedload(User.profile)
             )
-            # 2. Load thông tin Kết quả & Bác sĩ: Image -> Analysis -> Validation -> Doctor -> Profile
+            # Load thông tin Kết quả & Bác sĩ
             .options(
                 joinedload(RetinalImage.analysis_result)
                 .joinedload(AIAnalysisResult.doctor_validation)
-                .joinedload(DoctorValidation.doctor) # <--- THÊM MỚI: Load User bác sĩ
-                .joinedload(User.profile)            # <--- THÊM MỚI: Load Profile bác sĩ
+                .joinedload(DoctorValidation.doctor)
+                .joinedload(User.profile)
             )
             .filter(RetinalImage.id == record_id)
             .first()
         )
     
-    def get_by_patient_id(self, user_id: str, skip: int = 0, limit: int = 100):
-        """
-        Lấy danh sách ảnh dựa trên User ID của bệnh nhân
-        """
+    def get_by_patient_id(self, user_id: str, skip: int = 0, limit: int = 100) -> List[RetinalImage]:
         return (
             self.db.query(RetinalImage)
             .join(Patient, RetinalImage.patient_id == Patient.id)

@@ -11,26 +11,32 @@ from models.users import User
 from schemas.chat_schema import MessageCreate
 from services.chat_service import ChatService
 
+from services.chat_service import ChatService
+from infrastructure.repositories.chat_repo import ChatRepository
+from infrastructure.repositories.user_repo import UserRepository
+
 router = APIRouter()
 
-@router.get("", response_model=Any)
+def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
+    chat_repo = ChatRepository(db)
+    user_repo = UserRepository(db)
+    return ChatService(chat_repo=chat_repo, user_repo=user_repo, db=db)
+
+@router.get("")
 def get_chats(
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    service: ChatService = Depends(get_chat_service) # <--- Inject
 ):
-    """Lấy danh sách chat (cho Sidebar)"""
-    service = ChatService(db)
     chats = service.get_recent_chats(current_user.id)
     return {"chats": chats}
 
 @router.get("/history/{partner_id}")
 def get_history(
     partner_id: str,
-    db: Session = Depends(get_db),
+    service: ChatService = Depends(get_chat_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """Lấy nội dung chat với một người"""
-    service = ChatService(db)
     try:
         messages = service.get_chat_history(current_user.id, partner_id)
         return {"messages": messages}
@@ -40,11 +46,10 @@ def get_history(
 @router.post("/send")
 def send_message(
     msg_in: MessageCreate,
-    db: Session = Depends(get_db),
+    service: ChatService = Depends(get_chat_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """Gửi tin nhắn mới"""
-    service = ChatService(db)
     try:
         new_msg = service.send_message(current_user.id, msg_in)
         return {"status": "success", "msg_id": str(new_msg.id)}
@@ -54,10 +59,9 @@ def send_message(
 @router.put("/read/{partner_id}")
 def mark_read(
     partner_id: str,
-    db: Session = Depends(get_db),
+    service: ChatService = Depends(get_chat_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """Đánh dấu đã đọc"""
-    service = ChatService(db)
     service.mark_read(current_user.id, partner_id)
     return {"status": "marked as read"}

@@ -1,0 +1,100 @@
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
+from typing import List, Optional
+from uuid import UUID
+
+from models.users import User, Profile
+from models.enums import UserRole, UserStatus
+from schemas.user_schema import UserCreate
+
+# Import Interface (Đã sửa lại đường dẫn đúng)
+from domain.models.iuser_repository import IUserRepository
+
+class UserRepository(IUserRepository):
+    def __init__(self, db: Session):
+        self.db = db
+
+    # --- CÁC HÀM CŨ (Giữ nguyên) ---
+    def get_by_email(self, email: str):
+        return self.db.query(User).filter(User.email == email).first()
+
+    def get_by_username(self, username: str):
+        return self.db.query(User).filter(User.username == username).first()
+
+    def get_by_id(self, user_id: str):
+        return self.db.query(User).filter(User.id == user_id).first()
+
+    def create_user(self, user_data: UserCreate, hashed_password: str):
+        try:
+            new_user = User(
+                username=user_data.username,
+                email=user_data.email,
+                password_hash=hashed_password,
+                role=user_data.role if user_data.role else UserRole.USER,
+                status=UserStatus.ACTIVE
+            )
+            self.db.add(new_user)
+            self.db.flush() 
+
+            new_profile = Profile(
+                user_id=new_user.id,
+                full_name=user_data.full_name,
+                phone=user_data.phone
+            )
+            self.db.add(new_profile)
+            
+            self.db.commit()
+            self.db.refresh(new_user)
+            return new_user
+        except Exception as e:
+            self.db.rollback()
+            raise e
+        
+    def get_all_users(self, skip: int = 0, limit: int = 100):
+        return self.db.query(User).offset(skip).limit(limit).all()
+
+    # --- 🔥 BƯỚC B: THÊM 2 HÀM MỚI Ở ĐÂY 🔥 ---
+    
+    def get_doctors_by_clinic_id(self, clinic_id: UUID) -> List[User]:
+        """
+        Lấy danh sách Bác sĩ thuộc phòng khám.
+        Có join sẵn Profile để hiển thị tên.
+        """
+        return self.db.query(User).options(
+            joinedload(User.profile)
+        ).filter(
+            User.clinic_id == clinic_id, 
+            User.role == UserRole.DOCTOR
+        ).all()
+
+    def get_patients_by_clinic_id(self, clinic_id: UUID) -> List[User]:
+        """
+        Lấy danh sách Bệnh nhân thuộc phòng khám.
+        Có join sẵn Profile và Bác sĩ phụ trách.
+        """
+        return self.db.query(User).options(
+            # Load bác sĩ phụ trách -> Load profile của bác sĩ đó
+            joinedload(User.assigned_doctor).joinedload(User.profile),
+            # Load profile của chính bệnh nhân
+            joinedload(User.profile),
+        ).filter(
+            User.clinic_id == clinic_id,
+            User.role == UserRole.USER
+        ).all()
+    
+    def search_users_by_role(self, role: UserRole, query: str) -> List[User]:
+        """
+        Tìm kiếm User theo Role và từ khóa (Username hoặc Email)
+        """
+        sql_query = self.db.query(User).filter(User.role == role)
+        
+        if query:
+            search_term = f"%{query}%"
+            sql_query = sql_query.filter(
+                or_(
+                    User.email.ilike(search_term), 
+                    User.username.ilike(search_term)
+                )
+            )
+            
+        return sql_query.all()

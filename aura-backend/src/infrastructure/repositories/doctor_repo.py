@@ -1,24 +1,29 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from models.users import User, Profile
+from uuid import UUID
+from typing import List, Optional
+
+# Import Interface
+from domain.models.idoctor_repository import IDoctorRepository
+
+# Import Models
+from models.users import User
 from models.medical import RetinalImage, AIAnalysisResult
 from models.enums import UserRole
-import uuid
 
-class DoctorRepository:
+class DoctorRepository(IDoctorRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def get_assigned_patients(self, doctor_id: uuid.UUID):
+    def get_assigned_patients(self, doctor_id: UUID) -> List[User]:
         """Lấy danh sách bệnh nhân được phân công cho bác sĩ này"""
         return self.db.query(User).filter(
             User.assigned_doctor_id == doctor_id,
             User.role == UserRole.USER
         ).all()
 
-    def get_latest_scan(self, patient_id: uuid.UUID):
+    def get_latest_scan(self, patient_id: UUID) -> Optional[RetinalImage]:
         """Lấy kết quả khám mới nhất của bệnh nhân"""
-        # Join RetinalImage với AIAnalysisResult để lấy kết quả
         return self.db.query(RetinalImage).join(
             AIAnalysisResult, RetinalImage.id == AIAnalysisResult.image_id, isouter=True
         ).filter(

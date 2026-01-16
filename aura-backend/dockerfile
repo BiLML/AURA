@@ -20,4 +20,6 @@ RUN pip install --upgrade pip && \
 # 3. Copy toàn bộ code (Bao gồm cả folder server và ai_service)
 COPY . .
 
+ENV PYTHONPATH=/app/src
+
 # 4. Không cần CMD cứng ở đây, docker-compose sẽ điều khiển
