@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-
+import { FaArrowLeft } from 'react-icons/fa';
 // ... (Giữ nguyên các interface và logic fetch data cũ) ...
 interface MedicalRecord {
     id: number;
@@ -100,7 +100,7 @@ const AnalysisResult: React.FC = () => {
             
             {/* innerContainer để giới hạn nội dung ở giữa cho đẹp, không bị bè ra quá rộng */}
             <div style={styles.innerContainer}>
-                <button onClick={() => navigate('/dashboard')} style={styles.backBtn}>&larr; Quay lại Dashboard</button>
+                <button onClick={() => navigate('/dashboard')} style={styles.modernBackBtn} onMouseOver={(e) => e.currentTarget.style.borderColor = '#94a3b8'} onMouseOut={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}><div style={styles.iconCircle}><FaArrowLeft size={14} /></div><span>Quay lại</span></button>
                 
                 <div style={styles.header}>
                     <div>
@@ -196,7 +196,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#666', backgroundColor: '#fff', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 10000 },
     
     // Style cũ giữ nguyên
-    backBtn: { border: 'none', background: 'none', color: '#007bff', cursor: 'pointer', marginBottom: '20px', fontSize: '16px', fontWeight: '600', padding: 0 },
+    modernBackBtn: { display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '6px 16px 6px 6px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '30px', color: '#475569', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '25px', transition: 'all 0.2s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
+    iconCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '40px', borderBottom: '2px solid #f5f5f5', paddingBottom: '20px' },
     dateBadge: { background: '#f8f9fa', padding: '6px 14px', borderRadius: '20px', fontSize: '14px', color: '#666', fontWeight: '600', border: '1px solid #eee' },
     
