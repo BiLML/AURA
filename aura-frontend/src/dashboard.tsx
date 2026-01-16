@@ -6,6 +6,23 @@ import {
     FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory 
 } from 'react-icons/fa';
 
+interface ServicePackage {
+    id: string;
+    name: string;
+    price: number;
+    analysis_limit: number;
+    duration_days: number;
+    description: string;
+    target_role: string;
+}
+
+interface UserSubscription {
+    active: boolean;
+    credits: number;
+    plan_name: string;
+    expiry: string | null;
+}
+
 // --- Dashboard Component (USER / PATIENT) ---
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -43,6 +60,11 @@ const Dashboard: React.FC = () => {
     // State ảnh upload
     const [clinicImages, setClinicImages] = useState<{ front: File | null, back: File | null }>({ front: null, back: null });
     const [previewImages, setPreviewImages] = useState<{ front: string | null, back: string | null }>({ front: null, back: null });
+
+// --- 2. THÊM STATE CHO BILLING ---
+    const [packages, setPackages] = useState<ServicePackage[]>([]);
+    const [mySub, setMySub] = useState<UserSubscription>({ active: false, credits: 0, plan_name: 'Free', expiry: null });
+    const [isBuying, setIsBuying] = useState(false);
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
     const fetchChatData = useCallback(async () => {
@@ -232,6 +254,7 @@ const Dashboard: React.FC = () => {
         const interval = setInterval(async () => {
              if (activeTab === 'messages') fetchChatData(); 
              if (activeTab === 'home') fetchMedicalRecords();
+             if (activeTab === 'payments') fetchBillingData();
              if (selectedChatId && selectedChatId !== 'system') {
                 const serverMsgs = await fetchMessageHistory(selectedChatId);
                 if (serverMsgs && serverMsgs.length > currentMessages.length) setCurrentMessages(serverMsgs);
@@ -257,6 +280,7 @@ const Dashboard: React.FC = () => {
                 
                 await fetchMedicalRecords(); 
                 await fetchChatData(); 
+                await fetchBillingData();
             } catch (error) { console.error("Lỗi tải dữ liệu:", error); } 
             finally { setIsLoading(false); }
         };
@@ -271,6 +295,66 @@ const Dashboard: React.FC = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const fetchBillingData = useCallback(async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            // 1. Lấy danh sách gói
+            const pkgRes = await fetch('http://localhost:8000/api/v1/billing/packages', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (pkgRes.ok) {
+                const data = await pkgRes.json();
+                setPackages(data);
+            }
+
+            // 2. Lấy thông tin ví hiện tại
+            const subRes = await fetch('http://localhost:8000/api/v1/billing/my-usage', { // Hoặc /my-subscription tùy API bạn đặt
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (subRes.ok) {
+                const subData = await subRes.json();
+                setMySub({
+                    active: subData.active || false,
+                    credits: subData.credits || subData.credits_left || 0,
+                    plan_name: subData.plan_name || 'Free',
+                    expiry: subData.expiry || subData.expires_at || null
+                });
+            }
+        } catch (error) { console.error("Lỗi billing:", error); }
+    }, []);
+
+    // --- HÀM 2: MUA GÓI ---
+    const handleBuyPackage = async (pkg: ServicePackage) => {
+        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
+        
+        setIsBuying(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/billing/subscribe', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ package_id: pkg.id })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ Đăng ký thành công! Bạn có thêm ${data.credits_left || pkg.analysis_limit} lượt.`);
+                fetchBillingData(); // Load lại dữ liệu ví
+            } else {
+                alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
+            }
+        } catch (e) {
+            alert("Lỗi kết nối server");
+        } finally {
+            setIsBuying(false);
+        }
+    };
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
     const goToProfilePage = () => { setShowUserMenu(false); navigate('/profile'); };
@@ -287,6 +371,8 @@ const Dashboard: React.FC = () => {
         return '#007bff'; // Xanh dương (Mặc định)
     };
 
+
+
     const totalScans = historyData.length;
     const highRiskCount = historyData.filter(item => {
         const res = (item.result || "").toLowerCase();
@@ -295,6 +381,7 @@ const Dashboard: React.FC = () => {
     
     const recentNotifications = historyData.slice(0, 5);
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
+
 
     // --- RENDER CONTENT ---
     const renderContent = () => {
@@ -484,9 +571,64 @@ if (activeTab === 'messages') {
         
         // 3. PAYMENTS
         if (activeTab === 'payments') return (
-            <div style={styles.card}>
-                <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10}}/>Thanh toán & Dịch vụ</h2></div>
-                <div style={{padding:'30px', textAlign:'center', color:'#666'}}>Chức năng đang được phát triển...</div>
+            <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+                
+                {/* THẺ VÍ CỦA TÔI */}
+                <div style={styles.card}>
+                    <div style={styles.cardHeader}>
+                        <h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10}}/>Ví & Dịch vụ</h2>
+                    </div>
+                    <div style={{padding:'25px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'linear-gradient(135deg, #007bff 0%, #0056b3 100%)', margin:'20px', borderRadius:'12px', color:'white'}}>
+                        <div>
+                            <p style={{margin:0, opacity:0.8, fontSize:'14px'}}>Gói hiện tại</p>
+                            <h2 style={{margin:'5px 0', fontSize:'24px'}}>{mySub.plan_name}</h2>
+                            {mySub.expiry && <small style={{opacity:0.9}}>Hết hạn: {new Date(mySub.expiry).toLocaleDateString('vi-VN')}</small>}
+                        </div>
+                        <div style={{textAlign:'right'}}>
+                            <p style={{margin:0, opacity:0.8, fontSize:'14px'}}>Số lượt còn lại</p>
+                            <h1 style={{margin:0, fontSize:'48px', fontWeight:'800'}}>{mySub.credits}</h1>
+                        </div>
+                    </div>
+                </div>
+
+                {/* DANH SÁCH GÓI DỊCH VỤ */}
+                <div>
+                    <h3 style={{color:'#333', marginBottom:'15px', display:'flex', alignItems:'center'}}>
+                        <FaHospital style={{marginRight:10, color:'#007bff'}}/> Gói dịch vụ có sẵn
+                    </h3>
+                    
+                    {packages.length === 0 ? (
+                        <div style={{textAlign:'center', padding:'40px', color:'#999'}}>Chưa có gói dịch vụ nào.</div>
+                    ) : (
+                        <div style={styles.pricingGrid}>
+                            {packages.map(pkg => (
+                                <div key={pkg.id} style={styles.pricingCard}>
+                                    <div style={styles.pricingHeader}>
+                                        <h4 style={{margin:0, fontSize:'18px', color:'#333'}}>{pkg.name}</h4>
+                                        <div style={styles.priceTag}>
+                                            {pkg.price === 0 ? 'Miễn phí' : `${pkg.price.toLocaleString('vi-VN')} đ`}
+                                        </div>
+                                    </div>
+                                    <div style={styles.pricingBody}>
+                                        <p style={{fontSize:'13px', color:'#666', minHeight:'40px'}}>{pkg.description || 'Gói dịch vụ tiêu chuẩn'}</p>
+                                        <ul style={{paddingLeft:'20px', margin:'15px 0', color:'#444', fontSize:'14px'}}>
+                                            <li style={{marginBottom:'8px'}}>⏳ Thời hạn: <b>{pkg.duration_days} ngày</b></li>
+                                            <li style={{marginBottom:'8px'}}>🧠 Số lượt AI: <b>{pkg.analysis_limit} lượt</b></li>
+                                            <li>👨‍⚕️ Hỗ trợ bác sĩ: <b>Có</b></li>
+                                        </ul>
+                                        <button 
+                                            onClick={() => handleBuyPackage(pkg)} 
+                                            disabled={isBuying}
+                                            style={{...styles.primaryBtn, width:'100%', background: isBuying ? '#ccc' : '#007bff'}}
+                                        >
+                                            {isBuying ? 'Đang xử lý...' : 'Đăng ký ngay'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         );
 
@@ -686,6 +828,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     statusActive: { background: '#d4edda', color: '#155724', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' },
     statusPending: { background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', display:'flex', alignItems:'center', gap:'5px', width:'fit-content' },
     emptyCell: { textAlign: 'center', padding: '40px', color: '#999', fontStyle: 'italic' },
+    pricingGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' },
+    pricingCard: { backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e1e4e8', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },
+    pricingHeader: { padding: '20px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #eee', textAlign: 'center' },
+    priceTag: { fontSize: '24px', fontWeight: '800', color: '#007bff', marginTop: '10px' },
+    pricingBody: { padding: '20px' },
 };
 
 const styleSheet = document.createElement("style");

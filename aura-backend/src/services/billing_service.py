@@ -47,3 +47,24 @@ class BillingService:
         if not sub:
             return 0
         return sub.credits_left
+    
+    def get_usage_status(self, user_id: UUID):
+        sub = self.billing_repo.get_active_subscription(user_id)
+        
+        # Trường hợp 1: Không có gói nào
+        if not sub:
+            return {
+                "active": False,
+                "credits": 0,
+                "plan_name": "Free",
+                "expiry": None
+            }
+        
+        # Trường hợp 2: Có gói -> Trả về full thông tin
+        # Lưu ý: sub.package.name hoạt động nhờ relationship trong model
+        return {
+            "active": True,
+            "credits": sub.credits_left,
+            "plan_name": sub.package.name if sub.package else "Unknown",
+            "expiry": sub.expired_at
+        }

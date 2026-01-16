@@ -47,10 +47,10 @@ def subscribe(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/my-subscription")
-def check_credits(
+@router.get("/my-usage")  # <--- Đổi tên endpoint tại đây
+def get_my_usage(
     current_user: User = Depends(get_current_user),
     service: BillingService = Depends(get_billing_service)
 ):
-    credits = service.check_credits(current_user.id)
-    return {"credits_left": credits}
+    # Gọi hàm mới viết ở Bước 1
+    return service.get_usage_status(current_user.id)
