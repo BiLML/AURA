@@ -105,3 +105,44 @@ class MedicalRepository(IMedicalRepository):
             .limit(limit)
             .all()
         )
+    
+    def count_all_records(self) -> int:
+        return self.db.query(RetinalImage).count()
+    
+    def get_ai_validation_stats(self) -> dict:
+        # 1. Đếm tổng số ca bác sĩ đã xác nhận
+        total_validated = self.db.query(DoctorValidation).filter(
+            DoctorValidation.doctor_confirm.isnot(None)
+        ).count()
+        
+        if total_validated == 0:
+            return {"total_validated": 0, "correct_ai": 0}
+
+        # 2. Đếm số ca AI đoán đúng (So sánh risk_level vs doctor_confirm)
+        correct_ai = self.db.query(DoctorValidation).join(
+            AIAnalysisResult, 
+            DoctorValidation.analysis_id == AIAnalysisResult.id
+        ).filter(
+            DoctorValidation.doctor_confirm.isnot(None),
+            DoctorValidation.doctor_confirm == AIAnalysisResult.risk_level
+        ).count()
+
+        return {
+            "total_validated": total_validated,
+            "correct_ai": correct_ai
+        }
+    
+    def assign_patient_to_clinic(self, user_id: UUID, clinic_id: UUID) -> bool:
+        # Tìm hồ sơ bệnh nhân của user này
+        patient = self.db.query(Patient).filter(Patient.user_id == user_id).first()
+        
+        if patient:
+            # Nếu đã có hồ sơ -> Update
+            patient.clinic_id = clinic_id
+        else:
+            # Nếu chưa có -> Tạo mới (Tự động tạo hồ sơ trống khi join phòng khám)
+            patient = Patient(user_id=user_id, clinic_id=clinic_id)
+            self.db.add(patient)
+            
+        self.db.commit()
+        return True

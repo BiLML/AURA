@@ -42,3 +42,7 @@ class PaymentTransaction(Base):
     amount = Column(Numeric(10, 2), nullable=False)
     status = Column(String(20), default="PENDING") # PENDING, SUCCESS, FAILED
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+    package = relationship("ServicePackage")

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaHospital, FaBrain, FaSignOutAlt, FaSearch, 
-    FaCheck, FaUsers, FaUserShield, FaBell,
+    FaCheck, FaUsers, FaUserShield, FaBell, FaCheckDouble,
     FaEdit, FaLock, FaUnlock, FaBan, FaTimes, FaSave, 
     FaCogs, FaRobot, FaMoneyBillWave, FaPlus // ✅ Đã thêm icon cho Config
 } from 'react-icons/fa';
@@ -84,6 +84,14 @@ const DashboardAdmin: React.FC = () => {
         duration_days: 30,
         description: '',
         target_role: 'USER' // Mặc định bán cho User
+    });
+
+    const [globalStats, setGlobalStats] = useState({
+    revenue: 0,
+    totalScans: 0,
+    recentTransactions: [],
+    aiAccuracy: 0,
+    validatedCount: 0
     });
 
     // State cho Config AI (Mặc định)
@@ -187,6 +195,19 @@ const DashboardAdmin: React.FC = () => {
                     setPackageList(pkgData);
                 }
             } catch (e) { console.error("Lỗi fetch gói:", e); }
+
+
+            const statsRes = await fetch('http://127.0.0.1:8000/api/v1/admin/stats/global', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (statsRes.ok) {
+                const data = await statsRes.json();
+                setGlobalStats({
+                    revenue: data.total_revenue,
+                    totalScans: data.total_scans,
+                    recentTransactions: data.recent_transactions,
+                    aiAccuracy: data.ai_performance?.accuracy || 0,
+                    validatedCount: data.ai_performance?.total_validated || 0
+                });
+            }
 
             setIsLoading(false);
 
@@ -424,6 +445,48 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Revenue Card */}
+                        <div style={styles.statCard}>
+                            <div style={{...styles.iconBox, background: '#dcfce7', color: '#15803d'}}>
+                                <FaMoneyBillWave size={24}/>
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Tổng Doanh Thu</span>
+                                <span style={{...styles.statCount, color:'#15803d'}}>
+                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(globalStats.revenue)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* AI Scans Card */}
+                        <div style={styles.statCard}>
+                            <div style={{...styles.iconBox, background: '#fef3c7', color: '#b45309'}}>
+                                <FaBrain size={24}/>
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Lượt AI Phân tích</span>
+                                <span style={styles.statCount}>{globalStats.totalScans} lượt</span>
+                            </div>
+                        </div>
+
+                        <div style={styles.statCard}>
+                            <div style={{...styles.iconBox, background: '#e0f2fe', color: '#0284c7'}}>
+                                <FaCheckDouble size={24}/> {/* Nhớ import icon này */}
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Độ chính xác AI</span>
+                                <div style={{display:'flex', alignItems:'baseline', gap:'5px'}}>
+                                    <span style={{...styles.statCount, color: globalStats.aiAccuracy >= 80 ? '#16a34a' : '#ca8a04'}}>
+                                        {globalStats.aiAccuracy}%
+                                    </span>
+                                    <span style={{fontSize:'11px', color:'#64748b'}}>
+                                        (trên {globalStats.validatedCount} mẫu)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        
 
                     </div>
 
@@ -708,6 +771,32 @@ const DashboardAdmin: React.FC = () => {
                             </>
                         )}
 
+                        <div style={{marginTop: '20px', ...styles.tableCard}}>
+                            <div style={styles.cardHeader}>
+                                <h3 style={styles.cardTitle}>💰 Giao dịch gần đây</h3>
+                            </div>
+                            <table style={styles.table}>
+                                <thead>
+                                    <tr>
+                                        <th style={styles.th}>KHÁCH HÀNG</th>
+                                        <th style={styles.th}>SỐ TIỀN</th>
+                                        <th style={styles.th}>THỜI GIAN</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {globalStats.recentTransactions.map((tx: any) => (
+                                        <tr key={tx.id} style={styles.tr}>
+                                            <td style={styles.td}>{tx.user}</td>
+                                            <td style={{...styles.td, color:'#15803d', fontWeight:'bold'}}>
+                                                +{new Intl.NumberFormat('vi-VN').format(tx.amount)} đ
+                                            </td>
+                                            <td style={styles.td}>{new Date(tx.date).toLocaleDateString('vi-VN')}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
                     </div>
                 </div>
             </main>
@@ -806,6 +895,8 @@ const DashboardAdmin: React.FC = () => {
                 </div>
             )}
         </div>
+
+        
     );
 };
 

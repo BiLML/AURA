@@ -37,3 +37,12 @@ class IMedicalRepository(ABC):
     # Analysis
     @abstractmethod
     def save_analysis_result(self, image_id: UUID, risk_level: str, vessel_data: dict, annotated_url: str, report_content: str = None) -> AIAnalysisResult: pass
+
+    @abstractmethod
+    def count_all_records(self) -> int: pass
+
+    @abstractmethod
+    def get_ai_validation_stats(self) -> dict: pass
+
+    @abstractmethod
+    def assign_patient_to_clinic(self, user_id: UUID, clinic_id: UUID) -> bool: pass

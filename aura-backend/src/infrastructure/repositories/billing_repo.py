@@ -1,3 +1,4 @@
+from sqlalchemy import func, desc # Import thêm func, desc
 from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 from datetime import date, timedelta
@@ -72,3 +73,19 @@ class BillingRepository(IBillingRepository):
             self.db.commit()
             return True
         return False
+    
+    def get_total_revenue(self) -> float:
+        # Tính tổng cột amount trong bảng payment_transactions
+        # Chỉ tính giao dịch thành công (nếu có status)
+        total = self.db.query(func.sum(PaymentTransaction.amount)).filter(
+            PaymentTransaction.status == "SUCCESS"
+        ).scalar()
+        return total if total else 0.0
+
+    def get_recent_transactions(self, limit: int = 10) -> List[PaymentTransaction]:
+        return self.db.query(PaymentTransaction).options(
+            joinedload(PaymentTransaction.user),     # <--- Load luôn User
+            joinedload(PaymentTransaction.package)   # <--- Load luôn Package
+        ).filter(
+            PaymentTransaction.status == "SUCCESS"
+        ).order_by(desc(PaymentTransaction.created_at)).limit(limit).all()

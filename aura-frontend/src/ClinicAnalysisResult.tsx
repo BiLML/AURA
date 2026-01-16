@@ -101,7 +101,7 @@ const ClinicAnalysisResult: React.FC = () => {
             {/* --- HEADER --- */}
             <div style={styles.topBar}>
                 <button onClick={() => navigate('/clinic-dashboard')} style={styles.backBtn}>
-                    <FaArrowLeft /> Quay lại Dashboard
+                    <FaArrowLeft /> Quay lại
                 </button>
                 <div style={styles.headerInfo}>
                     <h1 style={styles.title}>HỒ SƠ PHÂN TÍCH #{data.id.slice(0, 8)}</h1>

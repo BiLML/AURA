@@ -1,6 +1,4 @@
 import os
-import shutil
-import uuid
 import cloudinary
 import cloudinary.uploader
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -14,6 +12,7 @@ from services.clinic_service import ClinicService
 from schemas.clinic_schema import ClinicCreate, ClinicResponse, DashboardResponse, AddUserRequest, AssignRequest
 from models.users import User
 from models.enums import UserRole
+from models.clinic import Clinic # Nhớ import Clinic để query
 
 from infrastructure.repositories.clinic_repo import ClinicRepository
 from infrastructure.repositories.medical_repo import MedicalRepository
@@ -84,9 +83,18 @@ def get_dashboard_data(
     current_user: User = Depends(get_current_user),
     service: ClinicService = Depends(get_clinic_service)
 ):
-    data = service.get_clinic_dashboard_data(current_user.id)
+    # 👇 GỌI SERVICE (Không viết logic ở đây)
+    data = service.get_clinic_dashboard_data(current_user)
+    
     if not data:
-        raise HTTPException(status_code=404, detail="Admin chưa có phòng khám nào")
+        # Trả về data rỗng nếu chưa có phòng khám (để Frontend không bị crash)
+        return {
+            "clinic": None,
+            "admin_name": current_user.username,
+            "doctors": [],
+            "patients": []
+        }
+    
     return data
 
 @router.get("/{clinic_id}", response_model=ClinicResponse)
@@ -122,13 +130,19 @@ def search_patients(
     patients = service.search_patients(query)
     return {"patients": patients}
 
+# src/api/clinics.py
+
 @router.post("/add-user")
 def add_user_to_my_clinic(
     req: AddUserRequest,
     current_user: User = Depends(get_current_user), 
-    service: ClinicService = Depends(get_clinic_service)):
+    service: ClinicService = Depends(get_clinic_service)
+):
     try:
+        service.add_user_to_clinic_context(current_user, req.user_id)
+        
         return {"message": "Thêm thành công"}
+        
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

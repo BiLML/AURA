@@ -37,3 +37,9 @@ class IUserRepository(ABC):
     @abstractmethod
     def search_users_by_role(self, role: UserRole, query: str) -> List[User]:
         pass
+
+    @abstractmethod
+    def count_users(self) -> int: pass
+
+    @abstractmethod
+    def count_patients_by_doctor_id(self, doctor_id: UUID) -> int: pass

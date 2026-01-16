@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft, FaFilePdf, FaFileCsv } from 'react-icons/fa';
 // ... (Giữ nguyên các interface và logic fetch data cũ) ...
 interface MedicalRecord {
     id: number;
@@ -93,11 +93,61 @@ const AnalysisResult: React.FC = () => {
     const imageUrl = (viewMode === 'annotated' && data.annotated_image_url) ? data.annotated_image_url : data.image_url;
     const formattedDate = new Date(data.upload_date).toLocaleString('vi-VN');
 
+    // --- 1. XUẤT CSV (Excel) ---
+    const handleExportCSV = () => {
+        if (!data) return;
+        
+        // Định nghĩa Header
+        const headers = ["Mã Hồ Sơ", "Ngày Khám", "Bệnh Nhân", "Kết Quả AI", "Bác Sĩ Chẩn Đoán", "Ghi Chú", "Link Ảnh"];
+        
+        // Định nghĩa Dòng dữ liệu (Xử lý các ký tự đặc biệt)
+        const row = [
+            data.id,
+            new Date(data.upload_date).toLocaleDateString('vi-VN'),
+            "Bệnh nhân AURA", // Hoặc lấy tên thật nếu có trong data
+            data.ai_result,
+            data.doctor_note ? "Đã xác thực" : "Chưa xác thực",
+            `"${(data.doctor_note || '').replace(/"/g, '""')}"`, // Escape dấu ngoặc kép
+            data.annotated_image_url || data.image_url
+        ];
+
+        // Tạo nội dung file (Thêm \uFEFF để Excel nhận diện tiếng Việt UTF-8)
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), row.join(",")].join("\n");
+        
+        // Tải xuống
+        const link = document.createElement("a");
+        link.href = encodeURI(csvContent);
+        link.download = `AURA_Report_${data.id}.csv`;
+        link.click();
+    };
+
+    // --- 2. XUẤT PDF (In ấn) ---
+    const handlePrintPDF = () => {
+        window.print();
+    };
     return (
         // --- KEY CHANGE: fullScreenOverlay ---
         // Dùng position fixed để đè lên toàn bộ background cũ
         <div style={styles.fullScreenOverlay}>
-            
+            <style>{`
+                @media print {
+                    /* Ẩn các nút bấm, thanh điều hướng khi in */
+                    .no-print { display: none !important; }
+                    
+                    /* Căn chỉnh trang giấy A4 */
+                    @page { margin: 2cm; size: A4; }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+                    
+                    /* Bung rộng nội dung */
+                    div[style*="innerContainer"] { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+                    div[style*="fullScreenOverlay"] { position: static; height: auto; overflow: visible; }
+                    
+                    /* Tùy chỉnh layout khi in (để ảnh và chữ nằm dọc cho dễ đọc nếu cần) */
+                    div[style*="contentGrid"] { display: block !important; }
+                    div[style*="leftColumn"] { margin-bottom: 20px; page-break-inside: avoid; }
+                    div[style*="rightColumn"] { page-break-inside: avoid; }
+                }
+            `}</style>            
             {/* innerContainer để giới hạn nội dung ở giữa cho đẹp, không bị bè ra quá rộng */}
             <div style={styles.innerContainer}>
                 <button onClick={() => navigate('/dashboard')} style={styles.modernBackBtn} onMouseOver={(e) => e.currentTarget.style.borderColor = '#94a3b8'} onMouseOut={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}><div style={styles.iconCircle}><FaArrowLeft size={14} /></div><span>Quay lại</span></button>
@@ -107,7 +157,19 @@ const AnalysisResult: React.FC = () => {
                         <h2 style={{margin: 0, color: '#333'}}>Kết quả phân tích AURA</h2>
                         <p style={{margin: '5px 0 0 0', color: '#666'}}>Mã hồ sơ: #{data.id}</p>
                     </div>
+
                     <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                        
+                        {/* Nút CSV */}
+                        <button onClick={handleExportCSV} className="no-print" style={{...styles.exportBtn, backgroundColor: '#107c41'}}>
+                            <FaFileCsv style={{marginRight: 6}}/> Xuất CSV
+                        </button>
+
+                        {/* Nút PDF */}
+                        <button onClick={handlePrintPDF} className="no-print" style={{...styles.exportBtn, backgroundColor: '#dc3545'}}>
+                            <FaFilePdf style={{marginRight: 6}}/> Lưu PDF
+                        </button>
+
                         <span style={styles.dateBadge}>{formattedDate}</span>
                     </div>
                 </div>
@@ -223,7 +285,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     doctorNoteText: { margin: 0, fontSize: '15px', fontWeight: '500', color: '#1565c0', whiteSpace: 'pre-wrap', lineHeight: '1.6' },
     
     analysisDetails: { backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', padding: '25px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' },
-    reportContent: { whiteSpace: 'pre-line', lineHeight: '1.7', color: '#333', fontSize: '15px' }
+    reportContent: { whiteSpace: 'pre-line', lineHeight: '1.7', color: '#333', fontSize: '15px' },
+
+    exportBtn: {display: 'inline-flex',alignItems: 'center',padding: '8px 14px',color: 'white',border: 'none',borderRadius: '6px',fontSize: '13px',fontWeight: '600',cursor: 'pointer',boxShadow: '0 2px 4px rgba(0,0,0,0.1)',transition: 'opacity 0.2s'}
 };
 
 export default AnalysisResult;

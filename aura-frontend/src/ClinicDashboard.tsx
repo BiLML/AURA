@@ -4,7 +4,7 @@ import {
     FaSearch, FaSignOutAlt, FaUserMd, FaRobot, FaUpload, FaSpinner,
     FaBoxOpen, FaChartLine, FaFileExport, FaExclamationTriangle,
     FaClipboardList, FaUserCircle, FaUserPlus, FaStethoscope, FaEdit, FaTrash, FaEye,
-    FaHistory, FaArrowRight, FaCamera, FaTimes 
+    FaHistory, FaArrowRight, FaCamera, FaTimes, FaCheck, FaCreditCard  
 } from 'react-icons/fa';
 
 // --- INTERFACES ---
@@ -33,11 +33,21 @@ interface Doctor {
     status: string;
 }
 
-interface Service {
-    id: number;
+interface ServicePackage {
+    id: string;
     name: string;
-    price: string;
+    price: number;
+    analysis_limit: number;
+    duration_days: number;
     description: string;
+    target_role: string;
+}
+
+interface UserSubscription {
+    active: boolean;
+    credits: number;
+    plan_name: string;
+    expiry: string | null;
 }
 
 const ClinicDashboard: React.FC = () => {
@@ -54,11 +64,12 @@ const ClinicDashboard: React.FC = () => {
     const [doctors, setDoctors] = useState<Doctor[]>([]);
     const [loading, setLoading] = useState(true);
 
+    
+
     // --- STATE MOCK SERVICES (Dữ liệu mẫu cho phần dịch vụ) ---
-    const [services, setServices] = useState<Service[]>([
-        { id: 1, name: "Khám mắt tổng quát", price: "200.000 đ", description: "Kiểm tra thị lực, đo nhãn áp" },
-        { id: 2, name: "Chụp đáy mắt AI", price: "500.000 đ", description: "Sử dụng AI AURA phát hiện bệnh lý võng mạc" },
-    ]);
+    const [packages, setPackages] = useState<ServicePackage[]>([]);
+    const [mySub, setMySub] = useState<UserSubscription>({ active: false, credits: 0, plan_name: 'Free', expiry: null });
+    const [isBuying, setIsBuying] = useState(false);
 
     // --- STATE AI ANALYSIS & UPLOAD ---
     const [aiSubTab, setAiSubTab] = useState<'clinic' | 'patient'>('clinic'); // <--- State Tab Mới
@@ -304,6 +315,85 @@ const handleAddExistingDoctor = async (doctorId: string) => {
         return res.includes('nặng') || res.includes('severe') || res.includes('pdr');
     });
 
+    // 👇 2. THÊM HÀM FETCH BILLING DATA
+    const fetchBillingData = useCallback(async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            // A. Lấy danh sách gói (Lọc theo target_role = 'CLINIC')
+            const pkgRes = await fetch('http://localhost:8000/api/v1/billing/packages', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (pkgRes.ok) {
+                const data = await pkgRes.json();
+                // ⚠️ QUAN TRỌNG: Chỉ lấy gói dành cho CLINIC
+                const clinicPackages = data.filter((p: any) => p.target_role === 'CLINIC');
+                setPackages(clinicPackages);
+            }
+
+            // B. Lấy thông tin ví hiện tại
+            const subRes = await fetch('http://localhost:8000/api/v1/billing/my-usage', { 
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (subRes.ok) {
+                const subData = await subRes.json();
+                setMySub({
+                    active: subData.active || false,
+                    credits: subData.credits || subData.credits_left || 0,
+                    plan_name: subData.plan_name || 'Free',
+                    expiry: subData.expiry || subData.expires_at || null
+                });
+            }
+        } catch (error) { console.error("Lỗi billing:", error); }
+    }, []);
+
+    // 👇 3. THÊM HÀM XỬ LÝ MUA GÓI
+    const handleBuyPackage = async (pkg: ServicePackage) => {
+        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
+        
+        setIsBuying(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/billing/subscribe', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ package_id: pkg.id })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ Đăng ký thành công! Phòng khám đã được cộng thêm lượt.`);
+                fetchBillingData(); // Load lại ngay
+            } else {
+                alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
+            }
+        } catch (e) {
+            alert("Lỗi kết nối server");
+        } finally {
+            setIsBuying(false);
+        }
+    };
+
+    // 👇 4. CẬP NHẬT USE EFFECT (Thêm fetchBillingData vào lúc khởi chạy và interval)
+    useEffect(() => {
+        fetchDashboardData();
+        fetchAiHistory();
+        fetchBillingData(); // <--- Gọi lần đầu
+    }, [fetchDashboardData, fetchAiHistory, fetchBillingData]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (activeMenu === 'ai') fetchAiHistory();
+            if (activeMenu === 'accounts' || activeMenu === 'stats') fetchDashboardData();
+            if (activeMenu === 'billing') fetchBillingData(); // <--- Gọi định kỳ nếu đang ở tab billing
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [activeMenu, fetchAiHistory, fetchDashboardData, fetchBillingData]);
+
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={30} /> &nbsp; Đang tải dữ liệu phòng khám...</div>;
 
     return (
@@ -322,15 +412,18 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                     <div style={activeMenu === 'accounts' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveMenu('accounts')}>
                         <FaClipboardList style={styles.menuIcon} /> Quản lý Tổng hợp
                     </div>
+
                     <div style={activeMenu === 'ai' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveMenu('ai')}>
                         <FaRobot style={styles.menuIcon} /> Phân tích AI
                     </div>
-                    <div style={activeMenu === 'services' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveMenu('services')}>
-                        <FaBoxOpen style={styles.menuIcon} /> Dịch vụ
-                    </div>
+
                     <div style={activeMenu === 'stats' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveMenu('stats')}>
                         <FaChartLine style={styles.menuIcon} /> Thống kê & Cảnh báo
                         {warningPatients.length > 0 && <span style={styles.badgeWarn}>{warningPatients.length}</span>}
+                    </div>
+
+                    <div style={activeMenu === 'billing' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveMenu('billing')}>
+                        <FaCreditCard style={styles.menuIcon} /> Gói cước & Thanh toán
                     </div>
                 </nav>
                 <div style={styles.sidebarFooter}>
@@ -500,35 +593,6 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                             </table>
                         </div>
                     )}
-
-                    {/* --- TAB 3: DỊCH VỤ --- */}
-                    {activeMenu === 'services' && (
-                        <div style={styles.card}>
-                            <div style={styles.cardHeader}>
-                                <h2 style={styles.pageTitle}><FaBoxOpen style={{marginRight: 10}}/>Dịch vụ Phòng khám</h2>
-                                <button style={styles.primaryBtnSm}>+ Thêm Dịch vụ</button>
-                            </div>
-                            <table style={styles.table}>
-                                <thead><tr><th style={styles.th}>Tên Dịch vụ</th><th style={styles.th}>Mô tả</th><th style={styles.th}>Giá tiền</th><th style={styles.th}>Thao tác</th></tr></thead>
-                                <tbody>
-                                    {services.map(s => (
-                                        <tr key={s.id} style={styles.tr}>
-                                            <td style={styles.td}><b>{s.name}</b></td>
-                                            <td style={styles.td}>{s.description}</td>
-                                            <td style={styles.td}><span style={{color: '#007bff', fontWeight: 'bold'}}>{s.price}</span></td>
-                                            <td style={styles.td}>
-                                                <div style={{display:'flex', gap:'10px'}}>
-                                                    <button style={{border:'none', background:'transparent', color:'#555', cursor:'pointer'}}><FaEdit/></button>
-                                                    <button style={{border:'none', background:'transparent', color:'red', cursor:'pointer'}}><FaTrash/></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
                     {/* --- TAB 4: THỐNG KÊ --- */}
                     {activeMenu === 'stats' && (
                         <div style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
@@ -554,6 +618,81 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                             <div style={styles.card}>
                                 <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaFileExport style={{marginRight: 10}}/>Tổng hợp dữ liệu rủi ro</h2></div>
                                 <div style={{padding: '25px'}}>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- TAB 5: BILLING (GIAO DIỆN MỚI) --- */}
+                    {activeMenu === 'billing' && (
+                        <div style={{display:'flex', flexDirection:'column', gap:'30px'}}>
+                            
+                            {/* Card hiển thị Ví hiện tại */}
+                            <div style={styles.card}>
+                                <div style={styles.cardHeader}>
+                                    <h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10}}/>Thông tin Ví & Dịch vụ</h2>
+                                </div>
+                                <div style={{
+                                    padding:'30px', 
+                                    background:'linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%)', // Màu tím xanh chuyên nghiệp cho Clinic
+                                    margin:'20px', 
+                                    borderRadius:'12px', 
+                                    color:'white',
+                                    boxShadow: '0 4px 15px rgba(78, 84, 200, 0.3)'
+                                }}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end'}}>
+                                        <div>
+                                            <p style={{margin:0, opacity:0.8, fontSize:'14px', textTransform:'uppercase', letterSpacing:'1px'}}>Gói Doanh nghiệp hiện tại</p>
+                                            <h2 style={{margin:'5px 0', fontSize:'32px', fontWeight:'800'}}>{mySub.plan_name}</h2>
+                                            {mySub.expiry && <small style={{opacity:0.9, background:'rgba(255,255,255,0.2)', padding:'2px 8px', borderRadius:'4px'}}>Hết hạn: {new Date(mySub.expiry).toLocaleDateString('vi-VN')}</small>}
+                                        </div>
+                                        <div style={{textAlign:'right'}}>
+                                            <p style={{margin:0, opacity:0.8, fontSize:'14px', textTransform:'uppercase', letterSpacing:'1px'}}>Số lượt AI khả dụng</p>
+                                            <h1 style={{margin:0, fontSize:'56px', fontWeight:'800', lineHeight:'1'}}>{mySub.credits}</h1>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Danh sách gói mua thêm */}
+                            <div style={styles.card}>
+                                <div style={styles.cardHeader}>
+                                    <h2 style={styles.pageTitle}><FaBoxOpen style={{marginRight:10}}/>Mua thêm gói dịch vụ</h2>
+                                </div>
+                                <div style={{padding:'25px'}}>
+                                    {packages.length === 0 ? (
+                                        <div style={{textAlign:'center', padding:'40px', color:'#999'}}>
+                                            Hiện chưa có gói dịch vụ nào dành cho Phòng khám. Vui lòng liên hệ Admin.
+                                        </div>
+                                    ) : (
+                                        <div style={styles.pricingGrid}>
+                                            {packages.map(pkg => (
+                                                <div key={pkg.id} style={styles.pricingCard}>
+                                                    <div style={styles.pricingHeader}>
+                                                        <h4 style={{margin:0, fontSize:'18px', color:'#333', textTransform:'uppercase', fontWeight:'700'}}>{pkg.name}</h4>
+                                                        <div style={styles.priceTag}>
+                                                            {pkg.price === 0 ? 'Liên hệ' : `${pkg.price.toLocaleString('vi-VN')} đ`}
+                                                        </div>
+                                                    </div>
+                                                    <div style={styles.pricingBody}>
+                                                        <p style={{fontSize:'13px', color:'#666', minHeight:'40px', fontStyle:'italic'}}>{pkg.description || 'Gói dịch vụ chuyên nghiệp'}</p>
+                                                        <ul style={{paddingLeft:'0', margin:'20px 0', color:'#444', fontSize:'14px', listStyle:'none'}}>
+                                                            <li style={{marginBottom:'10px', display:'flex', alignItems:'center'}}><FaCheck style={{color:'#28a745', marginRight:'10px'}}/> Thời hạn: <b>{pkg.duration_days} ngày</b></li>
+                                                            <li style={{marginBottom:'10px', display:'flex', alignItems:'center'}}><FaRobot style={{color:'#007bff', marginRight:'10px'}}/> Số lượt AI: <b>{pkg.analysis_limit} lượt</b></li>
+                                                            <li style={{marginBottom:'10px', display:'flex', alignItems:'center'}}><FaCheck style={{color:'#6f42c1', marginRight:'10px'}}/> Dành cho: <b>Phòng khám</b></li>
+                                                        </ul>
+                                                        <button 
+                                                            onClick={() => handleBuyPackage(pkg)} 
+                                                            disabled={isBuying}
+                                                            style={{...styles.primaryBtn, width:'100%', justifyContent:'center'}}
+                                                        >
+                                                            {isBuying ? 'Đang xử lý...' : 'Mua ngay'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -664,7 +803,11 @@ const styles: {[key:string]: React.CSSProperties} = {
     removeImgBtn: { position: 'absolute', top: 5, right: 5, background: 'rgba(255,255,255,0.8)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer', color: 'red' },
     tabActive: { padding: '6px 15px', background: '#007bff', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' },
     tabInactive: { padding: '6px 15px', background: 'transparent', color: '#555', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px' },
-
+    pricingGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '25px' },
+    pricingCard: { backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e1e4e8', overflow: 'hidden', transition: 'transform 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', display:'flex', flexDirection:'column' },
+    pricingHeader: { padding: '25px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #eee', textAlign: 'center' },
+    priceTag: { fontSize: '28px', fontWeight: '800', color: '#007bff', marginTop: '10px' },
+    pricingBody: { padding: '25px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' },
 };
 
 // CSS Animation for Spinner

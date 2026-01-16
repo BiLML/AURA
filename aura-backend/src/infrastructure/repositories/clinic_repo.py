@@ -53,3 +53,6 @@ class ClinicRepository(IClinicRepository):
         self.db.commit()
         self.db.refresh(clinic)
         return clinic
+    
+    def get_by_admin_id(self, admin_id: UUID) -> Optional[Clinic]:
+        return self.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()

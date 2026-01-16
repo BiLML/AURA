@@ -307,7 +307,8 @@ const Dashboard: React.FC = () => {
             });
             if (pkgRes.ok) {
                 const data = await pkgRes.json();
-                setPackages(data);
+                const userPackages = data.filter((p: any) => p.target_role === 'USER');
+                setPackages(userPackages);
             }
 
             // 2. Lấy thông tin ví hiện tại

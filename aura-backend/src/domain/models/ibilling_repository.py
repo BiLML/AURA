@@ -35,3 +35,10 @@ class IBillingRepository(ABC):
     # --- 3. LỊCH SỬ GIAO DỊCH (AUDIT) ---
     @abstractmethod
     def create_transaction(self, user_id: UUID, package_id: UUID, amount: float, status: str) -> PaymentTransaction: pass
+
+    # --- 4. BÁO CÁO DOANH THU (ADMIN) ---
+    @abstractmethod
+    def get_total_revenue(self) -> float: pass
+
+    @abstractmethod
+    def get_recent_transactions(self, limit: int = 10) -> List[PaymentTransaction]: pass

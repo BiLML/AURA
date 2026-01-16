@@ -7,11 +7,16 @@ from models.system_config import SystemConfig # Import model mới
 from uuid import UUID
 
 from domain.models.iuser_repository import IUserRepository
+from domain.models.imedical_repository import IMedicalRepository
+from domain.models.ibilling_repository import IBillingRepository
+from domain.models.iconfig_repository import IConfigRepository 
 
 class AdminService:
-    def __init__(self, user_repo: IUserRepository, db: Session):
+    def __init__(self, user_repo: IUserRepository, medical_repo: IMedicalRepository, billing_repo: IBillingRepository, config_repo: IConfigRepository):
         self.user_repo = user_repo
-        self.db = db
+        self.medical_repo = medical_repo
+        self.billing_repo = billing_repo
+        self.config_repo = config_repo
 
     def get_user_by_id(self, user_id: UUID) -> User:
         user = self.user_repo.get_by_id(user_id)
@@ -47,27 +52,59 @@ class AdminService:
         return user
     
     def get_system_config(self):
-        # Lấy dòng đầu tiên, nếu chưa có thì tạo default
-        config = self.db.query(SystemConfig).first()
-        if not config:
-            config = SystemConfig()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
-        return config
+        return self.config_repo.get_config()
+    
+    def update_system_config(self, data):
+        return self.config_repo.update_config(data)
+    
+    def get_global_stats(self):
+        # 1. Số liệu Người dùng
+        total_users = self.user_repo.count_users() # Giả sử UserRepo đã có hàm count
+        new_users = 0 # Có thể thêm hàm count_new_users_this_month() nếu cần
+        
+        # 2. Số liệu AI & Y tế
+        # (Lưu ý: Bạn cần thêm hàm count_total_records() vào IMedicalRepository nếu chưa có)
+        # Tạm thời giả định MedicalRepo có hàm đếm record
+        total_scans = self.medical_repo.count_all_records() 
+        
+        # 3. Số liệu Tài chính (Billing)
+        total_revenue = self.billing_repo.get_total_revenue()
+        recent_tx = self.billing_repo.get_recent_transactions(5)
 
-    def update_system_config(self, config_in):
-        config = self.get_system_config() # Lấy config hiện tại
-        
-        # Cập nhật từng trường
-        config.confidence_threshold = config_in.confidence_threshold
-        config.model_version = config_in.model_version
-        config.alert_risk_level = config_in.alert_risk_level
-        config.enable_email_alerts = config_in.enable_email_alerts
-        config.auto_retrain = config_in.auto_retrain
-        config.retrain_frequency_days = config_in.retrain_frequency_days
-        config.min_new_data_samples = config_in.min_new_data_samples
-        
-        self.db.commit()
-        self.db.refresh(config)
-        return config
+        # 4. Lấy thống kê hiệu suất AI (tỷ lệ chính xác)
+        val_stats = self.medical_repo.get_ai_validation_stats()
+        total_val = val_stats["total_validated"]
+        correct = val_stats["correct_ai"]
+        accuracy = (correct / total_val * 100) if total_val > 0 else 0
+
+        # 5. Lấy Config để hiển thị version model
+        current_config = self.config_repo.get_config() 
+        model_ver = current_config.model_version if current_config else "Unknown"
+
+        # Format danh sách giao dịch để trả về Frontend
+        tx_list = []
+        for tx in recent_tx:
+            # Lấy tên user (cẩn thận lazy loading)
+            user_name = "Unknown"
+            if tx.user: # Giả sử relation đã setup
+                user_name = tx.user.username
+
+            tx_list.append({
+                "id": str(tx.id),
+                "user": user_name,
+                "amount": tx.amount,
+                "package": tx.package_id, # Hoặc tx.package.name
+                "date": tx.created_at
+            })
+
+        return {
+            "total_users": total_users,
+            "total_scans": total_scans,
+            "total_revenue": total_revenue,
+            "recent_transactions": tx_list,
+            "ai_performance": {
+                "accuracy": round(accuracy, 1), # VD: 92.5
+                "total_validated": total_val,
+                "model_version": model_ver # Hiển thị: "Model v1.0.0"
+            }
+        }

@@ -22,3 +22,6 @@ class IClinicRepository(ABC):
 
     @abstractmethod
     def verify_clinic(self, clinic_id: str, status: str) -> Optional[Clinic]: pass
+
+    @abstractmethod
+    def get_by_admin_id(self, admin_id: UUID) -> Optional[Clinic]: pass

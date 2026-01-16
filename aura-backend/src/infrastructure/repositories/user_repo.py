@@ -98,3 +98,26 @@ class UserRepository(IUserRepository):
             )
             
         return sql_query.all()
+    
+    def count_users(self) -> int:
+        # Đếm số user đang active, trừ admin ra
+        return self.db.query(User).filter(User.role != UserRole.ADMIN).count()
+    
+    def update(self, user: User) -> User:
+        """
+        Cập nhật thông tin User và LƯU vào Database (Commit).
+        Hàm này rất quan trọng để lưu clinic_id.
+        """
+        self.db.add(user)       # Đánh dấu object này cần update
+        self.db.commit()        # <--- LỆNH QUAN TRỌNG NHẤT: Lưu xuống ổ cứng
+        self.db.refresh(user)   # Load lại dữ liệu mới nhất
+        return user
+    
+    def count_patients_by_doctor_id(self, doctor_id: UUID) -> int:
+        """
+        Đếm số lượng bệnh nhân đang được phân công cho một bác sĩ cụ thể.
+        """
+        return self.db.query(User).filter(
+            User.assigned_doctor_id == doctor_id,
+            User.role == UserRole.USER # Đảm bảo chỉ đếm bệnh nhân
+        ).count()

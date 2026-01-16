@@ -2,14 +2,15 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, or_
 from domain.models.iclinic_repository import IClinicRepository
 from domain.models.imedical_repository import IMedicalRepository
-from domain.models.iuser_repository import IUserRepository # <--- THÊM IMPORT NÀY
+from domain.models.iuser_repository import IUserRepository
 
 from models.medical import RetinalImage, Patient, AIAnalysisResult
 from models.clinic import Clinic
-from models.users import User
+from models.users import User, UserRole
 from models.enums import UserRole, ClinicStatus, UserStatus 
 from uuid import UUID
 
+from fastapi import HTTPException
 class ClinicService:
     # 2. INJECT THÊM USER REPO VÀO HÀM KHỞI TẠO
     def __init__(self, 
@@ -33,14 +34,23 @@ class ClinicService:
     def get_all_clinics(self):
         return self.clinic_repo.get_all_clinics()
 
-    def get_clinic_dashboard_data(self, admin_id: UUID):
-        # A. Lấy thông tin Clinic (Có thể chuyển vào clinic_repo sau, tạm thời giữ query cũ cũng được)
-        clinic = self.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()
+    def get_clinic_dashboard_data(self, current_user: User):
+        clinic = None
+
+        # TRƯỜNG HỢP 1: User là nhân viên/bác sĩ (đã được gán vào phòng khám)
+        if current_user.clinic_id:
+            clinic = self.clinic_repo.get_clinic_by_id(current_user.clinic_id)
+            
+        # TRƯỜNG HỢP 2: User là CHỦ PHÒNG KHÁM (tìm trong bảng clinics cột admin_id)
+        else:
+            # Code cũ của bạn: self.db.query(Clinic)... -> Nên chuyển vào Repo nếu được, nhưng để tạm đây cũng chạy được
+            clinic = self.db.query(Clinic).filter(Clinic.admin_id == current_user.id).first()
+        
         if not clinic:
             return None
         
         # B. Lấy thông tin Admin (Dùng Repo thay vì query trực tiếp)
-        admin_user = self.user_repo.get_by_id(admin_id) # <--- Dùng Repo
+        admin_user = self.user_repo.get_by_id(clinic.admin_id) # <--- Dùng Repo
         admin_name = "Clinic Admin"
         if admin_user and admin_user.profile and admin_user.profile.full_name:
             admin_name = admin_user.profile.full_name
@@ -123,16 +133,25 @@ class ClinicService:
             "patients": formatted_patients
         }
     
-    def add_user_to_clinic(self, admin_id: UUID, target_user_id: UUID):
-        clinic = self.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()
-        if not clinic: raise Exception("Admin chưa có phòng khám")
+    def add_user_to_clinic_context(self, current_user: User, target_user_id: UUID):
         
-        user = self.db.query(User).filter(User.id == target_user_id).first()
-        if not user: raise Exception("User không tồn tại")
+        # 1. LOGIC TÌM CLINIC ID (Đã chuyển từ Router sang đây)
+        clinic_id = None
         
-        user.clinic_id = clinic.id
-        self.db.commit()
-        return True
+        if current_user.role == UserRole.CLINIC:
+            # Gọi Repo thay vì db.query trực tiếp
+            clinic = self.clinic_repo.get_by_admin_id(current_user.id) 
+            if clinic:
+                clinic_id = clinic.id
+        elif current_user.clinic_id:
+            clinic_id = current_user.clinic_id
+
+        # Kiểm tra
+        if not clinic_id:
+            raise HTTPException(400, "Bạn chưa sở hữu hoặc không thuộc về phòng khám nào.")
+
+        # 2. GỌI HÀM LOGIC CŨ ĐỂ THÊM (Tái sử dụng code)
+        return self.add_user_to_clinic(clinic_id, target_user_id)
 
     def assign_patient(self, patient_id: UUID, doctor_id: UUID):
         patient = self.db.query(User).filter(User.id == patient_id).first()
