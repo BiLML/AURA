@@ -12,16 +12,22 @@ from schemas.medical_schema import ImageResponse
 # 1. IMPORT SERVICE VÀ REPO THỰC
 from services.medical_service import MedicalService
 from infrastructure.repositories.medical_repo import MedicalRepository
+from infrastructure.repositories.billing_repo import BillingRepository
 
 router = APIRouter()
 
 
 # 2. HÀM DEPENDENCY ĐỂ KHỞI TẠO SERVICE
 def get_medical_service(db: Session = Depends(get_db)) -> MedicalService:
-    # Bước A: Tạo Repo thực
-    repo = MedicalRepository(db)
-    # Bước B: Tiêm vào Service (Service nhận Interface, ta đưa Class thực vào là OK)
-    return MedicalService(repo=repo)
+    # Bước A: Tạo Repo thực cho Medical
+    medical_repo = MedicalRepository(db)
+    
+    # Bước B: Tạo Repo thực cho Billing
+    billing_repo = BillingRepository(db)
+    
+    # Bước C: Tiêm cả 2 vào Service
+    # Service yêu cầu Interface, ta đưa Class thực vào -> Hợp lệ (Polymorphism)
+    return MedicalService(repo=medical_repo, billing_repo=billing_repo)
 
 # 1. API UPLOAD & PHÂN TÍCH
 @router.post("/analyze", response_model=ImageResponse, status_code=201)

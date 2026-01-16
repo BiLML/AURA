@@ -4,7 +4,7 @@ import {
     FaHospital, FaBrain, FaSignOutAlt, FaSearch, 
     FaCheck, FaUsers, FaUserShield, FaBell,
     FaEdit, FaLock, FaUnlock, FaBan, FaTimes, FaSave, 
-    FaCogs, FaRobot // ✅ Đã thêm icon cho Config
+    FaCogs, FaRobot, FaMoneyBillWave, FaPlus // ✅ Đã thêm icon cho Config
 } from 'react-icons/fa';
 
 // --- INTERFACES ---
@@ -47,12 +47,23 @@ interface AIConfig {
     min_new_data_samples: number;
 }
 
+interface ServicePackage {
+    id: string;
+    name: string;
+    price: number;
+    analysis_limit: number;
+    duration_days: number;
+    description: string;
+    target_role: string;
+    is_active?: boolean;
+}
+
 const DashboardAdmin: React.FC = () => {
     const navigate = useNavigate();
     
     // --- STATE UI ---
     // Thêm tab 'config' vào danh sách tabs
-    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config'>('users'); 
+    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config' | 'billing'>('users'); 
     const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active'>('pending');
     const [adminName, setAdminName] = useState('Admin');
     const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +74,18 @@ const DashboardAdmin: React.FC = () => {
     const [activeClinics, setActiveClinics] = useState<ClinicRequest[]>([]);
     const [feedbackList, setFeedbackList] = useState<any[]>([]); 
     
+    // state cho Billing & Packages
+    const [packageList, setPackageList] = useState<ServicePackage[]>([]);
+    const [showPackageModal, setShowPackageModal] = useState(false);
+    const [newPackage, setNewPackage] = useState({
+        name: '',
+        price: 0,
+        analysis_limit: 10,
+        duration_days: 30,
+        description: '',
+        target_role: 'USER' // Mặc định bán cho User
+    });
+
     // State cho Config AI (Mặc định)
     const [aiConfig, setAiConfig] = useState<AIConfig>({
         confidence_threshold: 0.85,
@@ -153,6 +176,17 @@ const DashboardAdmin: React.FC = () => {
                     setAiConfig(configData);
                 }
             } catch (e) { }
+
+            // 👇 7. THÊM: GET PACKAGES
+            try {
+                const pkgRes = await fetch('http://127.0.0.1:8000/api/v1/billing/packages', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (pkgRes.ok) {
+                    const pkgData = await pkgRes.json();
+                    setPackageList(pkgData);
+                }
+            } catch (e) { console.error("Lỗi fetch gói:", e); }
 
             setIsLoading(false);
 
@@ -262,6 +296,40 @@ const DashboardAdmin: React.FC = () => {
         } catch (e) { alert("Lỗi kết nối."); }
     };
 
+    const handleCreatePackage = async () => {
+        if (!newPackage.name || newPackage.price < 0) {
+            alert("Vui lòng nhập tên gói và giá hợp lệ!");
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('http://127.0.0.1:8000/api/v1/billing/packages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(newPackage)
+            });
+
+            if (res.ok) {
+                alert("✅ Tạo gói dịch vụ thành công!");
+                setShowPackageModal(false);
+                // Reset form
+                setNewPackage({ name: '', price: 0, analysis_limit: 10, duration_days: 30, description: '', target_role: 'USER' });
+                fetchData(); // Load lại list
+            } else {
+                const err = await res.json();
+                alert("❌ Lỗi: " + (err.detail || "Không thể tạo gói"));
+            }
+        } catch (e) {
+            alert("Lỗi kết nối server");
+        }
+    };
+    
+    // Hàm helper format tiền VND
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    };
+
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
 
     if (isLoading) return <div style={styles.loading}>Đang tải dữ liệu Admin...</div>;
@@ -334,6 +402,17 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Billing / Packages Tab (Mới) */}
+                        <div onClick={() => setActiveTab('billing')} style={activeTab === 'billing' ? styles.statCardActive : styles.statCard}>
+                            <div style={{...styles.iconBox, background: activeTab === 'billing' ? '#e7f1ff' : '#f1f5f9', color: activeTab === 'billing' ? '#007bff' : '#64748b'}}>
+                                <FaMoneyBillWave size={24}/>
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Gói Dịch vụ</span>
+                                <span style={styles.statCount}>{packageList.length} Gói</span>
+                            </div>
+                        </div>
+
                         {/* AI Config Tab (Mới) */}
                         <div onClick={() => setActiveTab('config')} style={activeTab === 'config' ? styles.statCardActive : styles.statCard}>
                             <div style={{...styles.iconBox, background: activeTab === 'config' ? '#e7f1ff' : '#f1f5f9', color: activeTab === 'config' ? '#007bff' : '#64748b'}}>
@@ -344,6 +423,8 @@ const DashboardAdmin: React.FC = () => {
                                 <span style={styles.statCount}>{aiConfig.model_version}</span>
                             </div>
                         </div>
+
+
                     </div>
 
                     {/* CONTENT TABLE */}
@@ -570,6 +651,63 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         )}
 
+                        {/* TAB 5: BILLING (QUẢN LÝ GÓI) */}
+                        {activeTab === 'billing' && (
+                            <>
+                                <div style={styles.cardHeader}>
+                                    <h3 style={styles.cardTitle}><FaMoneyBillWave style={{marginRight:10, color:'#007bff'}}/>Danh sách Gói Dịch vụ</h3>
+                                    <button onClick={() => setShowPackageModal(true)} style={styles.btnPrimary}>
+                                        <FaPlus style={{marginRight:5}}/> Tạo gói mới
+                                    </button>
+                                </div>
+                                <div style={styles.tableContainer}>
+                                    <table style={styles.table}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.th}>TÊN GÓI</th>
+                                                <th style={styles.th}>GIÁ (VND)</th>
+                                                <th style={styles.th}>QUYỀN LỢI</th>
+                                                <th style={styles.th}>ĐỐI TƯỢNG</th>
+                                                <th style={styles.th}>MÔ TẢ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {packageList.length === 0 ? (
+                                                <tr><td colSpan={5} style={styles.emptyState}>Chưa có gói dịch vụ nào.</td></tr>
+                                            ) : (
+                                                packageList.map(pkg => (
+                                                    <tr key={pkg.id} style={styles.tr}>
+                                                        <td style={styles.td}>
+                                                            <b style={{color:'#0f172a', fontSize:'14px'}}>{pkg.name}</b>
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <span style={{fontWeight:'bold', color:'#059669'}}>{formatCurrency(pkg.price)}</span>
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+                                                                <span style={{fontSize:'12px'}}>⏳ {pkg.duration_days} ngày</span>
+                                                                <span style={{fontSize:'12px'}}>🧠 {pkg.analysis_limit} lượt AI</span>
+                                                            </div>
+                                                        </td>
+                                                        <td style={styles.td}>
+                                                            <span style={{
+                                                                ...styles.roleBadge, 
+                                                                background: pkg.target_role === 'USER' ? '#dcfce7' : '#e0f2fe',
+                                                                color: pkg.target_role === 'USER' ? '#15803d' : '#0369a1'
+                                                            }}>{pkg.target_role}</span>
+                                                        </td>
+                                                        <td style={{...styles.td, maxWidth:'250px', color:'#64748b'}}>
+                                                            {pkg.description || '--'}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+
                     </div>
                 </div>
             </main>
@@ -603,6 +741,66 @@ const DashboardAdmin: React.FC = () => {
                         <div style={styles.modalFooter}>
                             <button onClick={() => setShowUserModal(false)} style={styles.btnSecondary}>Hủy</button>
                             <button onClick={handleSaveUser} style={styles.btnPrimary}><FaSave/> Lưu</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL TẠO GÓI DỊCH VỤ */}
+            {showPackageModal && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalContent}>
+                        <div style={styles.modalHeader}>
+                            <h3>💰 Tạo Gói Dịch Vụ Mới</h3>
+                            <button onClick={() => setShowPackageModal(false)} style={styles.closeBtn}><FaTimes/></button>
+                        </div>
+                        <div style={styles.modalBody}>
+                            <label style={styles.label}>Tên gói:</label>
+                            <input style={styles.input} type="text" placeholder="Ví dụ: Gói Cơ Bản" 
+                                value={newPackage.name} onChange={(e) => setNewPackage({...newPackage, name: e.target.value})} 
+                            />
+
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
+                                <div>
+                                    <label style={styles.label}>Giá tiền (VNĐ):</label>
+                                    <input style={styles.input} type="number" 
+                                        value={newPackage.price} onChange={(e) => setNewPackage({...newPackage, price: Number(e.target.value)})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.label}>Đối tượng:</label>
+                                    <select style={styles.select} value={newPackage.target_role} onChange={(e) => setNewPackage({...newPackage, target_role: e.target.value})}>
+                                        <option value="USER">Người dùng cá nhân</option>
+                                        <option value="DOCTOR">Bác sĩ</option>
+                                        <option value="CLINIC">Phòng khám</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
+                                <div>
+                                    <label style={styles.label}>Số lượt AI:</label>
+                                    <input style={styles.input} type="number" 
+                                        value={newPackage.analysis_limit} onChange={(e) => setNewPackage({...newPackage, analysis_limit: Number(e.target.value)})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={styles.label}>Thời hạn (Ngày):</label>
+                                    <input style={styles.input} type="number" 
+                                        value={newPackage.duration_days} onChange={(e) => setNewPackage({...newPackage, duration_days: Number(e.target.value)})} 
+                                    />
+                                </div>
+                            </div>
+
+                            <label style={styles.label}>Mô tả ngắn:</label>
+                            <input style={styles.input} type="text" placeholder="Mô tả quyền lợi..." 
+                                value={newPackage.description} onChange={(e) => setNewPackage({...newPackage, description: e.target.value})} 
+                            />
+
+                        </div>
+                        <div style={styles.modalFooter}>
+                            <button onClick={() => setShowPackageModal(false)} style={styles.btnSecondary}>Hủy</button>
+                            <button onClick={handleCreatePackage} style={styles.btnPrimary}><FaSave/> Tạo gói</button>
                         </div>
                     </div>
                 </div>

@@ -6,6 +6,8 @@ from fastapi import UploadFile, HTTPException
 from datetime import datetime 
 # Import Repository và Model
 from domain.models.imedical_repository import IMedicalRepository
+from domain.models.ibilling_repository import IBillingRepository
+
 from models.enums import EyeSide
 
 # Cấu hình Cloudinary
@@ -20,8 +22,9 @@ cloudinary.config(
 )
 
 class MedicalService:
-    def __init__(self, repo: IMedicalRepository): 
+    def __init__(self, repo: IMedicalRepository, billing_repo: IBillingRepository): 
         self.repo = repo
+        self.billing_repo = billing_repo # Lưu lại để dùng
         self.ai_service_url = os.getenv("AI_SERVICE_URL", "http://ai_service:8001/analyze")
 
     def upload_and_analyze(self, user_id: UUID, file: UploadFile, eye_side: str): # eye_side là str cho linh hoạt
@@ -32,6 +35,23 @@ class MedicalService:
         3. Nhận kết quả từ AI (JSON + URL ảnh đã vẽ đè từ AI).
         4. Lưu tất cả vào Database.
         """
+
+        # A. Lấy thông tin gói cước
+        subscription = self.billing_repo.get_active_subscription(user_id)
+        
+        # B. Kiểm tra xem có gói không
+        if not subscription:
+            raise HTTPException(status_code=402, detail="⛔ Bạn chưa đăng ký gói dịch vụ. Vui lòng mua gói để tiếp tục!")
+            
+        # C. Kiểm tra xem còn lượt không
+        if subscription.credits_left <= 0:
+            raise HTTPException(status_code=402, detail="⛔ Bạn đã hết lượt phân tích (0 credits). Vui lòng nạp thêm!")
+
+        # D. Trừ 1 lượt (Nếu trừ thất bại thì chặn luôn)
+        is_deducted = self.billing_repo.deduct_credits(subscription.id)
+        if not is_deducted:
+             raise HTTPException(status_code=500, detail="Lỗi xử lý thanh toán. Vui lòng thử lại.")
+        # ---------------------------------------------------------
         
         # B1: Đảm bảo User đã có hồ sơ Bệnh nhân
         patient = self.repo.create_patient_record(user_id)
