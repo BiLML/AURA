@@ -67,7 +67,7 @@ def get_patient_medical_history(
 
 # ... (các imports khác) ...
 
-@router.post("/records/{record_id}/diagnosis")
+@router.put("/records/{record_id}/diagnosis")
 def submit_diagnosis(
     record_id: str,
     payload: DoctorDiagnosisRequest,

@@ -121,7 +121,7 @@ const DoctorAnalysis: React.FC = () => {
                 is_correct: isAiCorrect,
                 ai_detailed_report: reportContent // <--- THÊM TRƯỜNG NÀY
             };
-            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnose`, {
+            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

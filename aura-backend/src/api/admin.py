@@ -77,7 +77,6 @@ def update_user_role(
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Không thể tự đổi quyền của chính mình")
 
-    service: AdminService = Depends(get_admin_service)
     service.update_user_role(user_id, req.role)
     return {"message": "Cập nhật vai trò thành công"}
 

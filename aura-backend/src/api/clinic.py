@@ -196,7 +196,7 @@ def get_pending_clinics_for_admin(
 
 
 # API 2: Duyệt hoặc Từ chối (Dùng PUT và nhận body status)
-@router.put("/{clinic_id}/status")
+@router.put("/admin/{clinic_id}/status")
 def update_clinic_status(
     clinic_id: str,
     body: ClinicStatusUpdate,
