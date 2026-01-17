@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    FaPaperPlane, FaTrash, FaImage, FaFileAlt, 
+    FaPaperPlane, FaTrash, FaImage, FaFileAlt, FaLock,
     FaHome, FaComments, FaHospital, FaCreditCard, 
     FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory 
 } from 'react-icons/fa';
@@ -359,7 +359,24 @@ const Dashboard: React.FC = () => {
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
     const goToProfilePage = () => { setShowUserMenu(false); navigate('/profile'); };
-    const goToUpload = () => navigate('/upload');
+    const goToUpload = () => {
+        // 1. Kiểm tra xem người dùng có lượt phân tích nào không
+        if (mySub.credits <= 0) {
+            // 2. Nếu không còn lượt -> Hiển thị thông báo
+            const confirmRegister = window.confirm(
+                "⚠️ Bạn chưa đăng ký gói dịch vụ hoặc đã hết lượt phân tích.\n\nBạn có muốn đi đến trang Đăng ký gói ngay không?"
+            );
+            
+            // 3. Nếu người dùng bấm OK -> Chuyển sang tab Thanh toán
+            if (confirmRegister) {
+                setActiveTab('payments');
+            }
+            return; // Dừng lại, không cho chuyển sang trang upload
+        }
+
+        // 4. Nếu còn lượt -> Cho phép đi tiếp
+        navigate('/upload');
+    };
     const goToDetail = (recordId: string) => navigate(`/analysis-result/${recordId}`);
     
     // Logic hiển thị màu sắc theo MỨC ĐỘ RỦI RO (Giống Clinic)
@@ -652,8 +669,16 @@ if (activeTab === 'messages') {
                             <h3 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/> Lịch sử Phân tích AI</h3>
                             <span style={styles.badge}>{historyData.length} Ca khám</span>
                         </div>
-                        <button onClick={goToUpload} style={{...styles.primaryBtn, display:'flex', alignItems:'center', gap:'8px', padding: '8px 15px', fontSize:'13px'}}>
-                            <FaCamera /> Phân tích mới
+                        <button 
+                            onClick={goToUpload} 
+                            style={{
+                                ...styles.primaryBtn,
+                                display:'flex', alignItems:'center', gap:'8px', padding: '8px 15px', fontSize:'13px',
+                                background: mySub.credits > 0 ? '#007bff' : '#6c757d'
+                            }}
+                        >
+                            {mySub.credits > 0 ? <FaCamera /> : <FaLock />}       
+                            Phân tích mới
                         </button>
                     </div>
 

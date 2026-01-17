@@ -152,6 +152,23 @@ class ClinicService:
 
         # 2. GỌI HÀM LOGIC CŨ ĐỂ THÊM (Tái sử dụng code)
         return self.add_user_to_clinic(clinic_id, target_user_id)
+    
+    def add_user_to_clinic(self, clinic_id: UUID, user_id: UUID):
+        # 1. Lấy User (Gọi User Repo)
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise HTTPException(404, "User not found")
+
+        # 2. Cập nhật bảng User (Gọi User Repo)
+        user.clinic_id = clinic_id
+        self.user_repo.update(user) 
+
+        # 3. Cập nhật bảng Patient (Gọi Medical Repo - CHUẨN CLEAN ARCH)
+        if user.role == UserRole.USER:
+            # 👇 Thay thế đoạn logic loằng ngoằng cũ bằng 1 dòng này
+            self.medical_repo.assign_patient_to_clinic(user_id, clinic_id)
+
+        return True
 
     def assign_patient(self, patient_id: UUID, doctor_id: UUID):
         patient = self.db.query(User).filter(User.id == patient_id).first()

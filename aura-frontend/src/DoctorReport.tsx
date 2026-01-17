@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 interface ReportInfo {
     record_id: string;
@@ -18,14 +18,12 @@ interface ReportInfo {
 const DoctorReport: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const location = useLocation();
 
     // State cho dữ liệu hiển thị
     const [info, setInfo] = useState<ReportInfo | null>(null);
     const [loading, setLoading] = useState(true);
 
     // State cho form phản hồi
-    const [isAiCorrect, setIsAiCorrect] = useState<boolean>(true); // Xác nhận tính đúng đắn
     const [feedbackContent, setFeedbackContent] = useState('');    // Nội dung phản hồi cho Admin
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,7 +87,7 @@ const DoctorReport: React.FC = () => {
                 feedback_for_ai: feedbackContent // Trường quan trọng để Admin huấn luyện lại AI
             };
 
-            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnose`, {
+            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

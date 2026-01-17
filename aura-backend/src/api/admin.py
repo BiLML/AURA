@@ -86,9 +86,18 @@ def update_user_role(
 @router.get("/config", response_model=SystemConfigResponse)
 def get_ai_config(
     service: AdminService = Depends(get_admin_service),
-    current_user: User = Depends(get_current_admin) # Bảo vệ bằng quyền Admin
+    current_user: User = Depends(get_current_admin) 
 ):
-    return service.get_system_config()
+    config = service.get_system_config()
+    
+    # --- BỔ SUNG ĐOẠN NÀY ---
+    # if not config:
+        # Nếu không có config, trả về lỗi 404 thay vì để crash server
+        # Frontend sẽ nhận được lỗi này và xử lý (ví dụ: hiển thị form tạo mới)
+    #    raise HTTPException(status_code=404, detail="Chưa có cấu hình hệ thống")
+    # ------------------------
+
+    return config
 
 @router.put("/config", response_model=SystemConfigResponse)
 def update_ai_config(
@@ -104,3 +113,10 @@ def get_global_dashboard_stats(
     service: AdminService = Depends(get_admin_service)
 ):
     return service.get_global_stats()
+
+@router.get("/stats/analytics")
+def get_analytics_data(
+    service: AdminService = Depends(get_admin_service),
+    current_user: User = Depends(get_current_admin) # Chỉ Admin mới được xem
+):
+    return service.get_system_analytics()

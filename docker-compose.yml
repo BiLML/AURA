@@ -19,13 +19,20 @@ services:
       context: ./aura-backend
       dockerfile: Dockerfile
     container_name: aura_ai_core
-    command: python src/ai_service/main.py
+    command: python -u src/ai_service/main.py
     ports:
       - "8001:8001"
     env_file:
       - ./aura-backend/.env 
     volumes:
       - ./aura-backend:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   backend_core:
     build: 

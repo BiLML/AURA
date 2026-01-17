@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, cast, Date
 from uuid import UUID
 from typing import List, Optional
 
@@ -146,3 +147,53 @@ class MedicalRepository(IMedicalRepository):
             
         self.db.commit()
         return True
+    
+    # 👇 1. Lấy phân bố rủi ro (Cho biểu đồ tròn/cột)
+    def get_risk_distribution_stats(self) -> list:
+        """Trả về list các tuple: [(RiskLevel, Count), ...]"""
+        return self.db.query(
+            AIAnalysisResult.risk_level, 
+            func.count(AIAnalysisResult.id)
+        ).group_by(AIAnalysisResult.risk_level).all()
+
+    # 👇 2. Lấy xu hướng upload trong 7 ngày qua (Cho biểu đồ miền/đường)
+    def get_upload_trends_last_7_days(self) -> list:
+        """Trả về số lượng ảnh upload theo ngày"""
+        # Lưu ý: cast(Date) hoạt động tốt trên Postgres/MySQL. Với SQLite có thể cần func.date(...)
+        return self.db.query(
+            cast(RetinalImage.created_at, Date).label('upload_date'),
+            func.count(RetinalImage.id)
+        ).group_by(cast(RetinalImage.created_at, Date))\
+         .order_by(cast(RetinalImage.created_at, Date).desc())\
+         .limit(7).all()
+    
+    def update_image_url(self, image_id: int, new_url: str):
+        """Cập nhật URL ảnh sau khi upload xong (dùng cho Queue)"""
+        try:
+            image = self.db.query(RetinalImage).filter(RetinalImage.id == image_id).first()
+            if image:
+                image.image_url = new_url
+                self.db.commit()
+                self.db.refresh(image)
+                return True
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error updating image URL: {e}")
+            return False
+
+    def update_analysis_result(self, result_id: int, risk_level: str, annotated_url: str, report_content: str):
+        """Cập nhật kết quả AI sau khi xử lý xong (dùng cho Queue)"""
+        try:
+            result = self.db.query(AIAnalysisResult).filter(AIAnalysisResult.id == result_id).first()
+            if result:
+                result.risk_level = risk_level
+                result.annotated_image_url = annotated_url
+                result.ai_detailed_report = report_content
+                # result.ai_analysis_status = "COMPLETED" # Nếu model bạn có trường status
+                self.db.commit()
+                self.db.refresh(result)
+                return True
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error updating analysis result: {e}")
+            return False

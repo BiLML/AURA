@@ -96,76 +96,47 @@ const Upload: React.FC = () => {
     const handleUpload = async () => {
         if (selectedFiles.length === 0) return;
         setIsUploading(true);
-        const token = localStorage.getItem('token');
         
-        let hasError = false;
-        let successCount = 0;
-        let lastResult = null;
+        // 🚨 QUAN TRỌNG: Gọi vào Backend Core (Port 8000)
+        // API này sẽ lo việc lưu DB và gọi AI
+        const BACKEND_API = 'http://localhost:8000/api/v1/medical-records/batch-analyze';
+        const token = localStorage.getItem('token');
 
         try {
-            for (const file of selectedFiles) {
-                const formData = new FormData();
-                
-                // 1. File ảnh
-                formData.append('file', file); 
-                
-                // 2. Eye Side (QUAN TRỌNG - KHÔNG CÓ LÀ LỖI 422)
-                formData.append('eye_side', eyeSide);
+            const formData = new FormData();
+            selectedFiles.forEach(file => formData.append('files', file));
+            if (selectedPatientId) formData.append('patient_id', selectedPatientId);
+            formData.append('eye_side', eyeSide);
 
-                // 3. Patient ID (Nếu có)
-                if (selectedPatientId) {
-                    formData.append('patient_id', selectedPatientId);
-                }
+            const response = await fetch(BACKEND_API, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }, // Bắt buộc có Token
+                body: formData
+            });
 
-                // GỌI API
-                const response = await fetch('http://localhost:8000/api/v1/medical-records/analyze', {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    console.error("Lỗi upload file:", file.name, response.status, response.statusText);
-                    hasError = true;
-                    continue; 
-                }
-
-                const resultData = await response.json();
-                console.log("AI Result:", resultData);
-                
-                successCount++;
-                lastResult = resultData;
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Lỗi xử lý từ server");
             }
 
-            // --- XỬ LÝ KẾT QUẢ ---
-            if (successCount === 0) {
-                alert("Upload thất bại! Vui lòng kiểm tra lại ảnh hoặc kết nối.");
-            } else {
-                const msg = hasError 
-                    ? `Đã xử lý xong ${successCount}/${selectedFiles.length} ảnh. (Có file lỗi)`
-                    : "Phân tích AI hoàn tất 100%!";
-                
-                alert(msg);
-
-                // ĐIỀU HƯỚNG
-                if (!['clinic', 'doctor'].includes(role)) {
-                    // User thường -> Xem kết quả ngay
-                    if (lastResult) {
-                         // Dữ liệu trả về từ API mới thường bọc trong `analysis_result` hoặc trả thẳng
-                         // Cần đảm bảo Dashboard/Analysis nhận đúng format
-                        navigate(`/analysis-result/${lastResult.id}`, { state: { result: lastResult } });
-                    }
-                } else {
-                    // Bác sĩ -> Về Dashboard
-                    navigate('/clinic-dashboard');
-                }
-            }
+            const data = await response.json(); 
+            
+            // Chuyển hướng với dữ liệu đã được Backend xử lý & lưu
+            navigate('/analysis-result-batch', { state: { 
+                batchResults: data.data.map((item: any) => ({
+                    id: item.id,
+                    status: item.status,
+                    diagnosis: item.diagnosis,
+                    confidence: item.confidence,
+                    image_base64: null, 
+                    local_preview: item.image_url, // Backend trả về link ảnh tĩnh (static)
+                    report: item.report
+                }))
+            }});
 
         } catch (error) {
-            console.error("System Error:", error);
-            alert("Lỗi kết nối Server!");
+            console.error("Lỗi:", error);
+            alert(`Thất bại: ${(error as Error).message}`);
         } finally {
             setIsUploading(false);
         }

@@ -1,25 +1,32 @@
-# Sử dụng Python 3.10 Slim
-FROM python:3.10-slim
+# 1. Đổi sang Image 11.8 có sẵn CUDNN 8 (QUAN TRỌNG: Phải có tag cudnn8-runtime)
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# 1. Cài đặt thư viện hệ thống cần thiết cho OpenCV và ONNX
+# 2. Cài đặt Python 3.10 và các thư viện hệ thống
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgomp1 \   
     && rm -rf /var/lib/apt/lists/*
+
+# Link python3 -> python
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# 2. Copy requirements và cài đặt
+# 3. Copy requirements và cài đặt
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
-# 3. Copy toàn bộ code (Bao gồm cả folder server và ai_service)
+# 4. Copy toàn bộ code
 COPY . .
 
-ENV PYTHONPATH=/app/src
+# 5. Thiết lập biến môi trường để Python tìm thấy thư viện CUDA
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:$LD_LIBRARY_PATH
 
-# 4. Không cần CMD cứng ở đây, docker-compose sẽ điều khiển
+ENV PYTHONPATH=/app/src

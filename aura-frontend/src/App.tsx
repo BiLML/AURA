@@ -17,14 +17,14 @@ import ResetPassword from './ResetPassword';
 import DoctorAnalysis from './DoctorAnalysis';
 import DoctorReport from './DoctorReport';
 import ClinicAnalysisResult from './ClinicAnalysisResult';
+import AnalysisBatchResult from './AnalysisBatchResult';
 
-// --- HÀM HỖ TRỢ ĐỌC ROLE TỪ LOCAL STORAGE (GIỮ NGUYÊN) ---
+// --- HÀM HỖ TRỢ ĐỌC ROLE TỪ LOCAL STORAGE ---
 const getUserRoleFromStorage = () => {
     try {
         const userInfoString = localStorage.getItem('user_info');
         if (userInfoString) {
             const userInfo = JSON.parse(userInfoString);
-            // Trả về vai trò ở dạng chữ thường
             return userInfo.role ? userInfo.role.toLowerCase() : null;
         }
     } catch (e) {
@@ -42,28 +42,15 @@ const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) 
     return element;
 };
 
-// ⭐ COMPONENT ĐIỀU HƯỚNG MẶC ĐỊNH ĐƯỢC ĐƯA RA NGOÀI ⭐
+// ⭐ COMPONENT ĐIỀU HƯỚNG MẶC ĐỊNH ⭐
 const DefaultRedirect: React.FC = () => {
     const isAuthenticated = !!localStorage.getItem('token');
     const role = getUserRoleFromStorage();
     
-    if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
-    }
-    
-    if (role === 'admin') {
-        return <Navigate to="/admin" replace />;
-    }
-    
-    if (role === 'doctor') {
-        return <Navigate to="/dashboarddr" replace />;
-    }
-
-    if (role === 'clinic') {
-        return <Navigate to="/clinic-dashboard" replace />;
-    }
-    
-    // Mặc định là USER hoặc Guest (nếu chưa đăng ký)
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+    if (role === 'admin') return <Navigate to="/admin" replace />;
+    if (role === 'doctor') return <Navigate to="/dashboarddr" replace />;
+    if (role === 'clinic') return <Navigate to="/clinic-dashboard" replace />;
     return <Navigate to="/dashboard" replace />;
 };
 
@@ -72,40 +59,43 @@ const App: React.FC = () => {
         <Router>
             <div className="app-container">
                 <Routes>
-                    {/* 1. Các trang Công khai */}
+                    {/* --- CÁC ROUTE CÔNG KHAI --- */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
-                    {/* 2. Các trang Bảo mật (Protected Routes) */}
+                    <Route path="/reset-password" element={<ResetPassword />} />
+
+                    {/* --- DASHBOARDS --- */}
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/admin" element={<DashboardAdmin />} />
                     <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
                     <Route path="/dashboarddr" element={<ProtectedRoute element={<DashboardDr />} />} />
-                    <Route path="/clinic/analysis/:id" element={<ProtectedRoute element={<ClinicAnalysisResult />} />} />                    
+
+                    {/* --- CÁC ROUTE XỬ LÝ ẢNH & PHÂN TÍCH (QUAN TRỌNG) --- */}
+                    
+                    {/* 1. Trang Upload & Batch Result (Dùng chung) */}
+                    <Route path="/upload" element={<ProtectedRoute element={<Upload />} />} />
+                    <Route path="/analysis-result-batch" element={<AnalysisBatchResult />} />
+
+                    {/* 2. Trang Chi tiết dành cho USER THƯỜNG */}
+                    <Route path="/analysis-result/:id" element={<ProtectedRoute element={<Analysis />} />} />
+
+                    {/* 3. Trang Chi tiết dành cho PHÒNG KHÁM (CLINIC) */}
+                    <Route path="/clinic/analysis/:id" element={<ProtectedRoute element={<ClinicAnalysisResult />} />} />
+
+                    {/* 4. Trang dành cho BÁC SĨ (DOCTOR) */}
                     <Route path="/doctor/analysis/:id" element={<DoctorAnalysis />} />
                     <Route path="/doctor/report/:id" element={<DoctorReport />} />
+
+
+                    {/* --- USER PROFILE --- */}
                     <Route path="/profile-dr" element={<ProtectedRoute element={<ProfileDr />} />} />
-                    <Route path="/upload" element={<ProtectedRoute element={<Upload />} />} />
-                    <Route path="/analysis-result/:id" element={<ProtectedRoute element={<Analysis />} />} />
                     <Route path="/set-username" element={<ProtectedRoute element={<SetUsername />} />} />
                     <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    {/* ROUTE CHO ADMIN DASHBOARD */}
-                    <Route path="/admin" element={<DashboardAdmin />} />
-                    
-                    {/* 3. Trang mặc định: Sử dụng component DefaultRedirect độc lập */}
-                    <Route 
-                        path="/" 
-                        element={<DefaultRedirect />} 
-                    />
 
-                    {/* 4. Trang 404 */}
-                    <Route path="*" element={
-                        <div style={{ padding: '20px', textAlign: 'center' }}>
-                            <h1>404</h1>
-                            <p>Không tìm thấy trang. <a href="/">Quay về trang chính</a></p>
-                        </div>
-                    } />
+                    {/* --- DEFAULT & 404 --- */}
+                    <Route path="/" element={<DefaultRedirect />} />
+                    <Route path="*" element={<div style={{ padding: '20px', textAlign: 'center' }}><h1>404</h1><p>Page Not Found</p></div>} />
                 </Routes>
             </div>
         </Router>

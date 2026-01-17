@@ -7,4 +7,7 @@ class IConfigRepository(ABC):
     def get_config(self) -> Optional[SystemConfig]: pass
 
     @abstractmethod
+    def create_config(self, new_config: SystemConfig) -> SystemConfig: pass
+
+    @abstractmethod
     def update_config(self, config_data: dict) -> SystemConfig: pass

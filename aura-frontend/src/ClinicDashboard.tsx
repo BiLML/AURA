@@ -434,7 +434,6 @@ const handleAddExistingDoctor = async (doctorId: string) => {
             {/* MAIN */}
             <main style={styles.main}>
                 <header style={styles.header}>
-                    <div style={styles.searchBox}><FaSearch color="#999" /><input type="text" placeholder="Tìm kiếm hồ sơ..." style={styles.searchInput} /></div>
                     <div style={styles.headerRight}>
                         <div style={{position:'relative'}} ref={userMenuRef}>
                             <div style={styles.profileBox} onClick={() => setShowUserMenu(!showUserMenu)}>
@@ -442,8 +441,8 @@ const handleAddExistingDoctor = async (doctorId: string) => {
                                 <span style={styles.userNameText}>{adminName}</span>
                             </div>
                             {showUserMenu && (
-                                <div style={styles.dropdownMenu}>
-                                    <button style={styles.dropdownItem} onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
+                                // --- Dropdown Menu ---
+                                <div style={styles.dropdownMenu}> 
                                 </div>
                             )}
                         </div>

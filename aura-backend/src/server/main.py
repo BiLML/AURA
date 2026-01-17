@@ -8,10 +8,15 @@ from api import auth, users, medical_records, clinic, billing, admin, chat, doct
 
 app = FastAPI(title="Aura AI Backend")
 
+origins = [
+    "http://localhost:5173",    # Frontend của bạn
+    "http://127.0.0.1:5173",    # Dự phòng
+]
+
 # Cấu hình CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

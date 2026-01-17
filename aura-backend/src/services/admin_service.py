@@ -52,7 +52,18 @@ class AdminService:
         return user
     
     def get_system_config(self):
-        return self.config_repo.get_config()
+        # 1. Thử lấy cấu hình hiện tại
+        config = self.config_repo.get_config()
+        
+        # 2. Nếu chưa có (None) -> Tự động tạo mới
+        if not config:
+            # Tạo object mặc định (SQLAlchemy sẽ tự lấy các giá trị default đã khai báo trong Model)
+            default_config = SystemConfig() 
+            
+            # Gọi hàm create_config (hàm này bạn đã thêm vào Repo ở bước trước)
+            return self.config_repo.create_config(default_config)
+            
+        return config
     
     def update_system_config(self, data):
         return self.config_repo.update_config(data)
@@ -107,4 +118,40 @@ class AdminService:
                 "total_validated": total_val,
                 "model_version": model_ver # Hiển thị: "Model v1.0.0"
             }
+        }
+    
+    def get_system_analytics(self):
+        # 1. Lấy phân bố rủi ro
+        risk_data = self.medical_repo.get_risk_distribution_stats()
+        # Format lại: [{'name': 'SEVERE', 'value': 10}, ...]
+        risk_chart = [
+            {"name": risk if risk else "Unknown", "value": count} 
+            for risk, count in risk_data
+        ]
+
+        # 2. Lấy xu hướng 7 ngày
+        trend_data = self.medical_repo.get_upload_trends_last_7_days()
+        # Đảo ngược lại để ngày cũ bên trái, ngày mới bên phải
+        trend_data.reverse() 
+        trend_chart = [
+            {"date": d.strftime("%d/%m"), "count": c} 
+            for d, c in trend_data
+        ]
+
+        # 3. Lấy tỷ lệ lỗi (Dựa trên hàm cũ get_ai_validation_stats)
+        val_stats = self.medical_repo.get_ai_validation_stats()
+        total_val = val_stats["total_validated"]
+        correct = val_stats["correct_ai"]
+        incorrect = total_val - correct
+        
+        error_chart = [
+            {"name": "Chính xác", "value": correct, "fill": "#28a745"}, # Màu xanh
+            {"name": "Sai lệch", "value": incorrect, "fill": "#dc3545"}  # Màu đỏ
+        ]
+
+        return {
+            "risk_distribution": risk_chart,
+            "upload_trends": trend_chart,
+            "error_rates": error_chart,
+            "total_samples": total_val
         }

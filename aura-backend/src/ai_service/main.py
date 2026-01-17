@@ -1,75 +1,103 @@
-# aura-backend/ai_service/main.py
+# src/ai_service/main.py
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
-import cv2
-import numpy as np
-import io
-import cloudinary
-import cloudinary.uploader
-import os
-from dotenv import load_dotenv
 
-# QUAN TRỌNG: Import từ file inference nằm NGAY BÊN CẠNH
-from inference import run_aura_inference 
-from pathlib import Path
+# Import các hàm xử lý AI
+from inference import run_aura_inference, run_batch_inference
+from trainer import run_retraining_process
 
-current_file_path = Path(__file__).resolve()
-env_path = current_file_path.parent.parent / '.env'
-print(f' AI service loading .env from: {env_path}')
+app = FastAPI(title="AURA AI Microservice", version="2.0")
 
-if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
-    print("✅ Đã load file .env thành công!")
-else:
-    print("⚠️ CẢNH BÁO: Không tìm thấy file .env! Vui lòng kiểm tra lại đường dẫn.")
-
-app = FastAPI(title="AI Core Microservice")
-
-if not os.getenv("CLOUDINARY_CLOUD_NAME"):
-    print("❌ LỖI: Chưa đọc được CLOUDINARY_CLOUD_NAME. Kiểm tra nội dung file .env")
-
-cloudinary.config( 
-    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"), 
-    api_key = os.getenv("CLOUDINARY_API_KEY"), 
-    api_secret = os.getenv("CLOUDINARY_API_SECRET"),
-    secure = True
+# CORS config
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-class AIResponse(BaseModel):
-    diagnosis_result: str
-    detailed_risk: str
-    annotated_image_url: str
+@app.get("/")
+def health_check():
+    return {"status": "healthy", "service": "aura-ai-core"}
 
-@app.post("/analyze", response_model=AIResponse)
+# --- 1. XỬ LÝ ẢNH ĐƠN (Giữ nguyên) ---
+@app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
-    print("🤖 AI Core: Nhận request...")
     try:
         content = await file.read()
+        # Hàm này giờ trả về (base64_string, diagnosis, report_text)
+        img_b64, diagnosis, report = run_aura_inference(content)
         
-        # Gọi hàm xử lý logic
-        overlay_img, diagnosis_result, detailed_risk = run_aura_inference(content)
-        
-        # Encode ảnh kết quả
-        is_success, buffer = cv2.imencode(".png", overlay_img)
-        if not is_success: raise HTTPException(500, "Lỗi xử lý ảnh")
-        
-        # Upload Cloudinary
-        upload_result = cloudinary.uploader.upload(
-            io.BytesIO(buffer.tobytes()), 
-            folder="aura_results", 
-            resource_type="image"
-        )
-        
+        if img_b64 is None:
+            raise HTTPException(status_code=500, detail=diagnosis) # diagnosis chứa lỗi log
+
         return {
-            "diagnosis_result": diagnosis_result,
-            "detailed_risk": detailed_risk,
-            "annotated_image_url": upload_result.get("secure_url")
+            "image_base64": img_b64, # Frontend nhận cái này
+            "diagnosis": diagnosis,
+            "report": report
         }
     except Exception as e:
-        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/analyze/batch")
+async def analyze_batch(files: List[UploadFile] = File(...)):
+    print(f"🚀 Nhận batch request: {len(files)} ảnh")
+    
+    image_contents = []
+    for file in files:
+        content = await file.read()
+        image_contents.append(content)
+    
+    # Gọi hàm xử lý song song vừa sửa ở inference.py
+    results = run_batch_inference(image_contents)
+    
+    return {
+        "status": "success",
+        "results": results
+    }
+
+# --- 2. XỬ LÝ HÀNG LOẠT (SỬA LẠI CHO ĐÚNG NFR-2) ---
+@app.post("/analyze/batch")
+async def analyze_batch_images(files: List[UploadFile] = File(...)):
+    """
+    API xử lý hàng loạt >= 100 ảnh.
+    Sử dụng cơ chế Batch Tensor của ONNX Runtime để xử lý song song.
+    """
+    if len(files) > 200:
+        raise HTTPException(status_code=400, detail="Batch size limit is 200 images.")
+
+    print(f"🚀 Nhận batch request: {len(files)} ảnh")
+    
+    image_contents = [await file.read() for file in files]
+    # 1. Đọc toàn bộ file vào RAM trước (IO Bound)
+    for file in files:
+        content = await file.read()
+        image_contents.append(content)
+    
+    # 2. Gọi hàm xử lý song song (CPU/GPU Bound)
+    # Đây mới là chỗ tận dụng sức mạnh của ONNX Parallel
+    try:
+        results = run_batch_inference(image_contents)
+        return {
+            "status": "success",
+            "total_processed": len(results),
+            "results": results
+        }
+    except Exception as e:
+        print(f"Batch error: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi xử lý batch processing")
+
+# --- 3. AUTO-TRAINING TRIGGER ---
+@app.post("/train/trigger")
+async def trigger_retraining(background_tasks: BackgroundTasks):
+    """
+    Kích hoạt huấn luyện lại model (Classifier & Segmentation Negative Learning)
+    """
+    print("🔄 Nhận lệnh Retrain từ Admin...")
+    background_tasks.add_task(run_retraining_process)
+    return {"message": "Đã kích hoạt tiến trình Auto-Training ngầm."}
 
 if __name__ == "__main__":
-    # CHẠY TRÊN PORT 8001
     uvicorn.run(app, host="0.0.0.0", port=8001)

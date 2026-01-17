@@ -1,4 +1,3 @@
-from xxlimited import Str
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from uuid import UUID
@@ -11,7 +10,7 @@ class AIAnalysisResponse(BaseModel):
     risk_level: Optional[str] = None
     vessel_details: Optional[Dict[str, Any]] = None # Trả về JSON chi tiết
     annotated_image_url: Optional[str] = None
-    processed_at: datetime
+    processed_at: Optional[datetime] = None
     ai_detailed_report: Optional[str] = None
 
     class Config:
@@ -25,10 +24,7 @@ class ImageResponse(BaseModel):
     image_type: ImageType
     eye_side: Optional[EyeSide] = None
     created_at: datetime
-    
-    # Kèm theo kết quả phân tích (nếu có)
     analysis_result: Optional[AIAnalysisResponse] = None
-
     class Config:
         from_attributes = True
 

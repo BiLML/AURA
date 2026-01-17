@@ -4,8 +4,17 @@ import {
     FaHospital, FaBrain, FaSignOutAlt, FaSearch, 
     FaCheck, FaUsers, FaUserShield, FaBell, FaCheckDouble,
     FaEdit, FaLock, FaUnlock, FaBan, FaTimes, FaSave, 
-    FaCogs, FaRobot, FaMoneyBillWave, FaPlus // ✅ Đã thêm icon cho Config
+    FaCogs, FaRobot, FaMoneyBillWave, FaPlus,
+    FaChartPie
 } from 'react-icons/fa';
+
+import { 
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+    PieChart, Pie, Cell, AreaChart, Area
+} from 'recharts';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']; // Màu cho biểu đồ
+
 
 // --- INTERFACES ---
 interface User {
@@ -63,7 +72,7 @@ const DashboardAdmin: React.FC = () => {
     
     // --- STATE UI ---
     // Thêm tab 'config' vào danh sách tabs
-    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config' | 'billing'>('users'); 
+    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config' | 'billing' | 'analytics'>('users'); 
     const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active'>('pending');
     const [adminName, setAdminName] = useState('Admin');
     const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +112,12 @@ const DashboardAdmin: React.FC = () => {
         auto_retrain: false,
         retrain_frequency_days: 30,
         min_new_data_samples: 100
+    });
+
+    const [analyticsData, setAnalyticsData] = useState({
+        risk_distribution: [],
+        upload_trends: [],
+        error_rates: []
     });
 
     // --- STATE MODAL (SỬA USER) ---
@@ -195,6 +210,17 @@ const DashboardAdmin: React.FC = () => {
                     setPackageList(pkgData);
                 }
             } catch (e) { console.error("Lỗi fetch gói:", e); }
+
+            // 8. Analytics Data (FR-36)
+            try {
+                const analyticsRes = await fetch('http://127.0.0.1:8000/api/v1/admin/stats/analytics', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (analyticsRes.ok) {
+                    const anaData = await analyticsRes.json();
+                    setAnalyticsData(anaData);
+                }
+            } catch (e) { console.error("Analytics fetch error", e); }
 
 
             const statsRes = await fetch('http://127.0.0.1:8000/api/v1/admin/stats/global', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -442,6 +468,16 @@ const DashboardAdmin: React.FC = () => {
                             <div style={styles.statInfo}>
                                 <span style={styles.statLabel}>Cấu hình AI</span>
                                 <span style={styles.statCount}>{aiConfig.model_version}</span>
+                            </div>
+                        </div>
+
+                        <div onClick={() => setActiveTab('analytics')} style={activeTab === 'analytics' ? styles.statCardActive : styles.statCard}>
+                            <div style={{...styles.iconBox, background: activeTab === 'analytics' ? '#e7f1ff' : '#f1f5f9', color: activeTab === 'analytics' ? '#007bff' : '#64748b'}}>
+                                <FaChartPie size={24}/>
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Phân tích</span>
+                                <span style={styles.statCount}>Chi tiết</span>
                             </div>
                         </div>
 
@@ -771,6 +807,79 @@ const DashboardAdmin: React.FC = () => {
                             </>
                         )}
 
+                        {/* TAB 6: ANALYTICS (FR-36) */}
+                        {activeTab === 'analytics' && (
+                            <div style={{padding: '30px', display:'flex', flexDirection:'column', gap:'30px'}}>
+                                <div style={styles.cardHeader}>
+                                    <h3 style={styles.cardTitle}><FaChartPie style={{marginRight:10, color:'#007bff'}}/>Phân tích Hệ thống</h3>
+                                </div>
+
+                                {/* Hàng 1: Biểu đồ xu hướng và Tỷ lệ lỗi */}
+                                <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:'30px'}}>
+                                    
+                                    {/* 1. Xu hướng Upload (Area Chart) */}
+                                    <div style={styles.chartCard}>
+                                        <h3 style={styles.chartTitle}>📈 Xu hướng Tải lên (7 ngày qua)</h3>
+                                        <div style={{height:'300px', width:'100%'}}>
+                                            <ResponsiveContainer>
+                                                <AreaChart data={analyticsData.upload_trends}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                                                    <XAxis dataKey="date" style={{fontSize:'12px'}} />
+                                                    <YAxis style={{fontSize:'12px'}} />
+                                                    <RechartsTooltip />
+                                                    <Area type="monotone" dataKey="count" stroke="#8884d8" fill="#8884d8" name="Số lượng ảnh" />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Tỷ lệ Lỗi (Pie Chart) */}
+                                    <div style={styles.chartCard}>
+                                        <h3 style={styles.chartTitle}>🎯 Độ chính xác AI (RLHF)</h3>
+                                        <div style={{height:'300px', width:'100%'}}>
+                                            <ResponsiveContainer>
+                                                <PieChart>
+                                                    <Pie
+                                                        data={analyticsData.error_rates}
+                                                        cx="50%" cy="50%"
+                                                        innerRadius={60} outerRadius={80}
+                                                        paddingAngle={5}
+                                                        dataKey="value"
+                                                    >
+                                                        {analyticsData.error_rates.map((entry:any, index:number) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                        ))}
+                                                    </Pie>
+                                                    <RechartsTooltip />
+                                                    <Legend verticalAlign="bottom" height={36}/>
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Hàng 2: Phân bố rủi ro (Bar Chart) */}
+                                <div style={styles.chartCard}>
+                                    <h3 style={styles.chartTitle}>⚠️ Phân bố Mức độ Rủi ro (Toàn hệ thống)</h3>
+                                    <div style={{height:'350px', width:'100%'}}>
+                                        <ResponsiveContainer>
+                                            <BarChart data={analyticsData.risk_distribution} layout="vertical" margin={{left: 20, right: 20}}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                                <XAxis type="number" />
+                                                <YAxis dataKey="name" type="category" width={100} style={{fontSize:'12px', fontWeight:'bold'}} />
+                                                <RechartsTooltip cursor={{fill: 'transparent'}} />
+                                                <Bar dataKey="value" fill="#82ca9d" barSize={30} name="Số lượng ca" label={{ position: 'right' }}>
+                                                    {analyticsData.risk_distribution.map((_: any, index: number) => (
+                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div style={{marginTop: '20px', ...styles.tableCard}}>
                             <div style={styles.cardHeader}>
                                 <h3 style={styles.cardTitle}>💰 Giao dịch gần đây</h3>
@@ -960,6 +1069,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     modalFooter: { padding:'15px 20px', borderTop:'1px solid #eee', display:'flex', justifyContent:'flex-end', gap:'10px', background:'#f8fafc' },
     closeBtn: { border:'none', background:'transparent', fontSize:'16px', cursor:'pointer', color:'#64748b' },
     emptyState: { padding: '40px', textAlign: 'center', color: '#94a3b8' },
+    chartCard: { background: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 5px rgba(0,0,0,0.03)' },
+    chartTitle: { margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', fontWeight: '700' }
 };
 
 export default DashboardAdmin;
