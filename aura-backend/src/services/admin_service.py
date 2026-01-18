@@ -3,20 +3,33 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from models.users import User
 from models.enums import UserRole, UserStatus 
-from models.system_config import SystemConfig # Import model mới
+from models.system_config import SystemConfig
+from models.audit_log import AuditLog
 from uuid import UUID
+
+from schemas.notification_schema import TemplateUpdate
 
 from domain.models.iuser_repository import IUserRepository
 from domain.models.imedical_repository import IMedicalRepository
 from domain.models.ibilling_repository import IBillingRepository
 from domain.models.iconfig_repository import IConfigRepository 
+from domain.models.iaudit_repository import IAuditRepository
+from domain.models.inotification_repository import INotificationRepository
 
 class AdminService:
-    def __init__(self, user_repo: IUserRepository, medical_repo: IMedicalRepository, billing_repo: IBillingRepository, config_repo: IConfigRepository):
+    def __init__(self, 
+                 user_repo: IUserRepository, 
+                 medical_repo: IMedicalRepository, 
+                 billing_repo: IBillingRepository, 
+                 config_repo: IConfigRepository, 
+                 audit_repo: IAuditRepository, 
+                 noti_repo: INotificationRepository):
         self.user_repo = user_repo
         self.medical_repo = medical_repo
         self.billing_repo = billing_repo
         self.config_repo = config_repo
+        self.audit_repo = audit_repo
+        self.noti_repo = noti_repo
 
     def get_user_by_id(self, user_id: UUID) -> User:
         user = self.user_repo.get_by_id(user_id)
@@ -24,32 +37,54 @@ class AdminService:
             raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
         return user
 
-    def update_user_status(self, user_id: UUID, new_status: str):
+    def update_user_status(self, user_id: UUID, new_status: str, admin_id: UUID, ip_address: str):
         user = self.get_user_by_id(user_id)
+        old_status = user.status
         
-        # Cập nhật thẳng vào cột status
-        # Lưu ý: new_status phải khớp với các giá trị trong Enum UserStatus của bạn
+        # Logic cũ
         user.status = new_status 
-        
-        self.db.commit()
-        self.db.refresh(user)
-        return user
+        updated_user = self.user_repo.update(user)
 
-    def update_user_role(self, user_id: UUID, new_role: str):
+        # --- THÊM LOGGING ---
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=admin_id, # Người thực hiện là Admin
+                action="UPDATE_USER_STATUS",
+                resource_type="users",
+                resource_id=str(user.id),
+                old_values={"status": old_status},
+                new_values={"status": new_status},
+                ip_address=ip_address
+            ))
+        except Exception as e: print(f"Log Error: {e}")
+        
+        return updated_user
+
+    # Tương tự cho update_user_role
+    def update_user_role(self, user_id: UUID, new_role: str, admin_id: UUID, ip_address: str):
         user = self.get_user_by_id(user_id)
+        old_role = user.role
         
-        # Cập nhật role
+        # Logic cũ
         valid_roles = [e.value for e in UserRole]
-        if new_role not in valid_roles:
-             raise HTTPException(
-                 status_code=400, 
-                 detail=f"Vai trò '{new_role}' không hợp lệ. Phải là: {valid_roles}"
-             )
-
+        if new_role not in valid_roles: raise HTTPException(status_code=400, detail="Role invalid")
         user.role = new_role
-        self.db.commit()
-        self.db.refresh(user) # Thêm refresh để trả về data mới nhất
-        return user
+        updated_user = self.user_repo.update(user)
+
+        # --- THÊM LOGGING ---
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=admin_id,
+                action="UPDATE_USER_ROLE",
+                resource_type="users",
+                resource_id=str(user.id),
+                old_values={"role": old_role},
+                new_values={"role": new_role},
+                ip_address=ip_address
+            ))
+        except: pass
+        
+        return updated_user
     
     def get_system_config(self):
         # 1. Thử lấy cấu hình hiện tại
@@ -65,8 +100,42 @@ class AdminService:
             
         return config
     
-    def update_system_config(self, data):
-        return self.config_repo.update_config(data)
+    def update_system_config(self, data, user_id: UUID, ip_address: str):
+        # A. Lấy cấu hình CŨ để so sánh
+        current_config = self.get_system_config()
+        
+        # Serialize giá trị cũ sang Dict để lưu log
+        old_values = {
+            "confidence_threshold": current_config.confidence_threshold,
+            "auto_retrain": current_config.auto_retrain,
+            "anonymize_patient_data": getattr(current_config, "anonymize_patient_data", True),
+            "require_training_consent": getattr(current_config, "require_training_consent", False),
+            "data_retention_days": getattr(current_config, "data_retention_days", 90)
+        }
+
+        # B. Thực hiện Cập nhật (Logic cũ)
+        updated_config = self.config_repo.update_config(data)
+
+        # C. Chuẩn bị dữ liệu MỚI (chuyển Pydantic model sang dict)
+        new_values = data.model_dump(exclude_unset=True)
+
+        # D. GHI LOG (Audit Trail)
+        try:
+            log_entry = AuditLog(
+                user_id=user_id,
+                action="UPDATE_SYSTEM_CONFIG",
+                resource_type="system_configs",
+                resource_id=str(updated_config.id),
+                old_values=old_values,
+                new_values=new_values,
+                ip_address=ip_address
+            )
+            self.audit_repo.create_log(log_entry)
+            print(f"✅ [AUDIT] Admin {user_id} updated config.")
+        except Exception as e:
+            print(f"⚠️ [AUDIT FAIL] Could not write log: {e}")
+
+        return updated_config
     
     def get_global_stats(self):
         # 1. Số liệu Người dùng
@@ -155,3 +224,50 @@ class AdminService:
             "error_rates": error_chart,
             "total_samples": total_val
         }
+    
+    def get_audit_logs(self):
+        logs = self.audit_repo.get_recent_logs()
+        # Format dữ liệu trả về cho đẹp
+        return [
+            {
+                "id": str(log.id),
+                "actor": log.user.username if log.user else "Unknown",
+                "action": log.action,
+                "resource": f"{log.resource_type}/{log.resource_id}",
+                "ip": log.ip_address,
+                "time": log.created_at,
+                "changes": log.new_values # Hoặc log.old_values tùy bạn
+            }
+            for log in logs
+        ]
+    
+    def get_all_templates(self):
+        self.noti_repo.init_defaults() # Đảm bảo luôn có dữ liệu
+        return self.noti_repo.get_all()
+
+    def update_notification_template(self, code: str, data: TemplateUpdate, admin_id: str, ip: str):
+        # 1. Lấy dữ liệu từ Repo qua Interface
+        template = self.noti_repo.get_by_code(code)
+        if not template:
+             raise HTTPException(status_code=404, detail="Mẫu không tồn tại")
+
+        # 2. Cập nhật logic
+        template.subject = data.subject
+        template.content = data.content
+        
+        # 3. Lưu xuống DB qua Interface
+        updated_tpl = self.noti_repo.update(template)
+
+        # 4. Ghi Audit Log (Logic nghiệp vụ)
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=admin_id,
+                action="UPDATE_TEMPLATE",
+                resource_type="notification_templates",
+                resource_id=code,
+                new_values=data.model_dump(),
+                ip_address=ip
+            ))
+        except: pass
+        
+        return updated_tpl

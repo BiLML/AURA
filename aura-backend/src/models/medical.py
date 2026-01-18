@@ -20,6 +20,7 @@ class Patient(Base):
     clinic = relationship("Clinic", back_populates="patients")
     images = relationship("RetinalImage", back_populates="patient")
 
+    consent_for_training = Column(Boolean, default=False)
 class RetinalImage(Base):
     __tablename__ = "retinal_images"
 

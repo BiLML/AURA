@@ -4,7 +4,7 @@ from typing import Any, List
 from uuid import UUID
 
 from core.database import get_db
-from core.security import get_current_active_user
+from core.security import get_current_active_user, get_current_doctor
 from models.users import User
 from models.enums import UserRole
 
@@ -110,3 +110,19 @@ def get_report_detail_api(
         raise HTTPException(status_code=403, detail="Chỉ bác sĩ mới có quyền truy cập")
         
     return service.get_report_detail(record_id, current_user.id)
+
+@router.get("/reports/me")
+def get_my_sent_reports(
+    current_user: User = Depends(get_current_doctor),
+    service: DoctorService = Depends(get_doctor_service)
+):
+    return service.get_my_reports(current_user.id)
+
+@router.get("/stats")
+def get_doctor_dashboard_stats(
+    current_user: User = Depends(get_current_active_user),
+    service: DoctorService = Depends(get_doctor_service)
+):
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(status_code=403, detail="Quyền hạn không đủ")
+    return service.get_dashboard_stats(current_user.id)

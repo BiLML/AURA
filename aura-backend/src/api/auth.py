@@ -11,18 +11,27 @@ from schemas.user_schema import UserCreate, UserResponse, GoogleLoginSchema, Fac
 from infrastructure.repositories.user_repo import UserRepository
 from models.enums import UserStatus
 
+from infrastructure.repositories.notification_repo import NotificationRepository
+from infrastructure.repositories.user_notification_repo import UserNotificationRepository
 
 router = APIRouter()
 
 # Hàm Dependency Factory
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
-    repo = UserRepository(db)
-    return UserService(user_repo=repo, db=db) 
+    user_repo = UserRepository(db)
+    noti_template_repo = NotificationRepository(db) # <--- Mới
+    user_noti_repo = UserNotificationRepository(db) # <--- Mới
+    
+    return UserService(
+        user_repo=user_repo, 
+        noti_template_repo=noti_template_repo, # <--- Truyền vào
+        user_noti_repo=user_noti_repo,         # <--- Truyền vào
+        db=db
+    )
 
 @router.post("/register", response_model=UserResponse)
 def register(
     user_in: UserCreate, 
-    # 👇 SỬA: Inject Service vào tham số (Bỏ db thừa)
     service: UserService = Depends(get_user_service) 
 ):
     return service.register_user(user_in)
@@ -30,7 +39,6 @@ def register(
 @router.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), 
-    # 👇 SỬA: Inject Service vào tham số (Quan trọng nhất để fix lỗi 500)
     service: UserService = Depends(get_user_service)
 ):
     # form_data.username ở đây có thể là username hoặc email
@@ -61,38 +69,27 @@ def login(
 @router.post("/google-login")
 def google_login_api(
     schema: GoogleLoginSchema, 
-    # 👇 SỬA: Inject Service vào tham số
     service: UserService = Depends(get_user_service)
 ):
-    """
-    API này nhận Access Token từ React gửi lên
-    """
     return service.google_login(token=schema.token)
 
 @router.post("/facebook-login")
 def facebook_login_api(
     schema: FacebookLoginSchema, 
-    # 👇 SỬA: Inject Service vào tham số
     service: UserService = Depends(get_user_service)
 ):
-    """
-    API nhận Access Token và UserID từ React Facebook Login
-    """
     return service.facebook_login(token=schema.accessToken, user_id_from_fe=schema.userID)
 
 @router.post("/forgot-password")
 async def forgot_password_api(
     schema: ForgotPasswordSchema, 
-    # 👇 SỬA: Inject Service vào tham số
     service: UserService = Depends(get_user_service)
 ):
-    # Thêm 'await' vì service là async (gửi mail)
     return await service.forgot_password(schema.email)
 
 @router.post("/reset-password")
 def reset_password_api(
     schema: ResetPasswordSchema, 
-    # 👇 SỬA: Inject Service vào tham số
     service: UserService = Depends(get_user_service)
 ):
     return service.reset_password(token=schema.token, new_password=schema.new_password)

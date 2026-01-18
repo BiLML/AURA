@@ -4,24 +4,47 @@ from typing import List, Optional
 
 # Import Interface & Models
 from domain.models.ibilling_repository import IBillingRepository
-from models.billing import ServicePackage, Subscription
+from domain.models.iaudit_repository import IAuditRepository
+
+from models.billing import ServicePackage
+from models.audit_log import AuditLog 
 
 class BillingService:
-    def __init__(self, billing_repo: IBillingRepository, db=None): 
+    def __init__(self, billing_repo: IBillingRepository, audit_repo: IAuditRepository, db=None): 
         self.billing_repo = billing_repo
+        self.audit_repo = audit_repo
         self.db = db # Giữ lại nếu cần commit transaction phức tạp, nhưng nên hạn chế dùng
 
     # --- 1. ADMIN: TẠO GÓI (Thêm mới) ---
-    def create_package(self, name, price, limit, days, desc, role):
-        return self.billing_repo.create_package(name, price, limit, days, desc, role)
+    def create_package(self, name, price, limit, days, desc, role, admin_id: UUID, ip_address: str):
+        
+        # Logic cũ
+        new_pkg = self.billing_repo.create_package(name, price, limit, days, desc, role)
+
+        # --- THÊM LOGGING ---
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=admin_id,
+                action="CREATE_SERVICE_PACKAGE",
+                resource_type="service_packages",
+                resource_id=str(new_pkg.id),
+                old_values=None, # Tạo mới nên không có giá trị cũ
+                new_values={
+                    "name": name, 
+                    "price": float(price) if price else 0,
+                    "role": role
+                },
+                ip_address=ip_address
+            ))
+        except Exception as e: print(f"Log Error: {e}")
+
+        return new_pkg
 
     # --- 2. PUBLIC: LẤY DANH SÁCH GÓI ---
-    # (Khớp với hàm bạn gọi ở API: service.list_service_packages())
     def list_service_packages(self) -> List[ServicePackage]:
         return self.billing_repo.get_all_packages()
 
     # --- 3. USER: MUA GÓI ---
-    # (Khớp với hàm bạn gọi ở API: service.subscribe_user())
     def subscribe_user(self, user_id: UUID, package_id: UUID):
         # A. Kiểm tra gói tồn tại
         pkg = self.billing_repo.get_package_by_id(package_id)
@@ -68,3 +91,20 @@ class BillingService:
             "plan_name": sub.package.name if sub.package else "Unknown",
             "expiry": sub.expired_at
         }
+    
+    # --- [QUAN TRỌNG] 5. HÀM TRỪ LƯỢT (BỔ SUNG) ---
+    def deduct_credit(self, user_id: UUID) -> bool:
+        """
+        Kiểm tra và trừ 1 lượt của user.
+        Logic: Service lấy User ID -> Tìm Subscription ID -> Gọi Repo trừ tiền
+        """
+        # 1. Tìm gói đăng ký còn hạn của user
+        sub = self.billing_repo.get_active_subscription(user_id)
+        
+        # 2. Nếu không có gói hoặc hết lượt -> Trả về False
+        if not sub or sub.credits_left <= 0:
+            return False
+            
+        # 3. Gọi xuống Repo để thực hiện trừ (Atomic Update)
+        # Lưu ý: Repo deduct_credits nhận subscription_id, không phải user_id
+        return self.billing_repo.deduct_credits(sub.id)

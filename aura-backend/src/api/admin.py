@@ -1,5 +1,5 @@
 # FILE: api/admin.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -13,6 +13,7 @@ from services.admin_service import AdminService
 from schemas.user_schema import UserResponse
 from schemas.admin_schema import UpdateUserStatusRequest, UpdateUserRoleRequest
 from schemas.config_schema import SystemConfigResponse, SystemConfigUpdate
+from schemas.notification_schema import TemplateResponse, TemplateUpdate
 
 from models.users import User
 from models.enums import UserRole
@@ -22,6 +23,9 @@ from infrastructure.repositories.doctor_repo import DoctorRepository
 from infrastructure.repositories.medical_repo import MedicalRepository 
 from infrastructure.repositories.billing_repo import BillingRepository 
 from infrastructure.repositories.config_repo import ConfigRepository
+from infrastructure.repositories.audit_repo import AuditRepository
+from infrastructure.repositories.notification_repo import NotificationRepository
+from infrastructure.repositories.user_notification_repo import UserNotificationRepository
 
 router = APIRouter()
 
@@ -30,11 +34,17 @@ def get_admin_service(db: Session = Depends(get_db)) -> AdminService:
     medical_repo = MedicalRepository(db) 
     billing_repo = BillingRepository(db) 
     config_repo = ConfigRepository(db)
-    return AdminService(user_repo, medical_repo, billing_repo, config_repo)
+    audit_repo = AuditRepository(db)
+    noti_repo = NotificationRepository(db)
+
+    return AdminService(user_repo, medical_repo, billing_repo, config_repo, audit_repo, noti_repo)
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     repo = UserRepository(db)
-    return UserService(user_repo=repo, db=db)
+    noti_repo = NotificationRepository(db)
+    user_noti_repo = UserNotificationRepository(db)
+
+    return UserService(user_repo=repo, noti_template_repo=noti_repo, user_noti_repo=user_noti_repo, db=db)
 
 def get_doctor_service(db: Session = Depends(get_db)) -> DoctorService:
     doc_repo = DoctorRepository(db)
@@ -61,26 +71,40 @@ def get_admin_reports(
 def update_user_status(
     user_id: UUID,
     req: UpdateUserStatusRequest,
+    request: Request,
     current_user: User = Depends(get_current_admin),
     service: AdminService = Depends(get_admin_service)
 ):
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Không thể tự khóa tài khoản của chính mình")
-    service.update_user_status(user_id, req.status) 
-    return {"message": "Cập nhật trạng thái thành công"}
+        raise HTTPException(status_code=400, detail="Không thể tự khóa mình")
+    
+    # Gọi hàm mới với đủ tham số
+    service.update_user_status(
+        user_id=user_id, 
+        new_status=req.status, 
+        admin_id=current_user.id, # Truyền ID admin
+        ip_address=request.client.host # Truyền IP
+    ) 
+    return {"message": "Thành công"}
 
 # 2. Cập nhật Vai trò (Role)
 @router.put("/users/{user_id}/role")
 def update_user_role(
     user_id: UUID,
     req: UpdateUserRoleRequest,
+    request: Request,
     service: AdminService = Depends(get_admin_service),
     current_user: User = Depends(get_current_admin)
 ):
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Không thể tự đổi quyền của chính mình")
 
-    service.update_user_role(user_id, req.role)
+    service.update_user_role(
+        user_id, 
+        new_role=req.role,
+        admin_id=current_user.id,
+        ip_address=request.client.host
+    )
     return {"message": "Cập nhật vai trò thành công"}
 
 @router.get("/config", response_model=SystemConfigResponse)
@@ -102,10 +126,19 @@ def get_ai_config(
 @router.put("/config", response_model=SystemConfigResponse)
 def update_ai_config(
     config_in: SystemConfigUpdate,
+    request: Request, # <--- Thêm tham số Request
     current_user: User = Depends(get_current_admin),
     service: AdminService = Depends(get_admin_service)
 ):
-    return service.update_system_config(config_in)
+    # Lấy IP của client
+    client_ip = request.client.host
+    
+    # Gọi Service với đầy đủ thông tin ngữ cảnh
+    return service.update_system_config(
+        data=config_in, 
+        user_id=current_user.id, 
+        ip_address=client_ip
+    )
 
 @router.get("/stats/global")
 def get_global_dashboard_stats(
@@ -120,3 +153,25 @@ def get_analytics_data(
     current_user: User = Depends(get_current_admin) # Chỉ Admin mới được xem
 ):
     return service.get_system_analytics()
+
+# api/admin.py
+@router.get("/audit-logs")
+def view_audit_logs(
+    service: AdminService = Depends(get_admin_service),
+    current_user: User = Depends(get_current_admin)
+):
+    return service.get_audit_logs()
+
+@router.get("/templates", response_model=list[TemplateResponse])
+def get_templates(service: AdminService = Depends(get_admin_service)):
+    return service.get_all_templates()
+
+@router.put("/templates/{code}")
+def update_template(
+    code: str, 
+    data: TemplateUpdate, 
+    request: Request,
+    service: AdminService = Depends(get_admin_service),
+    current_user = Depends(get_current_admin)
+):
+    return service.update_notification_template(code, data, current_user.id, request.client.host)

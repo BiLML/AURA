@@ -12,17 +12,26 @@ from dotenv import load_dotenv
 # [PHẦN 1: CẤU HÌNH ĐƯỜNG DẪN & IMPORT]
 # ----------------------------------------------------------------------
 
-# Thêm đường dẫn root vào sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 1. Lấy vị trí của file env.py (.../aura-backend/alembic)
 current_path = os.path.dirname(os.path.abspath(__file__))
-root_path = os.path.join(current_path, "..")
-load_dotenv(os.path.join(root_path, ".env"))
-# Import Base và DATABASE_URL từ core/database (để đồng bộ kết nối)
+
+# 2. Lùi ra ngoài 1 cấp để lấy thư mục gốc dự án (.../aura-backend)
+project_root = os.path.dirname(current_path)
+
+# 3. Trỏ thẳng vào thư mục 'src' (.../aura-backend/src)
+src_path = os.path.join(project_root, 'src')
+
+# 4. Thêm đường dẫn src vào hệ thống
+sys.path.append(src_path)
+
+# [SỬA LỖI 1]: Dùng đúng tên biến project_root
+load_dotenv(os.path.join(project_root, ".env"))
+
+# Import Base và DATABASE_URL
 from core.database import DATABASE_URL 
 from models.base import Base
 
 # --- IMPORT TẤT CẢ CÁC MODELS CỦA BẠN TẠI ĐÂY ---
-# Lưu ý: Tên class (User, Clinic...) phải khớp với tên trong file model
 from models.users import User, Profile
 from models.clinic import Clinic
 from models.medical import (
@@ -30,17 +39,18 @@ from models.medical import (
     RetinalImage, 
     AIAnalysisResult, 
     DoctorValidation
-)  # [Fix] Đã sửa từ medical_record -> medical
+)
 from models.billing import ServicePackage, Subscription
 from models.chat import Message
 from models.system_config import SystemConfig
-# Nếu có thêm model mới, hãy thêm vào đây
+from models.audit_log import AuditLog  
+
 # ----------------------------------------------------------------------
 
 # Lấy config từ alembic.ini
 config = context.config
-# [QUAN TRỌNG] Ghi đè sqlalchemy.url bằng URL thực tế từ code python
-# Giúp chạy đúng trên Docker/Local mà không cần sửa file alembic.ini thủ công
+
+# Ghi đè URL kết nối bằng biến môi trường
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # Thiết lập log
@@ -51,7 +61,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
-    """Chế độ Offline: Tạo file SQL mà không cần kết nối DB (ít dùng)."""
+    """Chế độ Offline."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -65,9 +75,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Chế độ Online: Kết nối trực tiếp vào DB để tạo bảng."""
-    
-    # Tạo engine từ config đã được override URL ở trên
+    """Chế độ Online."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

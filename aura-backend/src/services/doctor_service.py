@@ -233,3 +233,94 @@ class DoctorService:
             
         return {"reports": results}
     
+    def get_my_reports(self, doctor_id: UUID):
+        reports = self.repo.get_feedback_by_doctor_id(doctor_id)
+        
+        results = []
+        for r in reports:
+            # 1. Lấy Image URL an toàn
+            img_url = None
+            ai_res = "N/A"
+            
+            # Kiểm tra từng cấp quan hệ để tránh crash nếu dữ liệu bị thiếu
+            if r.analysis:
+                ai_res = r.analysis.risk_level
+                if r.analysis.image:
+                    img_url = r.analysis.image.image_url
+            
+            # 2. Map các trường dữ liệu
+            results.append({
+                "id": str(r.id),
+                "image_url": img_url,
+                "ai_result": ai_res,
+                "doctor_confirm": r.doctor_confirm,
+                
+                # Model DoctorValidation dùng 'feedback_for_ai' để lưu nội dung báo cáo
+                "report_content": r.feedback_for_ai if r.feedback_for_ai else r.doctor_notes,
+                
+                # Nếu chưa có cột admin_feedback trong DB, tạm thời để None hoặc fix cứng
+                "admin_feedback": getattr(r, "admin_feedback", None),
+                
+                # Trạng thái giả định: Nếu đã có admin_feedback là FIXED, ngược lại là PENDING
+                "status": getattr(r, "status", "PENDING"),
+                
+                "created_at": r.created_at
+            })
+            
+        return results
+    
+    def get_dashboard_stats(self, doctor_id: UUID):
+        raw_stats = self.repo.get_doctor_statistics(doctor_id)
+        
+        # Tính tỷ lệ đồng thuận
+        total_reviews = raw_stats["total_reviews"]
+        agreed = raw_stats["agreed_reviews"]
+        accuracy_rate = 0
+        if total_reviews > 0:
+            accuracy_rate = round((agreed / total_reviews) * 100, 1)
+
+        # Map phân bố rủi ro
+        risk_map = raw_stats["risk_distribution"]
+        
+        # Gom nhóm cơ bản (Khởi tạo)
+        distribution = {
+            "safe": 0,
+            "mild": 0,
+            "moderate": 0,
+            "severe": 0,
+            "pdr": 0
+        }
+        
+        for risk, count in risk_map.items():
+            if not risk: continue
+            
+            # Chuẩn hóa về chữ hoa để so sánh chính xác
+            r_norm = risk.upper().strip()
+            
+            # 1. Nhóm PDR: Phải có chữ PDR nhưng KHÔNG ĐƯỢC chứa chữ NPDR
+            # (Vì Moderate NPDR hay Severe NPDR đều có chữ PDR bên trong nên bị bắt nhầm)
+            if "PDR" in r_norm and "NPDR" not in r_norm:
+                distribution["pdr"] += count
+
+            # 2. Nhóm Nặng (SEVERE NPDR)
+            elif "SEVERE" in r_norm or "NẶNG" in r_norm:
+                distribution["severe"] += count
+                
+            # 3. Nhóm Trung bình (MODERATE NPDR)
+            elif "MODERATE" in r_norm or "TRUNG BÌNH" in r_norm:
+                distribution["moderate"] += count
+                
+            # 4. Nhóm Nhẹ (MILD NPDR)
+            elif "MILD" in r_norm or "NHẸ" in r_norm or "EARLY" in r_norm:
+                distribution["mild"] += count
+                
+            # 5. Nhóm Bình thường (NORMAL)
+            elif "NORMAL" in r_norm or "BÌNH THƯỜNG" in r_norm or "NO DR" in r_norm:
+                distribution["safe"] += count
+
+        return {
+            "patient_count": raw_stats["total_patients"],
+            "reviewed_count": total_reviews,
+            "ai_agreement_rate": accuracy_rate,
+            "chart_data": distribution
+        }

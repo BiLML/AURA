@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaArrowLeft, FaCheckCircle, FaExclamationTriangle, FaUserMd } from 'react-icons/fa';
 
 const AnalysisBatchResult: React.FC = () => {
     const location = useLocation();
@@ -11,14 +11,43 @@ const AnalysisBatchResult: React.FC = () => {
     const [results, setResults] = useState(batchResults);
     const [filter, setFilter] = useState('ALL'); 
 
-    // Lấy thông tin User hiện tại để quyết định luồng
-    const getUserRole = () => {
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
-            return userInfo.role ? userInfo.role.toUpperCase() : 'USER';
-        } catch { return 'USER'; }
-    };
-    const currentRole = getUserRole();
+    // --- 1. THAY ĐỔI: Dùng State thay vì biến thường để UI tự update khi có API ---
+    const [currentRole, setCurrentRole] = useState<string>('');
+    const [isRoleLoaded, setIsRoleLoaded] = useState(false); // Cờ để biết đã check role xong chưa
+
+    // --- 2. LOGIC MỚI: Fetch Role từ Server (Copy từ Upload.tsx) ---
+    useEffect(() => {
+        const fetchUserRole = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) { 
+                // Fallback nếu không có token (tuỳ chọn navigate về login)
+                setIsRoleLoaded(true);
+                return; 
+            }
+
+            try {
+                const userRes = await fetch('http://localhost:8000/api/v1/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (userRes.ok) {
+                    const userData = await userRes.json();
+                    const info = userData.user_info || userData; 
+                    const rawRole = info.role || '';
+                    // Chuyển sang UpperCase để khớp với logic so sánh cũ (CLINIC, DOCTOR)
+                    setCurrentRole(rawRole.toUpperCase().trim());
+                }
+            } catch (error) {
+                console.error("Lỗi lấy thông tin user:", error);
+            } finally {
+                setIsRoleLoaded(true); // Đánh dấu là đã check xong
+            }
+        };
+
+        fetchUserRole();
+    }, []);
+
+    // Biến kiểm tra quyền (được tính toán lại mỗi khi currentRole đổi)
     const isClinicOrDoctor = currentRole === 'CLINIC' || currentRole === 'DOCTOR';
 
     if (!batchResults || batchResults.length === 0) {
@@ -47,8 +76,11 @@ const AnalysisBatchResult: React.FC = () => {
         return true;
     });
 
-    // --- LOGIC POLLING (TỰ ĐỘNG CẬP NHẬT) ---
+    // --- 3. LOGIC POLLING (Đã cập nhật dependency) ---
     useEffect(() => {
+        // Chỉ chạy polling khi đã xác định xong Role (isRoleLoaded = true)
+        if (!isRoleLoaded) return;
+
         const hasPending = results.some((r: any) => 
             r.diagnosis === "Đang xử lý..." || r.status === "PENDING" || r.diagnosis === "Unknown"
         );
@@ -57,10 +89,8 @@ const AnalysisBatchResult: React.FC = () => {
             const interval = setInterval(async () => {
                 const token = localStorage.getItem('token');
                 
-                // [QUAN TRỌNG] Chọn API Endpoint dựa trên Role
-                const apiEndpoint = isClinicOrDoctor
-                    ? `http://localhost:8000/api/v1/clinics/medical-records/?limit=50&t=${Date.now()}` // API cho Clinic
-                    : `http://localhost:8000/api/v1/medical-records/?limit=50&t=${Date.now()}`;       // API cho User thường
+                // Chọn API Endpoint dựa trên Role (Role giờ đã chính xác từ Server)
+                const apiEndpoint = `http://localhost:8000/api/v1/medical-records/?limit=50&t=${Date.now()}`;
 
                 try {
                     const res = await fetch(apiEndpoint, {
@@ -83,18 +113,19 @@ const AnalysisBatchResult: React.FC = () => {
                                 if (serverItem) {
                                     let updatedItem = { ...localItem };
                                     
-                                    // Logic lấy kết quả từ server (Clinic trả về cấu trúc hơi khác User chút nên cần check kỹ)
+                                    // Logic map dữ liệu server
                                     let analysis = serverItem.analysis_result;
                                     if (!analysis && serverItem.analysis_results && serverItem.analysis_results.length > 0) {
                                         analysis = serverItem.analysis_results[0];
                                     }
-                                    // Fallback nếu API clinic trả thẳng field
                                     const risk = analysis?.risk_level || serverItem.ai_risk_level;
 
                                     if (risk && risk !== "Processing..." && risk !== "Unknown") {
                                         hasUpdate = true;
                                         updatedItem = {
                                             ...updatedItem,
+                                            // Nếu là phòng khám, cập nhật thêm tên bệnh nhân nếu có
+                                            patient_name: serverItem.patient_name || localItem.patient_name, 
                                             diagnosis: risk,
                                             annotated_image_url: analysis?.annotated_image_url || serverItem.annotated_image_url,
                                             report: analysis?.ai_detailed_report || serverItem.ai_detailed_report || "Đã có kết quả.",
@@ -110,20 +141,22 @@ const AnalysisBatchResult: React.FC = () => {
                         });
                     }
                 } catch (e) { console.error("Polling error", e); }
-            }, 3000); // Poll mỗi 3s
+            }, 3000); 
 
             return () => clearInterval(interval);
         }
-    }, [results, isClinicOrDoctor]);
+    }, [results, isClinicOrDoctor, isRoleLoaded]); // Thêm isRoleLoaded vào dependency
     
     // --- HÀM XỬ LÝ CHUYỂN HƯỚNG ---
     const handleViewDetail = (item: any) => {
-        if (isClinicOrDoctor) {
-            // 👉 Điều hướng sang trang ClinicAnalysisResult
-            navigate(`/clinic/analysis/${item.id}`);
-        } else {
-            // 👉 Điều hướng sang trang Analysis (User thường)
-            navigate(`/analysis-result/${item.id}`, { 
+        if (currentRole === 'DOCTOR') {
+             navigate(`/doctor/analysis/${item.id}`);
+        } 
+        else if (currentRole === 'CLINIC') {
+             navigate(`/clinic/analysis/${item.id}`);
+        } 
+        else {
+             navigate(`/analysis-result/${item.id}`, { 
                 state: { 
                     result: {
                         id: item.id,
@@ -131,7 +164,8 @@ const AnalysisBatchResult: React.FC = () => {
                         ai_detailed_report: item.report,
                         annotated_image_url: item.annotated_image_url,
                         image_url: item.image_url || item.local_preview,
-                        upload_date: new Date().toISOString()
+                        upload_date: new Date().toISOString(),
+                        ai_analysis_status: "COMPLETED"
                     }
                 } 
             });
@@ -145,7 +179,8 @@ const AnalysisBatchResult: React.FC = () => {
                     <FaArrowLeft /> Tải thêm ảnh khác
                 </button>
                 <div style={styles.headerTitle}>
-                    <h2>KẾT QUẢ PHÂN TÍCH ({isClinicOrDoctor ? 'PHÒNG KHÁM' : 'CÁ NHÂN'})</h2>
+                    {/* Hiển thị tiêu đề dựa trên role đã tải */}
+                    <h2>KẾT QUẢ PHÂN TÍCH ({!isRoleLoaded ? '...' : (isClinicOrDoctor ? 'PHÒNG KHÁM' : 'CÁ NHÂN')})</h2>
                     <span style={styles.badge}>{batchResults.length} Ảnh</span>
                 </div>
                 <div style={styles.filterGroup}>
@@ -171,6 +206,14 @@ const AnalysisBatchResult: React.FC = () => {
                         </div>
 
                         <div style={styles.cardBody}>
+                            {/* --- FEATURE MỚI: HIỆN TÊN BỆNH NHÂN CHO PHÒNG KHÁM --- */}
+                            {isClinicOrDoctor && item.patient_name && (
+                                <div style={{marginBottom: '8px', fontSize: '13px', color: '#007bff', fontWeight: 'bold', display: 'flex', alignItems: 'center'}}>
+                                     <FaUserMd style={{marginRight: 5}}/> 
+                                     BN: {item.patient_name}
+                                </div>
+                            )}
+
                             <h3 style={{...styles.diagnosis, color: getStatusColor(item.diagnosis)}}>
                                 {item.diagnosis}
                             </h3>
@@ -191,7 +234,6 @@ const AnalysisBatchResult: React.FC = () => {
                                     </span>
                                 )}
                                 
-                                {/* GỌI HÀM ĐIỀU HƯỚNG ĐÃ TÁCH Ở TRÊN */}
                                 <button style={styles.detailBtn} onClick={() => handleViewDetail(item)}>
                                     Xem chi tiết
                                 </button>

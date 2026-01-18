@@ -10,19 +10,27 @@ class SystemConfig(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # --- 1. THAM SỐ AI (AI PARAMETERS) ---
-    confidence_threshold = Column(Float, default=0.85)  # Ngưỡng tin cậy (VD: >85% mới kết luận)
-    model_version = Column(String, default="v1.0.0")    # Phiên bản model đang chạy
+    # --- 1. THAM SỐ AI (Đã có) ---
+    confidence_threshold = Column(Float, default=0.85)
+    model_version = Column(String, default="v1.0.0")
     
-    # --- 2. NGƯỠNG CẢNH BÁO (WARNING THRESHOLDS) ---
-    # Mức độ nguy hiểm tối thiểu để gửi email cảnh báo ngay lập tức
-    # (VD: "SEVERE" hoặc "PDR")
+    # --- 2. NGƯỠNG CẢNH BÁO (Đã có) ---
     alert_risk_level = Column(String, default="SEVERE") 
     enable_email_alerts = Column(Boolean, default=True)
 
-    # --- 3. CHÍNH SÁCH HUẤN LUYỆN LẠI (RETRAINING POLICY) ---
-    auto_retrain = Column(Boolean, default=False)       # Tự động training lại hay không
-    retrain_frequency_days = Column(Integer, default=30) # Bao lâu training 1 lần (ngày)
-    min_new_data_samples = Column(Integer, default=100)  # Cần ít nhất bao nhiêu ảnh mới để training
+    # --- 3. CHÍNH SÁCH HUẤN LUYỆN LẠI (Đã có) ---
+    auto_retrain = Column(Boolean, default=False)
+    retrain_frequency_days = Column(Integer, default=30)
+    min_new_data_samples = Column(Integer, default=100)
 
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    # --- 4. CÀI ĐẶT QUYỀN RIÊNG TƯ & TUÂN THỦ (BỔ SUNG CHO FR-37) ---
+    # Tự động ẩn danh tên bệnh nhân khi gửi dữ liệu sang AI Core
+    anonymize_patient_data = Column(Boolean, default=True) 
+    
+    # Yêu cầu sự đồng ý của bệnh nhân trước khi dùng ảnh để train AI
+    require_training_consent = Column(Boolean, default=False)
+    
+    # Thời gian lưu trữ nhật ký hệ thống (ngày) trước khi tự động xóa
+    data_retention_days = Column(Integer, default=90)
+
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

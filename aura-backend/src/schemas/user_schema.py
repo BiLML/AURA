@@ -37,8 +37,9 @@ class UserResponse(BaseModel):
     status: UserStatus
     created_at: datetime
     
-    # Quan trọng: Trả về kèm Profile
     profile: Optional[ProfileResponse] = None
+
+    consent_for_training: bool = False
 
     class Config:
         from_attributes = True
@@ -76,3 +77,6 @@ class ForgotPasswordSchema(BaseModel):
 class ResetPasswordSchema(BaseModel):
     token: str
     new_password: str
+
+class UserPrivacyUpdate(BaseModel):
+    consent_for_training: bool # True = Đồng ý, False = Từ chối

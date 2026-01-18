@@ -11,13 +11,21 @@ from schemas.medical_schema import ImageResponse
 
 # 1. IMPORT SERVICE VÀ REPO THỰC
 from services.medical_service import MedicalService
+from services.billing_service import BillingService 
+
 from infrastructure.repositories.medical_repo import MedicalRepository
 from infrastructure.repositories.billing_repo import BillingRepository
+from infrastructure.repositories.audit_repo import AuditRepository
 
 router = APIRouter()
 
 
 # 2. HÀM DEPENDENCY ĐỂ KHỞI TẠO SERVICE
+def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
+    billing_repo = BillingRepository(db)
+    audit_repo = AuditRepository(db)
+    return BillingService(billing_repo=billing_repo, audit_repo=audit_repo, db=db)
+
 def get_medical_service(db: Session = Depends(get_db)) -> MedicalService:
     # Bước A: Tạo Repo thực cho Medical
     medical_repo = MedicalRepository(db)
@@ -36,10 +44,20 @@ def analyze_retina(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     # Thay vì tự khởi tạo, hãy nhờ FastAPI lấy hộ Service đã được lắp ráp
-    service: MedicalService = Depends(get_medical_service) 
+    service: MedicalService = Depends(get_medical_service), 
+    billing_service: BillingService = Depends(get_billing_service)
+    
 ):
     if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận file ảnh (jpg, png)")
+
+    has_credit = billing_service.deduct_credit(current_user.id)
+    
+    if not has_credit:
+        raise HTTPException(
+            status_code=402, # Mã lỗi Payment Required
+            detail="Bạn đã hết lượt phân tích. Vui lòng nạp thêm gói dịch vụ."
+        )
 
     try:
         # Gọi Service trực tiếp, không cần truyền db nữa
@@ -210,11 +228,30 @@ async def batch_analyze_retina(
     patient_id: str = Form(None),
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
-    service: MedicalService = Depends(get_medical_service)
+    service: MedicalService = Depends(get_medical_service),
+    billing_service: BillingService = Depends(get_billing_service)
 ):
     """
     API Batch Async: Nhận ảnh -> Tạo hàng đợi -> Trả về ngay lập tức
     """
+    total_cost = len(files)
+    
+    # 3. Kiểm tra số dư hiện tại trước
+    current_credits = billing_service.check_credits(current_user.id)
+    
+    if current_credits < total_cost:
+        raise HTTPException(
+            status_code=402, 
+            detail=f"Bạn không đủ lượt phân tích. Cần: {total_cost}, Hiện có: {current_credits}. Vui lòng nạp thêm."
+        )
+
+    # 4. Thực hiện trừ lượt (Lặp qua số lượng ảnh để trừ từng lượt)
+    # (Cách này tận dụng hàm deduct_credit có sẵn. Tốt nhất là viết thêm hàm deduct_multiple trong service sau này)
+    for _ in range(total_cost):
+        success = billing_service.deduct_credit(current_user.id)
+        if not success:
+            # Phòng trường hợp hiếm gặp (Race condition), double check lại
+            raise HTTPException(status_code=402, detail="Lỗi trong quá trình trừ lượt. Vui lòng thử lại.")
     # 1. Đọc dữ liệu file vào RAM ngay lập tức (Vì UploadFile sẽ đóng sau khi request kết thúc)
     # Lưu ý: Với 100 ảnh, RAM sẽ tăng. Nếu server yếu thì cần lưu tạm ra ổ cứng. 
     # Nhưng với demo đồ án thì đọc vào RAM vẫn ổn (100 ảnh x 2MB = 200MB RAM).
@@ -235,5 +272,6 @@ async def batch_analyze_retina(
     return {
         "status": "success",
         "message": f"Đã thêm {len(files)} ảnh vào hàng đợi xử lý.",
-        "data": initial_records
+        "data": initial_records,
+        "remaining_credits": current_credits - total_cost
     }

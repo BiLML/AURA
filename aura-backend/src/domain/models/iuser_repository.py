@@ -23,6 +23,10 @@ class IUserRepository(ABC):
     def get_by_id(self, user_id: str) -> Optional[User]: pass
 
     @abstractmethod
+    def update(self, user: User) -> User:
+        pass
+
+    @abstractmethod
     def create_user(self, user_data: UserCreate, hashed_password: str) -> User: pass
     
     @abstractmethod
@@ -43,3 +47,11 @@ class IUserRepository(ABC):
 
     @abstractmethod
     def count_patients_by_doctor_id(self, doctor_id: UUID) -> int: pass
+
+    @abstractmethod
+    def update_patient_consent(self, user_id: UUID, consent: bool) -> bool:
+        pass
+
+    @abstractmethod
+    def release_all_members_from_clinic(self, clinic_id: UUID):
+        pass

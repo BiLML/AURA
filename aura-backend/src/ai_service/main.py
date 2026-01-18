@@ -41,23 +41,6 @@ async def analyze_image(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/analyze/batch")
-async def analyze_batch(files: List[UploadFile] = File(...)):
-    print(f"🚀 Nhận batch request: {len(files)} ảnh")
-    
-    image_contents = []
-    for file in files:
-        content = await file.read()
-        image_contents.append(content)
-    
-    # Gọi hàm xử lý song song vừa sửa ở inference.py
-    results = run_batch_inference(image_contents)
-    
-    return {
-        "status": "success",
-        "results": results
-    }
-
 # --- 2. XỬ LÝ HÀNG LOẠT (SỬA LẠI CHO ĐÚNG NFR-2) ---
 @app.post("/analyze/batch")
 async def analyze_batch_images(files: List[UploadFile] = File(...)):
@@ -70,7 +53,7 @@ async def analyze_batch_images(files: List[UploadFile] = File(...)):
 
     print(f"🚀 Nhận batch request: {len(files)} ảnh")
     
-    image_contents = [await file.read() for file in files]
+    image_contents = []
     # 1. Đọc toàn bộ file vào RAM trước (IO Bound)
     for file in files:
         content = await file.read()

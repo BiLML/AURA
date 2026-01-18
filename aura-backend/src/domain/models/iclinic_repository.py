@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 
 from models.clinic import Clinic
 
@@ -25,3 +26,18 @@ class IClinicRepository(ABC):
 
     @abstractmethod
     def get_by_admin_id(self, admin_id: UUID) -> Optional[Clinic]: pass
+
+    @abstractmethod
+    def get_screening_stats_by_date(self, clinic_id: UUID, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Lấy thống kê kết quả sàng lọc theo khoảng thời gian"""
+        pass
+    
+    @abstractmethod
+    def get_high_risk_patients_in_range(self, clinic_id: UUID, start_date: datetime, end_date: datetime) -> List[Any]:
+        """Lấy danh sách bệnh nhân có kết quả nặng trong khoảng thời gian"""
+        pass
+
+    @abstractmethod
+    def get_research_data(self, clinic_id: UUID, start_date: datetime, end_date: datetime) -> List[Any]:
+        """Lấy dữ liệu thô (đã ẩn danh) phục vụ nghiên cứu"""
+        pass

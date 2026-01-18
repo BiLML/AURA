@@ -3,9 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { 
     FaPaperPlane, FaUserMd, FaUsers, FaClipboardList, FaCommentDots, 
     FaSearch, FaTimes, FaSignOutAlt, FaBell, FaChartBar, FaStethoscope,
-    FaFileAlt, FaEdit, FaCheckCircle, FaExclamationTriangle, FaCheck, FaCheckDouble 
+    FaFileAlt, FaExclamationTriangle, FaCheck, FaCheckDouble, FaRobot 
 } from 'react-icons/fa';
 
+interface MyReport {
+    id: string;
+    image_url: string | null;
+    ai_result: string;
+    doctor_confirm: string;
+    report_content: string;
+    admin_feedback: string | null;
+    status: string;
+    created_at: string;
+}
 // --- Dashboard Component (Bác sĩ) ---
 const DashboardDr: React.FC = () => {
     const navigate = useNavigate();
@@ -53,24 +63,45 @@ const DashboardDr: React.FC = () => {
         accuracy: 'CORRECT', // 'CORRECT' | 'INCORRECT'
         notes: ''
     });
-    const [submittedReports, setSubmittedReports] = useState<any[]>([]);
+
+    const [myReports, setMyReports] = useState<MyReport[]>([]);
+    const [loadingReports, setLoadingReports] = useState(false);
+
+    const [stats, setStats] = useState({
+        patient_count: 0,
+        reviewed_count: 0,
+        ai_agreement_rate: 0,
+        chart_data: { safe: 0, mild: 0, moderate: 0, severe: 0, pdr: 0 }
+    });
 
     // 1. Hàm lấy danh sách báo cáo
+    // 1. Hàm lấy danh sách báo cáo (ĐÃ SỬA URL VÀ CÁCH LẤY DATA)
     const fetchMyReports = useCallback(async () => {
+        setLoadingReports(true);
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://localhost:8000/api/v1/reports/me', {
+            // Lưu ý: Kiểm tra lại URL prefix xem là /doctor hay /doctors
+            const res = await fetch('http://localhost:8000/api/v1/doctor/reports/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                setSubmittedReports(data.reports || []); 
+                // Backend trả về mảng trực tiếp, không có key .reports
+                setMyReports(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             console.error("Lỗi tải báo cáo:", error);
+        } finally {
+            setLoadingReports(false);
         }
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'reports') {
+            fetchMyReports();
+        }
+    }, [activeTab, fetchMyReports]);
 
     // 2. Hàm gửi báo cáo
     const submitReport = async (e: React.FormEvent) => {
@@ -216,6 +247,8 @@ const DashboardDr: React.FC = () => {
         } catch (err) { return []; }
     };
 
+    
+
     const openChat = async (partnerId: string) => {
         setSelectedChatId(partnerId);
         const msgs = await fetchMessageHistory(partnerId);
@@ -306,6 +339,15 @@ const DashboardDr: React.FC = () => {
                     const data = await patientsRes.json(); 
                     setPatientsData(data.patients || []); 
                 }
+
+                const statsRes = await fetch('http://localhost:8000/api/v1/doctor/stats', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json();
+                    setStats(statsData);
+                }
+
                 await fetchChatData(token); 
             } catch (error) { console.error(error); } finally { setIsLoading(false); }
         };
@@ -336,30 +378,6 @@ const DashboardDr: React.FC = () => {
         }));
 
     const totalPending = pendingRecords.length;
-
-    const chartData = (() => {
-        let severe = 0, moderate = 0, mild = 0, safe = 0;
-        patientsData.forEach(p => {
-            const res = (p.latest_scan?.ai_result || '').toLowerCase();
-            if (res.includes('nặng') || res.includes('severe')) severe++;
-            else if (res.includes('trung bình') || res.includes('moderate')) moderate++;
-            else if (res.includes('nhẹ') || res.includes('mild')) mild++;
-            else safe++;
-        });
-        const max = Math.max(severe, moderate, mild, safe, 1);
-        return { severe, moderate, mild, safe, max };
-    })();
-
-    const handleOpenReport = () => {
-        setReportForm({
-            patientId: '', 
-            aiResult: 'Nguy cơ cao (AI)', 
-            doctorDiagnosis: '',
-            accuracy: 'CORRECT',
-            notes: ''
-        });
-        setShowReportModal(true);
-    };
 
     if (isLoading) return <div style={styles.loading}>Đang tải dữ liệu Bác sĩ...</div>;
 
@@ -441,85 +459,151 @@ const DashboardDr: React.FC = () => {
                     
                     {/* --- TAB HOME --- */}
                     {activeTab === 'home' && (
-                        <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
-                            {/* 1. GRID: THỐNG KÊ & BIỂU ĐỒ */}
-                            <div style={styles.statsGrid}>
-                                {/* Cột Trái: Cards (ĐÃ SỬA: Thêm height 100% để lấp đầy) */}
-                                <div style={{display:'flex', flexDirection:'column', gap:'20px', height: '100%'}}>
-                                    <div style={styles.statCard}>
-                                        <div style={styles.statIconBox}><FaUsers color="#3498db" size={24}/></div>
-                                        <div>
-                                            <div style={styles.statLabel}>Tổng Bệnh nhân</div>
-                                            <div style={styles.statValue}>{patientsData.length}</div>
-                                        </div>
-                                    </div>
-                                    <div style={styles.statCard}>
-                                        <div style={{...styles.statIconBox, background: totalPending > 0 ? '#fdecea' : '#e8f5e9'}}>
-                                            <FaClipboardList color={totalPending > 0 ? '#e74c3c' : '#2ecc71'} size={24}/>
-                                        </div>
-                                        <div>
-                                            <div style={styles.statLabel}>Hồ sơ cần xử lý</div>
-                                            <div style={{...styles.statValue, color: totalPending > 0 ? '#e74c3c' : '#2ecc71'}}>{totalPending}</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                            <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+                                                
+                                                {/* 1. GRID: THỐNG KÊ (Đã thêm 2 thẻ mới: Đã duyệt & Độ đồng thuận) */}
+                                                <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'20px'}}>
+                                                    <div style={styles.statCard}>
+                                                        <div style={styles.statIconBox}><FaUsers color="#3498db" size={24}/></div>
+                                                        <div>
+                                                            <div style={styles.statLabel}>Bệnh nhân phụ trách</div>
+                                                            <div style={styles.statValue}>{stats.patient_count}</div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div style={styles.statCard}>
+                                                        <div style={{...styles.statIconBox, background: totalPending > 0 ? '#fdecea' : '#e8f5e9'}}>
+                                                            <FaClipboardList color={totalPending > 0 ? '#e74c3c' : '#2ecc71'} size={24}/>
+                                                        </div>
+                                                        <div>
+                                                            <div style={styles.statLabel}>Cần xử lý</div>
+                                                            <div style={{...styles.statValue, color: totalPending > 0 ? '#e74c3c' : '#2ecc71'}}>{totalPending}</div>
+                                                        </div>
+                                                    </div>
 
-                                {/* Cột Phải: Biểu đồ CSS với trục tọa độ (GIỮ NGUYÊN CODE CHUẨN) */}
+                                                    {/* THẺ MỚI: Số ca đã duyệt */}
+                                                    <div style={styles.statCard}>
+                                                        <div style={{...styles.statIconBox, background:'#fff3e0'}}>
+                                                            <FaCheckDouble color="#f39c12" size={24}/>
+                                                        </div>
+                                                        <div>
+                                                            <div style={styles.statLabel}>Đã duyệt / Thẩm định</div>
+                                                            <div style={styles.statValue}>{stats.reviewed_count}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* THẺ MỚI: Độ đồng thuận với AI */}
+                                                    <div style={styles.statCard}>
+                                                        <div style={{...styles.statIconBox, background:'#e3f2fd'}}>
+                                                            <FaRobot color="#2980b9" size={24}/>
+                                                        </div>
+                                                        <div>
+                                                            <div style={styles.statLabel}>Đồng thuận với AI</div>
+                                                            <div style={{...styles.statValue, color:'#2980b9'}}>
+                                                                {stats.ai_agreement_rate}%
+                                                            </div>
+                                                            <div style={{fontSize:'10px', color:'#777'}}>Mức độ tin cậy model</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:'20px', alignItems:'stretch'}}>
+                                                    {/* --- BIỂU ĐỒ PHÂN BỐ RỦI RO (GIAO DIỆN MỚI) --- */}
                                 <div style={styles.chartCard}>
                                     <div style={styles.cardHeader}>
-                                        <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:8}}/> Phân bố Mức độ rủi ro</h3>
+                                        <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:10, color:'#555'}}/> Phân bố Rủi ro (Theo mức độ)</h3>
                                     </div>
-                                    
                                     <div style={styles.chartBody}>
+                                        
+                                        {/* 1. TRỤC Y */}
                                         <div style={styles.yAxis}>
-                                            {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((val) => (
-                                                <div key={val} style={styles.yAxisLabel}>
-                                                    {val}
-                                                </div>
-                                            ))}
+                                            <span>100%</span>
+                                            <span>75%</span>
+                                            <span>50%</span>
+                                            <span>25%</span>
+                                            <span>0%</span>
                                         </div>
 
+                                        {/* 2. KHUNG VẼ */}
                                         <div style={styles.plotArea}>
+                                            
+                                            {/* Lưới ngang */}
                                             <div style={styles.gridContainer}>
-                                                {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((val) => (
-                                                    <div key={val} style={styles.gridLine}></div>
-                                                ))}
+                                                <div style={styles.gridLine}></div>
+                                                <div style={styles.gridLine}></div>
+                                                <div style={styles.gridLine}></div>
+                                                <div style={styles.gridLine}></div>
+                                                <div style={{...styles.gridLine, borderBottom:'1px solid #eee'}}></div>
                                             </div>
 
+                                            {/* Các cột dữ liệu */}
                                             <div style={styles.barsContainer}>
-                                                <div style={styles.barColumn}>
-                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.safe, 100)}%`, background: '#2ecc71'}}>
-                                                        <span style={styles.barValueTop}>{chartData.safe}</span>
-                                                    </div>
-                                                    <div style={styles.xAxisLabel}>Bình thường</div>
-                                                </div>
+                                                {(() => {
+                                                    const total = stats.patient_count || 1; 
+                                                    // THÊM * 0.9: Giới hạn chiều cao cột tối đa là 90% khung vẽ để tạo khoảng trống phía trên
+                                                    const getHeight = (val: number) => `${Math.max((val / total) * 100 * 0.9, 0)}%`;
+                                                    
+                                                    return (
+                                                        <>
+                                                            {/* NHÓM 1: NORMAL*/}
+                                                            <div style={styles.barColumn}>
+                                                                {/* THAY ĐỔI: Dùng background gradient */}
+                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.safe), background: 'linear-gradient(to top, #2ecc71, #58d68d)'}}>
+                                                                    <span style={styles.barValueTop}>{stats.chart_data.safe}</span>
+                                                                </div>
+                                                                <div style={styles.xAxisLabel} title="Normal">Normal</div>
+                                                            </div>
 
-                                                <div style={styles.barColumn}>
-                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.mild, 100)}%`, background: '#f1c40f'}}>
-                                                        <span style={styles.barValueTop}>{chartData.mild}</span>
-                                                    </div>
-                                                    <div style={styles.xAxisLabel}>Nhẹ</div>
-                                                </div>
+                                                            {/* NHÓM 2: MILD  */}
+                                                            <div style={styles.barColumn}>
+                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.mild), background: 'linear-gradient(to top, #bd9a0d, #f2c615)'}}>
+                                                                    <span style={styles.barValueTop}>{stats.chart_data.mild}</span>
+                                                                </div>
+                                                                <div style={styles.xAxisLabel} title="Mild NPDR (Early Signs)">Mild NPDR</div>
+                                                            </div>
 
-                                                <div style={styles.barColumn}>
-                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.moderate, 100)}%`, background: '#e67e22'}}>
-                                                        <span style={styles.barValueTop}>{chartData.moderate}</span>
-                                                    </div>
-                                                    <div style={styles.xAxisLabel}>Trung bình</div>
-                                                </div>
+                                                            {/* NHÓM 3: MODERATE  */}
+                                                            <div style={styles.barColumn}>
+                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.moderate), background: 'linear-gradient(to top, #e67e22, #f39c12)'}}>
+                                                                    <span style={styles.barValueTop}>{stats.chart_data.moderate}</span>
+                                                                </div>
+                                                                <div style={styles.xAxisLabel} title="Moderate NPDR">Moderate NPDR</div>
+                                                            </div>
 
-                                                <div style={styles.barColumn}>
-                                                    <div style={{...styles.barFill, height: `${Math.min(chartData.severe, 100)}%`, background: '#e74c3c'}}>
-                                                        <span style={styles.barValueTop}>{chartData.severe}</span>
-                                                    </div>
-                                                    <div style={styles.xAxisLabel}>Nặng</div>
-                                                </div>
+                                                            {/* NHÓM 4*/}
+                                                            <div style={styles.barColumn}>
+                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.severe), background: 'linear-gradient(to top, #e74c3c, #c25c51)'}}>
+                                                                    <span style={styles.barValueTop}>{stats.chart_data.severe}</span>
+                                                                </div>
+                                                                <div style={styles.xAxisLabel} title="Severe NPDR">Severe</div>
+                                                            </div>
+
+                                                            {/* NHÓM 5: PDR */}
+                                                            <div style={styles.barColumn}>
+                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.pdr), background: 'linear-gradient(to top, #ff1900, #781106)'}}>
+                                                                    <span style={styles.barValueTop}>{stats.chart_data.pdr}</span>
+                                                                </div>
+                                                                <div style={styles.xAxisLabel} title="PDR">PDR</div>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                {/* Panel phụ: Thông tin thêm hoặc Action nhanh */}
+                                <div style={{...styles.card, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', padding:'20px', textAlign:'center'}}>
+                                    <FaStethoscope size={40} color="#3498db" style={{marginBottom:'15px'}}/>
+                                    <h3 style={{margin:'0 0 10px 0'}}>Bắt đầu phiên làm việc</h3>
+                                    <p style={{color:'#666', fontSize:'13px', marginBottom:'20px'}}>
+                                        Bạn có {totalPending} hồ sơ cần xem xét ưu tiên. Hãy kiểm tra các ca có nguy cơ cao trước.
+                                    </p>
+                                    <button onClick={()=>setActiveTab('patients')} style={styles.primaryBtnSm}>
+                                        Xem danh sách bệnh nhân
+                                    </button>
+                                </div>
                             </div>
-
                             {/* 2. TABLE: CẢNH BÁO */}
                             <div style={styles.card}>
                                 <div style={{...styles.cardHeader, borderLeft: '4px solid #e74c3c'}}>
@@ -717,66 +801,65 @@ const DashboardDr: React.FC = () => {
                     {activeTab === 'reports' && (
                         <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                             
-                            <div style={styles.card}>
-                                <div style={styles.cardHeader}>
-                                    <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:8}}/> Thống kê & Phản hồi chuyên môn</h3>
-                                    
-                                    <button style={styles.primaryBtnSm} onClick={handleOpenReport}>
-                                        <FaEdit style={{marginRight:5}}/> Viết báo cáo / Góp ý AI
-                                    </button>
-                                </div>
-                                <div style={{padding:'25px', display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'20px'}}>
-                                    <div style={{...styles.reportBox, borderLeft:'4px solid #3498db'}}>
-                                        <div style={styles.reportLabel}>Tổng hồ sơ</div>
-                                        <div style={styles.reportValue}>{patientsData.length}</div>
-                                    </div>
-                                    <div style={{...styles.reportBox, borderLeft:'4px solid #e74c3c'}}>
-                                        <div style={styles.reportLabel}>Ca Nặng</div>
-                                        <div style={{...styles.reportValue, color:'#e74c3c'}}>{chartData.severe}</div>
-                                    </div>
-                                    <div style={{...styles.reportBox, borderLeft:'4px solid #f1c40f'}}>
-                                        <div style={styles.reportLabel}>Ca Nhẹ</div>
-                                        <div style={{...styles.reportValue, color:'#f39c12'}}>{chartData.mild}</div>
-                                    </div>
-                                    <div style={{...styles.reportBox, borderLeft:'4px solid #2ecc71'}}>
-                                        <div style={styles.reportLabel}>Bình thường</div>
-                                        <div style={{...styles.reportValue, color:'#2ecc71'}}>{chartData.safe}</div>
-                                    </div>
+                            {/* Form gửi báo cáo mới */}
+                            <div style={styles.reportBox}>
+                                <h3 style={{margin:'0 0 10px 0', color:'#007bff'}}>Gửi báo cáo lỗi mới</h3>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                    <p style={{fontSize:'13px', color:'#666', margin:0}}>
+                                        Nếu phát hiện AI chẩn đoán sai, hãy vào <strong>Chi tiết bệnh nhân</strong> {'->'} <strong>Báo cáo sai sót</strong>.
+                                    </p>
                                 </div>
                             </div>
 
+                            {/* Danh sách báo cáo đã gửi */}
                             <div style={styles.card}>
                                 <div style={styles.cardHeader}>
-                                    <h3 style={styles.pageTitle}><FaFileAlt style={{marginRight:8}}/> Lịch sử Báo cáo gửi Admin</h3>
+                                    <h3 style={{margin:0, fontSize:'16px', display:'flex', alignItems:'center'}}>
+                                        <FaExclamationTriangle style={{marginRight:10, color:'#e67e22'}}/> 
+                                        Lịch sử báo cáo của tôi
+                                    </h3>
+                                    <button onClick={fetchMyReports} style={styles.btnSecondary}><FaChartBar/> Làm mới</button>
                                 </div>
-                                <table style={styles.table}>
-                                    <thead>
-                                        <tr>
-                                            <th style={styles.th}>Ngày gửi</th>
-                                            <th style={styles.th}>Loại báo cáo</th>
-                                            <th style={styles.th}>Liên quan đến</th>
-                                            <th style={styles.th}>Trạng thái</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {submittedReports.map((rp, idx) => (
-                                            <tr key={idx} style={styles.tr}>
-                                                <td style={styles.td}>{new Date(rp.created_at || rp.date).toLocaleDateString()}</td>
-                                                <td style={styles.td}>
-                                                    <span style={{
-                                                        display:'flex', alignItems:'center', gap:'5px', fontWeight:'bold',
-                                                        color: (rp.accuracy || '').includes('INCORRECT') ? '#e74c3c' : '#2ecc71'
-                                                    }}>
-                                                        {(rp.accuracy || '').includes('INCORRECT') ? <FaExclamationTriangle/> : <FaCheckCircle/>}
-                                                        {rp.accuracy === 'INCORRECT' ? 'Báo cáo sai lệch' : 'Xác nhận đúng'}
-                                                    </span>
-                                                </td>
-                                                <td style={styles.td}>{rp.patient_id}</td>
-                                                <td style={styles.td}><span style={{background:'#e3f2fd', color:'#2196f3', padding:'3px 8px', borderRadius:'10px', fontSize:'11px'}}>Đã gửi</span></td>
+                                
+                                <div style={{padding:'20px'}}>
+                                    <table style={{width:'100%', borderCollapse:'collapse', fontSize:'14px'}}>
+                                        <thead>
+                                            <tr style={{background:'#f8f9fa', color:'#555', borderBottom:'2px solid #eee'}}>
+                                                <th style={{padding:'12px', textAlign:'left'}}>Thời gian</th>
+                                                <th style={{padding:'12px', textAlign:'left'}}>Ảnh Scan</th>
+                                                <th style={{padding:'12px', textAlign:'left'}}>Nội dung báo cáo</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {loadingReports ? (
+                                                <tr><td colSpan={5} style={{padding:'20px', textAlign:'center'}}>Đang tải...</td></tr>
+                                            ) : myReports.length === 0 ? (
+                                                <tr><td colSpan={5} style={{padding:'20px', textAlign:'center', color:'#999'}}>Bạn chưa gửi báo cáo nào.</td></tr>
+                                            ) : (
+                                                myReports.map(report => (
+                                                    <tr key={report.id} style={{borderBottom:'1px solid #eee'}}>
+                                                        <td style={{padding:'12px'}}>
+                                                            {new Date(report.created_at).toLocaleDateString('vi-VN')}<br/>
+                                                            <small style={{color:'#999'}}>{new Date(report.created_at).toLocaleTimeString('vi-VN')}</small>
+                                                        </td>
+                                                        <td style={{padding:'12px'}}>
+                                                            {report.image_url ? (
+                                                                <a href={report.image_url} target="_blank" rel="noreferrer">
+                                                                    <img src={report.image_url} alt="Scan" style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}}/>
+                                                                </a>
+                                                            ) : <span style={{color:'#ccc'}}>Không có ảnh</span>}
+                                                        </td>
+                                                        <td style={{padding:'12px'}}>
+                                                            <div style={{fontWeight:'bold', color:'#333'}}>BS: {report.doctor_confirm}</div>
+                                                            <div style={{color:'#555', marginTop:'4px'}}>{report.report_content}</div>
+                                                            <div style={{fontSize:'11px', color:'#999', marginTop:'2px'}}>AI: {report.ai_result}</div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -955,50 +1038,45 @@ const styles: {[key:string]: React.CSSProperties} = {
     statValue: { fontSize:'24px', fontWeight:'bold', color:'#333' },
     
     // Chart Container
-    chartCard: { 
+chartCard: { 
         background:'white', 
         borderRadius:'12px', 
         boxShadow:'0 2px 10px rgba(0,0,0,0.03)', 
         border:'1px solid #eaeaea', 
         display:'flex', 
         flexDirection:'column',
-        height: '320px'
+        height: '380px', // Tăng chiều cao để thoáng hơn
+        position: 'relative'
     },
     chartBody: {
         display: 'flex',
         padding: '20px',
         flex: 1,
-        alignItems: 'stretch'
+        alignItems: 'stretch',
+        position: 'relative', // QUAN TRỌNG: Giữ các cột nằm trong khung
     },
     yAxis: {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        paddingRight: '10px',
+        paddingRight: '15px',
         borderRight: '1px solid #eee',
         color: '#999',
         fontSize: '11px',
         textAlign: 'right',
-        minWidth: '30px',
-        paddingBottom: '20px'
-    },
-    yAxisLabel: {
-        height: '0px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        transform: 'translateY(50%)'
+        minWidth: '40px',
+        paddingBottom: '30px' // Khớp với chiều cao nhãn trục X
     },
     plotArea: {
         flex: 1,
-        position: 'relative',
-        marginLeft: '10px',
+        position: 'relative', // Khung tọa độ cho các cột
+        marginLeft: '15px',
         display: 'flex',
         flexDirection: 'column'
     },
     gridContainer: {
         position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 20,
+        top: 0, left: 0, right: 0, bottom: 30, // Bottom 30 để chừa chỗ cho trục X
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -1016,7 +1094,7 @@ const styles: {[key:string]: React.CSSProperties} = {
         display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'flex-end',
-        paddingBottom: '20px'
+        paddingBottom: '30px' // Đẩy cột lên trên nhãn trục X
     },
     barColumn: {
         display: 'flex',
@@ -1024,34 +1102,35 @@ const styles: {[key:string]: React.CSSProperties} = {
         alignItems: 'center',
         justifyContent: 'flex-end',
         height: '100%',
-        width: '15%',
+        width: '12%', // Độ rộng cột
         position: 'relative'
     },
     barFill: {
         width: '100%',
-        borderRadius: '4px 4px 0 0',
+        borderRadius: '6px 6px 0 0',
         position: 'relative',
-        transition: 'height 0.5s ease-in-out',
-        minHeight: '0px'
+        transition: 'height 0.8s cubic-bezier(0.4, 0, 0.2, 1)', // Hiệu ứng mượt
+        minHeight: '4px', // Luôn hiện 1 chút dù giá trị là 0
+        cursor: 'pointer'
     },
     barValueTop: {
         position: 'absolute',
-        top: '-20px',
+        top: '-25px',
         width: '100%',
         textAlign: 'center',
-        fontSize: '12px',
+        fontSize: '13px',
         fontWeight: 'bold',
         color: '#333'
     },
     xAxisLabel: {
-        marginTop: '10px',
-        fontSize: '12px',
+        position: 'absolute',
+        bottom: '-30px',
+        width: '150%',
+        textAlign: 'center',
+        fontSize: '11px',
         color: '#666',
         fontWeight: '600',
-        textAlign: 'center',
-        position: 'absolute',
-        bottom: '-25px',
-        width: '150%'
+        whiteSpace: 'nowrap'
     },
     barLabel: { marginTop:'10px', fontSize:'12px', color:'#666', textAlign:'center' },
 

@@ -5,6 +5,8 @@ from uuid import UUID
 
 from models.users import User, Profile
 from models.enums import UserRole, UserStatus
+from models.medical import Patient 
+
 from schemas.user_schema import UserCreate
 
 # Import Interface (Đã sửa lại đường dẫn đúng)
@@ -23,6 +25,12 @@ class UserRepository(IUserRepository):
 
     def get_by_id(self, user_id: str):
         return self.db.query(User).filter(User.id == user_id).first()
+    
+    def update(self, user: User) -> User:
+        self.db.add(user)      # Đánh dấu object này cần lưu
+        self.db.commit()       # Đẩy xuống DB
+        self.db.refresh(user)  # Lấy lại dữ liệu mới nhất (nếu có trigger/default)
+        return user
 
     def create_user(self, user_data: UserCreate, hashed_password: str):
         try:
@@ -121,3 +129,28 @@ class UserRepository(IUserRepository):
             User.assigned_doctor_id == doctor_id,
             User.role == UserRole.USER # Đảm bảo chỉ đếm bệnh nhân
         ).count()
+    
+    def update_patient_consent(self, user_id: UUID, consent: bool) -> bool:
+        # Tìm hồ sơ bệnh nhân của user này
+        patient = self.db.query(Patient).filter(Patient.user_id == user_id).first()
+        
+        if patient:
+            patient.consent_for_training = consent
+            self.db.commit()
+            return True
+        else:
+            # Nếu user chưa có hồ sơ bệnh nhân (ví dụ mới đăng ký), có thể tự tạo mới
+            # Hoặc trả về False tùy logic. Ở đây ta trả về False cho đơn giản.
+            return False
+        
+    def release_all_members_from_clinic(self, clinic_id: UUID):
+        """
+        Gỡ bỏ liên kết (clinic_id = NULL) cho tất cả Bác sĩ và Bệnh nhân
+        đang thuộc về phòng khám này.
+        """
+        # Cập nhật hàng loạt (Bulk Update) cho hiệu suất cao
+        self.db.query(User).filter(User.clinic_id == clinic_id).update(
+            {User.clinic_id: None}, 
+            synchronize_session=False
+        )
+        self.db.commit()

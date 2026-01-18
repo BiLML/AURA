@@ -1,14 +1,14 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc, func, case
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 # Import Interface
 from domain.models.idoctor_repository import IDoctorRepository
 
 # Import Models
 from models.users import User
-from models.medical import RetinalImage, AIAnalysisResult
+from models.medical import RetinalImage, AIAnalysisResult, DoctorValidation
 from models.enums import UserRole
 
 class DoctorRepository(IDoctorRepository):
@@ -31,3 +31,62 @@ class DoctorRepository(IDoctorRepository):
         ).order_by(
             desc(RetinalImage.created_at)
         ).first()
+    
+    def get_feedback_by_doctor_id(self, doctor_id: UUID):
+        """Lấy danh sách báo cáo do bác sĩ gửi, kèm theo thông tin AI và Ảnh"""
+        return (
+            self.db.query(DoctorValidation)
+            .options(
+                # Load: Validation -> Analysis -> Image
+                joinedload(DoctorValidation.analysis).joinedload(AIAnalysisResult.image)
+            )
+            .filter(DoctorValidation.doctor_id == doctor_id)
+            .order_by(DoctorValidation.created_at.desc())
+            .all()
+        )
+    
+    def get_doctor_statistics(self, doctor_id: UUID) -> Dict[str, Any]:
+        # 1. Thống kê Bệnh nhân (Tổng số & Phân loại rủi ro)
+        # Lấy danh sách bệnh nhân của bác sĩ
+        patient_ids_query = self.db.query(User.id).filter(
+            User.assigned_doctor_id == doctor_id,
+            User.role == UserRole.USER
+        )
+        total_patients = patient_ids_query.count()
+
+        # 2. Thống kê Hoạt động Duyệt (Validation)
+        # Đếm tổng số lần bác sĩ đã đánh giá
+        total_reviews = self.db.query(DoctorValidation).filter(
+            DoctorValidation.doctor_id == doctor_id
+        ).count()
+
+        # Đếm số lần đồng ý với AI (is_correct = True)
+        agreed_reviews = self.db.query(DoctorValidation).filter(
+            DoctorValidation.doctor_id == doctor_id,
+            DoctorValidation.is_correct == True
+        ).count()
+
+        # 3. Thống kê Phân bố rủi ro (Dựa trên kết quả khám mới nhất của các bệnh nhân được gán)
+        # Logic này hơi phức tạp, ta có thể query đơn giản từ bảng AIAnalysisResult 
+        # kết hợp với RetinalImage của các bệnh nhân thuộc bác sĩ này.
+        
+        risk_stats = (
+            self.db.query(
+                AIAnalysisResult.risk_level,
+                func.count(AIAnalysisResult.id)
+            )
+            .join(RetinalImage, AIAnalysisResult.image_id == RetinalImage.id)
+            .filter(RetinalImage.uploader_id.in_(patient_ids_query)) # Chỉ lấy bệnh nhân của bác sĩ
+            .group_by(AIAnalysisResult.risk_level)
+            .all()
+        )
+        
+        # Chuyển risk_stats thành dict
+        risk_map = {r[0]: r[1] for r in risk_stats if r[0]}
+
+        return {
+            "total_patients": total_patients,
+            "total_reviews": total_reviews,
+            "agreed_reviews": agreed_reviews,
+            "risk_distribution": risk_map
+        }

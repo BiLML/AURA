@@ -5,7 +5,7 @@ import {
     FaCheck, FaUsers, FaUserShield, FaBell, FaCheckDouble,
     FaEdit, FaLock, FaUnlock, FaBan, FaTimes, FaSave, 
     FaCogs, FaRobot, FaMoneyBillWave, FaPlus,
-    FaChartPie
+    FaChartPie, FaHistory, FaEnvelopeOpenText
 } from 'react-icons/fa';
 
 import { 
@@ -54,6 +54,9 @@ interface AIConfig {
     auto_retrain: boolean;
     retrain_frequency_days: number;
     min_new_data_samples: number;
+    anonymize_patient_data: boolean;
+    require_training_consent: boolean;
+    data_retention_days: number;
 }
 
 interface ServicePackage {
@@ -67,13 +70,32 @@ interface ServicePackage {
     is_active?: boolean;
 }
 
+interface AuditLogEntry {
+    id: string;
+    actor: string;
+    action: string;
+    resource: string;
+    ip: string;
+    time: string;
+    changes: any;
+}
+
+interface NotificationTemplate {
+    code: string; 
+    name: string;
+    subject: string;
+    content: string;
+    available_variables: string;
+    updated_at: string;
+}
+
 const DashboardAdmin: React.FC = () => {
     const navigate = useNavigate();
     
     // --- STATE UI ---
     // Thêm tab 'config' vào danh sách tabs
-    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config' | 'billing' | 'analytics'>('users'); 
-    const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active'>('pending');
+    const [activeTab, setActiveTab] = useState<'users' | 'clinics' | 'feedback' | 'config' | 'billing' | 'analytics' | 'audit' | 'communication'>('users'); 
+    const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active' | 'suspended'>('pending');
     const [adminName, setAdminName] = useState('Admin');
     const [isLoading, setIsLoading] = useState(true);
 
@@ -82,7 +104,8 @@ const DashboardAdmin: React.FC = () => {
     const [clinicRequests, setClinicRequests] = useState<ClinicRequest[]>([]);
     const [activeClinics, setActiveClinics] = useState<ClinicRequest[]>([]);
     const [feedbackList, setFeedbackList] = useState<any[]>([]); 
-    
+    const [suspendedClinics, setSuspendedClinics] = useState<ClinicRequest[]>([]);
+    const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     // state cho Billing & Packages
     const [packageList, setPackageList] = useState<ServicePackage[]>([]);
     const [showPackageModal, setShowPackageModal] = useState(false);
@@ -111,7 +134,10 @@ const DashboardAdmin: React.FC = () => {
         enable_email_alerts: true,
         auto_retrain: false,
         retrain_frequency_days: 30,
-        min_new_data_samples: 100
+        min_new_data_samples: 100,
+        anonymize_patient_data: true,
+        require_training_consent: false,
+        data_retention_days: 90,
     });
 
     const [analyticsData, setAnalyticsData] = useState({
@@ -128,6 +154,9 @@ const DashboardAdmin: React.FC = () => {
     // UI Refs
     const [showUserMenu, setShowUserMenu] = useState(false);
     const profileRef = useRef<HTMLDivElement>(null);
+
+    const [templates, setTemplates] = useState<NotificationTemplate[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<NotificationTemplate | null>(null);
 
     // --- FETCH DATA ---
     const fetchData = useCallback(async () => {
@@ -176,9 +205,10 @@ const DashboardAdmin: React.FC = () => {
             const allClinicsRes = await fetch('http://127.0.0.1:8000/api/v1/clinics/', { headers: { 'Authorization': `Bearer ${token}` } });
             if (allClinicsRes.ok) {
                 const allClinics = await allClinicsRes.json();
-                const active = allClinics.filter((c: any) => c.status === 'APPROVED' || c.status === 'SUSPENDED');
-                setActiveClinics(active);
+                setActiveClinics(allClinics.filter((c: any) => c.status === 'APPROVED'));
+                setSuspendedClinics(allClinics.filter((c: any) => c.status === 'SUSPENDED'));
             }
+            
 
             // 5. Reports/Feedback
             try {
@@ -221,6 +251,28 @@ const DashboardAdmin: React.FC = () => {
                     setAnalyticsData(anaData);
                 }
             } catch (e) { console.error("Analytics fetch error", e); }
+
+            // 9. Audit Logs (Mới)
+            try {
+                const auditRes = await fetch('http://127.0.0.1:8000/api/v1/admin/audit-logs', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (auditRes.ok) {
+                    const logs = await auditRes.json();
+                    setAuditLogs(logs);
+                }
+            } catch (e) { console.error("Lỗi fetch audit logs", e); }
+
+            // 10. Notification Templates (FR-39)
+            try {
+                const tplRes = await fetch('http://127.0.0.1:8000/api/v1/admin/templates', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (tplRes.ok) {
+                    const tplData = await tplRes.json();
+                    setTemplates(tplData);
+                }
+            } catch (e) { }
 
 
             const statsRes = await fetch('http://127.0.0.1:8000/api/v1/admin/stats/global', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -371,6 +423,27 @@ const DashboardAdmin: React.FC = () => {
             alert("Lỗi kết nối server");
         }
     };
+
+    const handleSaveTemplate = async () => {
+        if (!selectedTemplate) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/templates/${selectedTemplate.code}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    subject: selectedTemplate.subject,
+                    content: selectedTemplate.content
+                })
+            });
+            if (res.ok) {
+                alert("Đã lưu mẫu thông báo!");
+                fetchData(); // Reload lại để cập nhật list
+            } else {
+                alert("Lỗi khi lưu.");
+            }
+        } catch (e) { alert("Lỗi kết nối."); }
+    };
     
     // Hàm helper format tiền VND
     const formatCurrency = (amount: number) => {
@@ -505,6 +578,28 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Audit Logs Tab */}
+                        <div onClick={() => setActiveTab('audit')} style={activeTab === 'audit' ? styles.statCardActive : styles.statCard}>
+                            <div style={{...styles.iconBox, background: activeTab === 'audit' ? '#e7f1ff' : '#f1f5f9', color: activeTab === 'audit' ? '#007bff' : '#64748b'}}>
+                                <FaHistory size={24}/> {/* Nhớ import FaHistory từ react-icons/fa */}
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Nhật ký</span>
+                                <span style={styles.statCount}>Giám sát</span>
+                            </div>
+                        </div>
+
+                        {/* 6. Thêm Nút trên Menu Stats Grid (Dưới cùng) */}
+                        <div onClick={() => setActiveTab('communication')} style={activeTab === 'communication' ? styles.statCardActive : styles.statCard}>
+                            <div style={{...styles.iconBox, background: activeTab === 'communication' ? '#e7f1ff' : '#f1f5f9', color: activeTab === 'communication' ? '#007bff' : '#64748b'}}>
+                                <FaEnvelopeOpenText size={24}/>
+                            </div>
+                            <div style={styles.statInfo}>
+                                <span style={styles.statLabel}>Thông báo & Email</span>
+                                <span style={styles.statCount}>{templates.length} Mẫu</span>
+                            </div>
+                        </div>
+
                         <div style={styles.statCard}>
                             <div style={{...styles.iconBox, background: '#e0f2fe', color: '#0284c7'}}>
                                 <FaCheckDouble size={24}/> {/* Nhớ import icon này */}
@@ -603,6 +698,10 @@ const DashboardAdmin: React.FC = () => {
                                                 onClick={() => setClinicViewMode('active')}
                                                 style={clinicViewMode === 'active' ? styles.subTabActive : styles.subTab}
                                             >Hoạt động ({activeClinics.length})</button>
+                                            <button 
+                                                onClick={() => setClinicViewMode('suspended')}
+                                                style={clinicViewMode === 'suspended' ? styles.subTabActive : styles.subTab}
+                                            >Đình chỉ ({suspendedClinics.length})</button>
                                         </div>
                                     </div>
                                 </div>
@@ -617,35 +716,51 @@ const DashboardAdmin: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {(clinicViewMode === 'pending' ? clinicRequests : activeClinics).length === 0 ? (
-                                                <tr><td colSpan={4} style={styles.emptyState}>Không có dữ liệu.</td></tr>
-                                            ) : (
-                                                (clinicViewMode === 'pending' ? clinicRequests : activeClinics).map(item => (
+                                            {/* Logic chọn danh sách hiển thị */}
+                                            {(() => {
+                                                let currentList: ClinicRequest[] = [];
+                                                if (clinicViewMode === 'pending') currentList = clinicRequests;
+                                                else if (clinicViewMode === 'active') currentList = activeClinics;
+                                                else currentList = suspendedClinics;
+
+                                                if (currentList.length === 0) {
+                                                    return <tr><td colSpan={4} style={styles.emptyState}>Không có dữ liệu.</td></tr>;
+                                                }
+
+                                                return currentList.map(item => (
                                                     <tr key={item.id} style={styles.tr}>
                                                         <td style={styles.td}><b>{item.name}</b><br/><small>{item.address}</small></td>
                                                         <td style={styles.td}>{item.owner_name}</td>
                                                         <td style={styles.td}>
                                                             {clinicViewMode === 'pending' ? <span style={styles.badgeWarning}>Chờ duyệt</span> :
-                                                                item.status === 'SUSPENDED' ? <span style={styles.badgeDanger}>Đình chỉ</span> : <span style={styles.badgeSuccess}>Hoạt động</span>
+                                                             clinicViewMode === 'suspended' ? <span style={styles.badgeDanger}>Đình chỉ</span> : 
+                                                             <span style={styles.badgeSuccess}>Hoạt động</span>
                                                             }
                                                         </td>
                                                         <td style={styles.td}>
                                                             <div style={{display:'flex', gap:'8px'}}>
-                                                                {clinicViewMode === 'pending' ? (
+                                                                {/* CASE 1: CHỜ DUYỆT */}
+                                                                {clinicViewMode === 'pending' && (
                                                                     <>
                                                                         <button onClick={() => handleClinicAction(item.id, 'APPROVED')} style={styles.btnApprove}><FaCheck/> Duyệt</button>
                                                                         <button onClick={() => handleClinicAction(item.id, 'REJECTED')} style={styles.btnReject}><FaTimes/> Hủy</button>
                                                                     </>
-                                                                ) : (
-                                                                    item.status === 'SUSPENDED' ?
-                                                                    <button onClick={() => handleClinicAction(item.id, 'ACTIVE')} style={styles.btnApprove}><FaUnlock/> Mở lại</button> :
+                                                                )}
+
+                                                                {/* CASE 2: ĐANG HOẠT ĐỘNG -> Nút ĐÌNH CHỈ */}
+                                                                {clinicViewMode === 'active' && (
                                                                     <button onClick={() => handleClinicAction(item.id, 'SUSPENDED')} style={styles.btnReject}><FaBan/> Đình chỉ</button>
+                                                                )}
+
+                                                                {/* CASE 3: ĐANG BỊ ĐÌNH CHỈ -> Nút MỞ LẠI */}
+                                                                {clinicViewMode === 'suspended' && (
+                                                                    <button onClick={() => handleClinicAction(item.id, 'ACTIVE')} style={styles.btnApprove}><FaUnlock/> Mở lại</button>
                                                                 )}
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ))
-                                            )}
+                                                ));
+                                            })()}
                                         </tbody>
                                     </table>
                                 </div>
@@ -688,64 +803,83 @@ const DashboardAdmin: React.FC = () => {
                             </>
                         )}
 
-                        {/* TAB 4: AI CONFIG (ĐÃ SỬA LỖI STYLE) */}
+                        {/* TAB 4: AI CONFIG & PRIVACY */}
                         {activeTab === 'config' && (
                             <div style={{padding:'30px'}}>
                                 <div style={styles.cardHeader}>
-                                    <h3 style={styles.cardTitle}><FaRobot style={{marginRight:10, color:'#007bff'}}/>Tham số AI & Chính sách</h3>
-                                    <button onClick={handleSaveConfig} style={styles.btnPrimary}><FaSave/> Lưu cấu hình</button>
+                                    <h3 style={styles.cardTitle}><FaUserShield style={{marginRight:10, color:'#007bff'}}/>Cấu hình Hệ thống & Bảo mật</h3>
+                                    <button onClick={handleSaveConfig} style={styles.btnPrimary}><FaSave/> Lưu thay đổi</button>
                                 </div>
                                 
-                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', marginTop:'20px'}}>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'20px', marginTop:'20px'}}>
                                     
-                                    {/* CỘT 1: THAM SỐ CƠ BẢN */}
-                                    <div style={{background:'#f8fafc', padding:'20px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
-                                        <h4 style={{marginBottom:'15px', color:'#334155'}}>⚙️ Tham số AI & Cảnh báo</h4>
+                                    {/* CỘT 1: THAM SỐ AI */}
+                                    <div style={{background:'white', padding:'20px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
+                                        <h4 style={{marginBottom:'15px', color:'#334155', borderBottom:'1px solid #eee', paddingBottom:'10px'}}>🤖 Tham số AI</h4>
                                         
                                         <label style={styles.label}>Phiên bản Model:</label>
                                         <input style={styles.input} type="text" value={aiConfig.model_version} onChange={(e)=>setAiConfig({...aiConfig, model_version: e.target.value})} />
 
-                                        <label style={styles.label}>Ngưỡng tin cậy (Confidence Threshold): {(aiConfig.confidence_threshold * 100).toFixed(0)}%</label>
+                                        <label style={styles.label}>Ngưỡng tin cậy: {(aiConfig.confidence_threshold * 100).toFixed(0)}%</label>
                                         <input type="range" min="0.5" max="0.99" step="0.01" style={{width:'100%'}} 
                                             value={aiConfig.confidence_threshold} 
                                             onChange={(e)=>setAiConfig({...aiConfig, confidence_threshold: parseFloat(e.target.value)})} 
                                         />
-                                        <p style={{fontSize:'12px', color:'#64748b', marginTop:'5px'}}>* Nếu độ tin cậy thấp hơn mức này, AI sẽ đánh dấu là "Không chắc chắn".</p>
 
                                         <label style={{...styles.label, marginTop:'15px'}}>Mức cảnh báo Email:</label>
                                         <select style={styles.select} value={aiConfig.alert_risk_level} onChange={(e)=>setAiConfig({...aiConfig, alert_risk_level: e.target.value})}>
-                                            <option value="MODERATE">Moderate (Trung bình)</option>
-                                            <option value="SEVERE">Severe (Nghiêm trọng)</option>
-                                            <option value="PDR">PDR (Rất nghiêm trọng)</option>
+                                            <option value="MODERATE">Moderate</option>
+                                            <option value="SEVERE">Severe</option>
+                                            <option value="PDR">PDR</option>
                                         </select>
 
-                                        <div style={{marginTop:'15px', display:'flex', alignItems:'center', gap:'10px'}}>
+                                        <div style={{marginTop:'15px', display:'flex', gap:'10px'}}>
                                             <input type="checkbox" checked={aiConfig.enable_email_alerts} onChange={(e)=>setAiConfig({...aiConfig, enable_email_alerts: e.target.checked})} />
-                                            <span style={{fontSize:'14px', fontWeight:'600'}}>Bật gửi Email cảnh báo bác sĩ</span>
+                                            <span style={{fontSize:'13px'}}>Gửi Email cảnh báo bác sĩ</span>
                                         </div>
                                     </div>
 
-                                    {/* CỘT 2: HUẤN LUYỆN LẠI (Đã sửa lỗi tại đây) */}
-                                    <div style={{background:'#f8fafc', padding:'20px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
-                                        <h4 style={{marginBottom:'15px', color:'#334155'}}>🔄 Chính sách Huấn luyện lại (Retraining)</h4>
+                                    {/* CỘT 2: HUẤN LUYỆN LẠI */}
+                                    <div style={{background:'white', padding:'20px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
+                                        <h4 style={{marginBottom:'15px', color:'#334155', borderBottom:'1px solid #eee', paddingBottom:'10px'}}>🔄 Auto-Training</h4>
                                         
-                                        <div style={{marginBottom:'15px', display:'flex', alignItems:'center', gap:'10px'}}>
+                                        <div style={{marginBottom:'15px', display:'flex', gap:'10px'}}>
                                             <input type="checkbox" checked={aiConfig.auto_retrain} onChange={(e)=>setAiConfig({...aiConfig, auto_retrain: e.target.checked})} />
-                                            <span style={{fontSize:'14px', fontWeight:'600'}}>Bật tự động huấn luyện (Auto-Retrain)</span>
+                                            <span style={{fontSize:'13px', fontWeight:'bold'}}>Bật tự động huấn luyện</span>
                                         </div>
 
-                                        <label style={styles.label}>Tần suất huấn luyện (Ngày):</label>
+                                        <label style={styles.label}>Chu kỳ (Ngày):</label>
                                         <input style={styles.input} type="number" value={aiConfig.retrain_frequency_days} onChange={(e)=>setAiConfig({...aiConfig, retrain_frequency_days: parseInt(e.target.value)})} />
 
-                                        {/* 👇 ĐÂY LÀ DÒNG ĐÃ SỬA LỖI: Gộp 2 style lại thành 1 */}
-                                        <label style={{...styles.label, marginTop:'15px'}}>Dữ liệu mới tối thiểu (Samples):</label>
-                                        
+                                        <label style={styles.label}>Dữ liệu mới tối thiểu:</label>
                                         <input style={styles.input} type="number" value={aiConfig.min_new_data_samples} onChange={(e)=>setAiConfig({...aiConfig, min_new_data_samples: parseInt(e.target.value)})} />
-                                        
-                                        <div style={{marginTop:'20px', padding:'10px', background:'#e0f2fe', borderRadius:'6px', fontSize:'13px', color:'#0369a1'}}>
-                                            ℹ️ <b>Ghi chú:</b> Hệ thống sẽ quét dữ liệu nhãn mới từ Feedback của bác sĩ để tinh chỉnh Model theo chu kỳ trên.
-                                        </div>
                                     </div>
+
+                                    {/* CỘT 3: QUYỀN RIÊNG TƯ (MỚI THÊM) */}
+                                    <div style={{background:'#fff7ed', padding:'20px', borderRadius:'8px', border:'1px solid #fed7aa'}}>
+                                        <h4 style={{marginBottom:'15px', color:'#c2410c', borderBottom:'1px solid #ffedd5', paddingBottom:'10px'}}>🛡️ Quyền riêng tư (Privacy)</h4>
+                                        
+                                        <div style={{marginBottom:'15px', display:'flex', alignItems:'start', gap:'10px'}}>
+                                            <input type="checkbox" style={{marginTop:'4px'}} checked={aiConfig.anonymize_patient_data} onChange={(e)=>setAiConfig({...aiConfig, anonymize_patient_data: e.target.checked})} />
+                                            <div>
+                                                <span style={{fontSize:'13px', fontWeight:'bold', display:'block'}}>Ẩn danh dữ liệu (Anonymize)</span>
+                                                <span style={{fontSize:'11px', color:'#666'}}>Tự động xóa tên/SĐT khi gửi sang AI Core.</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{marginBottom:'15px', display:'flex', alignItems:'start', gap:'10px'}}>
+                                            <input type="checkbox" style={{marginTop:'4px'}} checked={aiConfig.require_training_consent} onChange={(e)=>setAiConfig({...aiConfig, require_training_consent: e.target.checked})} />
+                                            <div>
+                                                <span style={{fontSize:'13px', fontWeight:'bold', display:'block'}}>Yêu cầu đồng ý (Consent)</span>
+                                                <span style={{fontSize:'11px', color:'#666'}}>Chỉ dùng ảnh có sự đồng ý của bệnh nhân để Train.</span>
+                                            </div>
+                                        </div>
+
+                                        <label style={styles.label}>Lưu nhật ký trong (Ngày):</label>
+                                        <input style={styles.input} type="number" value={aiConfig.data_retention_days} onChange={(e)=>setAiConfig({...aiConfig, data_retention_days: parseInt(e.target.value)})} />
+                                        <span style={{fontSize:'11px', color:'#666'}}>Nhật ký kiểm toán cũ hơn sẽ tự động bị xóa.</span>
+                                    </div>
+
                                 </div>
                             </div>
                         )}
@@ -876,6 +1010,112 @@ const DashboardAdmin: React.FC = () => {
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 7: AUDIT LOGS */}
+                        {activeTab === 'audit' && (
+                            <>
+                                <div style={styles.cardHeader}>
+                                    <h3 style={styles.cardTitle}><FaHistory style={{marginRight:10, color:'#007bff'}}/>Nhật ký Hoạt động Hệ thống</h3>
+                                </div>
+                                <div style={styles.tableContainer}>
+                                    <table style={styles.table}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.th}>THỜI GIAN</th>
+                                                <th style={styles.th}>NGƯỜI THỰC HIỆN</th>
+                                                <th style={styles.th}>HÀNH ĐỘNG</th>
+                                                <th style={styles.th}>ĐỐI TƯỢNG</th>
+                                                <th style={styles.th}>CHI TIẾT THAY ĐỔI</th>
+                                                <th style={styles.th}>IP</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {auditLogs.length === 0 ? (
+                                                <tr><td colSpan={6} style={styles.emptyState}>Chưa có nhật ký nào.</td></tr>
+                                            ) : (
+                                                auditLogs.map(log => (
+                                                    <tr key={log.id} style={styles.tr}>
+                                                        <td style={styles.td}>{new Date(log.time).toLocaleString('vi-VN')}</td>
+                                                        <td style={styles.td}><b>{log.actor}</b></td>
+                                                        <td style={styles.td}>
+                                                            <span style={{
+                                                                ...styles.roleBadge, 
+                                                                background: log.action.includes('UPDATE') ? '#fff7ed' : '#eef2ff',
+                                                                color: log.action.includes('UPDATE') ? '#c2410c' : '#3730a3'
+                                                            }}>
+                                                                {log.action}
+                                                            </span>
+                                                        </td>
+                                                        <td style={styles.td}>{log.resource}</td>
+                                                        <td style={{...styles.td, maxWidth:'300px', fontSize:'11px', fontFamily:'monospace', color:'#475569'}}>
+                                                            {JSON.stringify(log.changes).substring(0, 100)}...
+                                                        </td>
+                                                        <td style={styles.td}>{log.ip}</td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+
+                        {activeTab === 'communication' && (
+                            <div style={{display:'flex', height:'600px'}}>
+                                {/* LEFT SIDEBAR: LIST */}
+                                <div style={{width:'300px', borderRight:'1px solid #e2e8f0', overflowY:'auto'}}>
+                                    <div style={{padding:'15px', background:'#f8fafc', borderBottom:'1px solid #eee', fontWeight:'bold'}}>
+                                        Danh sách Mẫu
+                                    </div>
+                                    {templates.map(tpl => (
+                                        <div 
+                                            key={tpl.code}
+                                            onClick={() => setSelectedTemplate(tpl)}
+                                            style={{
+                                                padding:'15px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
+                                                background: selectedTemplate?.code === tpl.code ? '#eff6ff' : 'white',
+                                                borderLeft: selectedTemplate?.code === tpl.code ? '4px solid #007bff' : '4px solid transparent'
+                                            }}
+                                        >
+                                            <div style={{fontWeight:'600', color:'#334155'}}>{tpl.name}</div>
+                                            <div style={{fontSize:'11px', color:'#94a3b8', marginTop:'4px'}}>{tpl.code}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* RIGHT CONTENT: EDITOR */}
+                                <div style={{flex:1, padding:'25px', display:'flex', flexDirection:'column'}}>
+                                    {selectedTemplate ? (
+                                        <>
+                                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+                                                <h3 style={{margin:0, color:'#0f172a'}}>{selectedTemplate.name}</h3>
+                                                <button onClick={handleSaveTemplate} style={styles.btnPrimary}><FaSave/> Lưu Mẫu</button>
+                                            </div>
+
+                                            <label style={styles.label}>Tiêu đề Email (Subject):</label>
+                                            <input 
+                                                style={styles.input} 
+                                                value={selectedTemplate.subject}
+                                                onChange={(e) => setSelectedTemplate({...selectedTemplate, subject: e.target.value})}
+                                            />
+
+                                            <label style={styles.label}>Nội dung (Hỗ trợ HTML cơ bản):</label>
+                                            <textarea 
+                                                style={{...styles.input, height:'300px', fontFamily:'monospace', lineHeight:'1.5'}}
+                                                value={selectedTemplate.content}
+                                                onChange={(e) => setSelectedTemplate({...selectedTemplate, content: e.target.value})}
+                                            />
+                                            
+                                            <div style={{marginTop:'15px', padding:'10px', background:'#fff7ed', borderRadius:'6px', fontSize:'12px', color:'#c2410c'}}>
+                                                <b>💡 Các biến có thể sử dụng:</b> {selectedTemplate.available_variables ? selectedTemplate.available_variables.split(',').map(v => `{${v.trim()}}`).join(', ') : 'Không có'}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={styles.emptyState}>👈 Chọn một mẫu bên trái để chỉnh sửa</div>
+                                    )}
                                 </div>
                             </div>
                         )}

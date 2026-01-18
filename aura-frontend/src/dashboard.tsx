@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
     FaPaperPlane, FaTrash, FaImage, FaFileAlt, FaLock,
     FaHome, FaComments, FaHospital, FaCreditCard, 
-    FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory 
+    FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory,
+    FaCog, FaToggleOn, FaToggleOff, FaUserShield 
 } from 'react-icons/fa';
 
 interface ServicePackage {
@@ -45,6 +46,9 @@ const Dashboard: React.FC = () => {
     // State giao diện
     const [activeTab, setActiveTab] = useState<string>('home');
     const [showUserMenu, setShowUserMenu] = useState(false);
+
+    // [THÊM STATE THÔNG BÁO]
+    const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
 
     // --- STATE FORM ĐĂNG KÝ PHÒNG KHÁM ---
@@ -61,10 +65,14 @@ const Dashboard: React.FC = () => {
     const [clinicImages, setClinicImages] = useState<{ front: File | null, back: File | null }>({ front: null, back: null });
     const [previewImages, setPreviewImages] = useState<{ front: string | null, back: string | null }>({ front: null, back: null });
 
+    // State bảo mật
+    const [privacyConsent, setPrivacyConsent] = useState(false);
 // --- 2. THÊM STATE CHO BILLING ---
     const [packages, setPackages] = useState<ServicePackage[]>([]);
     const [mySub, setMySub] = useState<UserSubscription>({ active: false, credits: 0, plan_name: 'Free', expiry: null });
     const [isBuying, setIsBuying] = useState(false);
+
+    
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
     const fetchChatData = useCallback(async () => {
@@ -169,6 +177,27 @@ const Dashboard: React.FC = () => {
         }
         fetchChatData(); 
     };
+
+    const fetchNotifications = useCallback(async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            const res = await fetch('http://127.0.0.1:8000/api/v1/users/me/notifications', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.notifications || []);
+            }
+        } catch (e) { console.error(e); }
+    }, []);
+
+    useEffect(() => {
+        fetchNotifications();
+        // Polling 10s một lần cho nhẹ user
+        const interval = setInterval(fetchNotifications, 10000);
+        return () => clearInterval(interval);
+    }, [fetchNotifications]);
 
     // --- 4. CÁC HÀM XỬ LÝ SỰ KIỆN KHÁC ---
     const handleSendMessage = async (e: React.FormEvent) => {
@@ -277,7 +306,8 @@ const Dashboard: React.FC = () => {
                 setUserName(info.username || info.userName || '');
                 setUserRole(info.role);
                 setFullName(userProfile.full_name || info.full_name || '');
-                
+                setPrivacyConsent(userData.consent_for_training || false);
+
                 await fetchMedicalRecords(); 
                 await fetchChatData(); 
                 await fetchBillingData();
@@ -286,6 +316,30 @@ const Dashboard: React.FC = () => {
         };
         initData();
     }, [navigate, fetchChatData, fetchMedicalRecords]);
+
+    const handleTogglePrivacy = async () => {
+        const newValue = !privacyConsent;
+        setPrivacyConsent(newValue); // Optimistic UI update
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/users/me/privacy', {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ consent_for_training: newValue })
+            });
+            if (!res.ok) {
+                setPrivacyConsent(!newValue); // Revert nếu lỗi
+                alert("Lỗi cập nhật cài đặt!");
+            }
+        } catch (e) {
+            setPrivacyConsent(!newValue);
+            alert("Lỗi kết nối server");
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -400,6 +454,16 @@ const Dashboard: React.FC = () => {
     const recentNotifications = historyData.slice(0, 5);
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
 
+    useEffect(() => {
+    if (activeTab === 'payments') {
+        fetchBillingData();
+    } else if (activeTab === 'home') {
+        fetchMedicalRecords();
+        fetchBillingData();
+    } else if (activeTab === 'messages') {
+        fetchChatData();
+    }
+}, [activeTab]); // Chạy ngay lập tức mỗi khi activeTab thay đổi
 
     // --- RENDER CONTENT ---
     const renderContent = () => {
@@ -650,6 +714,33 @@ if (activeTab === 'messages') {
             </div>
         );
 
+        if (activeTab === 'settings') {
+            return (
+                <div style={styles.card}>
+                    <div style={styles.cardHeader}>
+                        <h2 style={styles.pageTitle}><FaUserShield style={{marginRight:10, color:'#007bff'}}/> Quyền riêng tư & Dữ liệu</h2>
+                    </div>
+                    <div style={{padding:'30px'}}>
+                        <div style={{
+                            display:'flex', justifyContent:'space-between', alignItems:'center', 
+                            padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px',
+                            background: privacyConsent ? '#f0fdf4' : '#fff'
+                        }}>
+                            <div style={{maxWidth:'80%'}}>
+                                <h4 style={{margin:'0 0 5px 0', fontSize:'16px', color:'#333'}}>Đồng ý chia sẻ dữ liệu ẩn danh</h4>
+                                <p style={{margin:0, fontSize:'13px', color:'#666', lineHeight:'1.5'}}>
+                                    Cho phép AURA sử dụng hình ảnh võng mạc của bạn (đã được xóa tên và thông tin cá nhân) để huấn luyện và cải thiện độ chính xác của AI.
+                                </p>
+                            </div>
+                            <div onClick={handleTogglePrivacy} style={{cursor:'pointer', fontSize:'35px', color: privacyConsent ? '#16a34a' : '#ccc', display:'flex', alignItems:'center'}}>
+                                {privacyConsent ? <FaToggleOn size={40}/> : <FaToggleOff size={40}/>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // 4. HOME (DASHBOARD) - PHẦN QUAN TRỌNG ĐÃ ĐƯỢC FIX
         return (
             <div style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
@@ -747,6 +838,7 @@ if (activeTab === 'messages') {
                     <div style={activeTab === 'messages' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('messages')}><FaComments style={styles.menuIcon} /> Tin nhắn {unreadMessagesCount > 0 && <span style={styles.badgeRed}>{unreadMessagesCount}</span>}</div>
                     <div style={activeTab === 'clinic-register' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('clinic-register')}><FaHospital style={styles.menuIcon} /> Đăng ký Phòng khám</div>
                     <div style={activeTab === 'payments' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('payments')}><FaCreditCard style={styles.menuIcon} /> Thanh toán</div>
+                    <div style={activeTab === 'settings' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('settings')}><FaCog style={styles.menuIcon} /> Cài đặt</div>
                 </nav>
                 <div style={styles.sidebarFooter}><button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button></div>
             </aside>
@@ -754,11 +846,29 @@ if (activeTab === 'messages') {
                 <header style={styles.header}>
                     <div style={styles.headerRight}>
                         <div style={{position:'relative'}} ref={notificationRef}>
-                             <button style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}><FaBell color="#555" size={18}/></button>
-                             {showNotifications && (
-                                <div style={styles.notificationDropdown}>
-                                    <div style={styles.dropdownHeader}>Thông báo</div>
-                                    {recentNotifications.length > 0 ? recentNotifications.map((n:any)=><div key={n.id} style={styles.notificationItem} onClick={()=>goToDetail(n.id)}>{n.result}</div>) : <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>}
+                            <button style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}><FaBell color="#555" size={18}/></button>
+                            {showNotifications && (
+                                <div style={{
+                                    position: 'absolute', right: 0, top: '50px', width: '300px', 
+                                    background: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.2)', 
+                                    borderRadius: '8px', overflow: 'hidden'
+                                }}>
+                                    <div style={{padding: '10px', fontWeight: 'bold', borderBottom: '1px solid #eee'}}>Thông báo</div>
+                                    <div style={{maxHeight: '300px', overflowY: 'auto'}}>
+                                        {recentNotifications.length > 0 ? recentNotifications.map((n:any)=><div key={n.id} style={styles.notificationItem} onClick={()=>goToDetail(n.id)}>{n.result}</div>) : <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>}
+                                        {notifications.length > 0 ? notifications.map((n) => (
+                                            <div key={n.id} style={{
+                                                padding: '12px', borderBottom: '1px solid #f0f0f0',
+                                                background: n.is_read ? 'white' : '#f0f9ff'
+                                            }}>
+                                                <div style={{fontWeight: '600', fontSize: '13px', marginBottom: '4px'}}>{n.title}</div>
+                                                <div style={{fontSize: '12px', color: '#555'}}>{n.content}</div>
+                                                <div style={{fontSize: '10px', color: '#999', marginTop: '5px'}}>
+                                                    {new Date(n.created_at).toLocaleString('vi-VN')}
+                                                </div>
+                                            </div>
+                                        )) : <div style={{padding:'20px', textAlign:'center', color:'#999'}}>Không có thông báo</div>}
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -37,3 +37,4 @@ class ClinicStatus(str, enum.Enum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     PENDING = "PENDING"
+    SUSPENDED = "SUSPENDED"
