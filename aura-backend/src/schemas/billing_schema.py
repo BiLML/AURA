@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 # --- 1. GÓI DỊCH VỤ ---
@@ -39,3 +39,13 @@ class SubscriptionResponse(BaseModel):
 # --- 3. INPUT ---
 class SubscribeRequest(BaseModel):
     package_id: UUID
+
+class TransactionResponse(BaseModel):
+    id: UUID
+    amount: Decimal
+    status: str
+    created_at: datetime
+    package_name: Optional[str] = "Unknown" # Để hiển thị tên gói
+
+    class Config:
+        from_attributes = True

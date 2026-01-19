@@ -12,6 +12,7 @@
   "dependencies": {
     "@greatsumini/react-facebook-login": "^3.4.0",
     "@react-oauth/google": "^0.12.2",
+    "framer-motion": "^12.27.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",

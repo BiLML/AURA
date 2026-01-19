@@ -2,11 +2,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request # <--- [ADD] Request
 from sqlalchemy.orm import Session
 from uuid import UUID
+from typing import List
 
 from core.database import get_db
 from core.security import get_current_user, get_current_admin # <--- [ADD] get_current_admin
+
 from services.billing_service import BillingService
-from schemas.billing_schema import PackageResponse, SubscriptionResponse, SubscribeRequest, PackageCreate
+
+from schemas.billing_schema import PackageResponse, SubscriptionResponse, SubscribeRequest, PackageCreate, TransactionResponse
+
 from models.users import User
 from models.enums import UserRole
 
@@ -66,3 +70,10 @@ def get_my_usage(
     service: BillingService = Depends(get_billing_service)
 ):
     return service.get_usage_status(current_user.id)
+@router.get("/my-transactions", response_model=List[TransactionResponse])
+def get_my_transaction_history(
+    current_user: User = Depends(get_current_user),
+    service: BillingService = Depends(get_billing_service)
+):
+    """Lấy lịch sử giao dịch của người dùng đang đăng nhập"""
+    return service.get_user_history(current_user.id)

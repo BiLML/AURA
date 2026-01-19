@@ -4,14 +4,13 @@ import {
     FaUser, FaEnvelope, FaPhone, FaArrowLeft, FaSave, 
     FaIdCard, FaGlobe, FaVenusMars, FaRulerVertical, FaWeight, 
     FaMapMarkerAlt, FaSignOutAlt, FaCamera, FaSpinner, 
-    FaBirthdayCake // Import thêm icon bánh sinh nhật
+    FaBirthdayCake
 } from 'react-icons/fa';
 
 // --- INTERFACES ---
 interface ProfileState {
     email: string;
     phone: string;
-    // SỬA 1: Đổi age thành date_of_birth
     date_of_birth: string; 
     hometown: string;
     insurance_id: string; 
@@ -28,10 +27,9 @@ const ProfilePage: React.FC = () => {
     const [userName, setUserName] = useState(''); 
     const [userRole, setUserRole] = useState('');
     
-    // SỬA 2: State khởi tạo
     const [profileData, setProfileData] = useState<ProfileState>({
         email: '', phone: '', 
-        date_of_birth: '', // Khởi tạo rỗng
+        date_of_birth: '',
         hometown: '',
         insurance_id: '', height: '', weight: '', gender: '', nationality: '', full_name:''
     });
@@ -60,12 +58,10 @@ const ProfilePage: React.FC = () => {
                 setUserName(info.username || ''); 
                 setUserRole(info.role || '');
                 
-                // SỬA 3: Mapping dữ liệu lấy từ medical_info
                 setProfileData({
                     email: info.email || '', 
                     phone: profile.phone || '',
                     full_name: profile.full_name || '',
-                    // Lấy date_of_birth từ JSONB medical_info
                     date_of_birth: medical.date_of_birth || '', 
                     hometown: medical.hometown || '',
                     insurance_id: medical.insurance_id || '',
@@ -104,12 +100,11 @@ const ProfilePage: React.FC = () => {
                     'Content-Type': 'application/json', 
                     'Authorization': `Bearer ${token}` 
                 },
-                // SỬA 4: Body sẽ tự động chứa date_of_birth do spread operator (...)
                 body: JSON.stringify({
                     ...profileData
                 })
             });
-            // ... (Phần xử lý response giữ nguyên) ...
+            
             const data = await res.json(); 
             if (res.ok) { alert("Cập nhật hồ sơ thành công!"); } 
             else { alert(data.detail ? JSON.stringify(data.detail) : "Lỗi khi lưu hồ sơ."); }
@@ -121,61 +116,47 @@ const ProfilePage: React.FC = () => {
         }
     };
 
-    // ... (Các hàm handleBack, handleLogout giữ nguyên) ...
     const handleBack = () => {
         const role = userRole.toUpperCase();
         if (role === 'CLINIC_OWNER' || role === 'DOCTOR') navigate('/clinic-dashboard');
         else navigate('/dashboard');
     };
+    
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
 
     if (isLoading) return <div style={styles.loading}><FaSpinner className="spin" style={{marginRight: 10}}/> Đang tải hồ sơ...</div>;
 
     return (
         <div style={styles.container}>
-            {/* ... (Phần Sidebar giữ nguyên) ... */}
-            <aside style={styles.sidebar}>
-                {/* (Giữ nguyên nội dung Sidebar cũ của bạn) */}
-                <div style={styles.sidebarHeader}>
-                    <div style={styles.logoRow}><FaUser style={{fontSize: '24px', color: '#007bff'}} /><span style={styles.logoText}>CÀI ĐẶT</span></div>
-                    <div style={styles.clinicName}>Quản lý tài khoản</div>
-                </div>
-                <nav style={styles.nav}>
-                    <div style={styles.menuItemActive}><FaUser style={styles.menuIcon} /> Hồ sơ cá nhân</div>
-                    
-                </nav>
-                <div style={styles.sidebarFooter}>
-                    <button onClick={handleBack} style={styles.backBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Quay lại</button>
-                </div>
-            </aside>
-
             <main style={styles.main}>
-                {/* ... (Phần Header giữ nguyên) ... */}
                 <header style={styles.header}>
-                    <h2 style={styles.pageTitle}>Chỉnh sửa hồ sơ</h2>
+                    <div style={styles.sidebarFooter}>
+                        <button onClick={handleBack} style={styles.backBtn} className="smooth-btn" > 
+                            <FaArrowLeft style={{marginRight: 8}} />
+                        </button>
+                    </div>
+
                     <div style={styles.headerRight}>
-                        <div style={styles.profileBox}>
-                            <div style={styles.avatarCircle}>{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
+                        <div style={styles.profileBox} className="profile-hover">
+                            <div style={styles.avatarCircle} className="avatar-pulse">{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
                             <span style={styles.userNameText}>{profileData.full_name || userName || 'User'}</span>
                         </div>
                     </div>
                 </header>
 
                 <div style={styles.contentBody}>
-                    <div style={styles.card}>
+                    <div style={styles.card} className="card-fade-in" >
                         <div style={styles.cardHeader}>
                             <h3 style={{...styles.pageTitle, fontSize:'18px'}}>Thông tin chi tiết</h3>
-                            <button onClick={handleSaveProfile} style={styles.primaryBtn} disabled={isSaving}>
-                                {isSaving ? <><FaSpinner className="spin"/> Đang lưu...</> : <><FaSave style={{marginRight:5}}/> Lưu thay đổi</>}
+                            <button onClick={handleSaveProfile} style={styles.primaryBtn} className="save-btn-hover" disabled={isSaving}>
+                                {isSaving ? <><FaSpinner className="spin"/> Đang lưu...</> : <><FaSave style={{marginRight: 8}}/> Lưu </>}
                             </button>
                         </div>
                         
                         <div style={{padding: '30px'}}>
-                             {/* ... (Phần Avatar Section giữ nguyên) ... */}
-                             <div style={{display:'flex', alignItems:'center', marginBottom:'40px', paddingBottom:'30px', borderBottom:'1px solid #eee'}}>
+                             <div style={{display:'flex', alignItems:'center', marginBottom:'40px', paddingBottom:'30px', borderBottom:'1px solid #eee'}} className="avatar-section-fade">
                                 <div style={{position:'relative', marginRight:'25px'}}>
-                                    <div style={styles.largeAvatar}>{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
-                                    <button style={styles.cameraBtn}><FaCamera/></button>
+                                    <div style={styles.largeAvatar} className="large-avatar-hover" >{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
                                 </div>
                                 <div>
                                     <h2 style={{margin:'0 0 5px 0', fontSize:'24px'}}>{profileData.full_name || userName}</h2>
@@ -184,75 +165,80 @@ const ProfilePage: React.FC = () => {
                             </div>
 
                             <div style={styles.formGrid}>
-                                {/* Cột 1: Thông tin liên hệ (Giữ nguyên) */}
-                                <div style={styles.sectionTitle}>1. Thông tin liên hệ</div>
-                                <div style={styles.gridRow}>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaUser style={styles.iconLabel}/> Họ và tên</label>
-                                        <input type="text" name="full_name" value={profileData.full_name} onChange={handleProfileChange} style={styles.formInput} />
-                                    </div>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaEnvelope style={styles.iconLabel}/> Email</label>
-                                        <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} style={styles.formInput} />
-                                    </div>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaPhone style={styles.iconLabel}/> Số điện thoại</label>
-                                        <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} style={styles.formInput} />
-                                    </div>
-                                </div>
-
-                                {/* Cột 2: Thông tin cá nhân - BỔ SUNG NGÀY SINH VÀO ĐÂY */}
-                                <div style={styles.sectionTitle}>2. Thông tin cá nhân</div>
-                                <div style={styles.gridRow}>
-                                    {/* SỬA 5: Thêm trường Ngày sinh vào đây cho hợp lý */}
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaBirthdayCake style={styles.iconLabel}/> Ngày sinh</label>
-                                        <input 
-                                            type="date" 
-                                            name="date_of_birth" 
-                                            value={profileData.date_of_birth} 
-                                            onChange={handleProfileChange} 
-                                            style={styles.formInput} 
-                                        />
-                                    </div>
-
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaVenusMars style={styles.iconLabel}/> Giới tính</label>
-                                        <select name="gender" value={profileData.gender} onChange={handleProfileChange as any} style={styles.formInput}>
-                                            <option value="">-- Chọn --</option>
-                                            <option value="Male">Nam</option>
-                                            <option value="Female">Nữ</option>
-                                            <option value="Other">Khác</option>
-                                        </select>
-                                    </div>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaGlobe style={styles.iconLabel}/> Quốc tịch</label>
-                                        <input type="text" name="nationality" value={profileData.nationality} onChange={handleProfileChange} style={styles.formInput} />
+                                {/* Cột 1: Thông tin liên hệ */}
+                                <div className="section-slide-in" style={{animationDelay: '0.1s'}}>
+                                    <div style={styles.sectionTitle}>1. Thông tin liên hệ</div>
+                                    <div style={styles.gridRow}>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaUser style={styles.iconLabel}/> Họ và tên</label>
+                                            <input type="text" name="full_name" value={profileData.full_name} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
+                                        </div>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaEnvelope style={styles.iconLabel}/> Email</label>
+                                            <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
+                                        </div>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaPhone style={styles.iconLabel}/> Số điện thoại</label>
+                                            <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Cột 3: Chỉ số sức khỏe - BỎ TUỔI ĐI */}
-                                <div style={styles.sectionTitle}>3. Chỉ số cơ bản</div>
-                                <div style={styles.gridRow}>
-                                    {/* SỬA 6: Bỏ input Tuổi (Age) ở đây đi hoặc thay bằng Mã BHYT */}
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaIdCard style={styles.iconLabel}/> Mã BHYT</label>
-                                        <input type="text" name="insurance_id" value={profileData.insurance_id} onChange={handleProfileChange} style={styles.formInput} />
-                                    </div>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaRulerVertical style={styles.iconLabel}/> Chiều cao (cm)</label>
-                                        <input type="number" name="height" value={profileData.height} onChange={handleProfileChange} style={styles.formInput} />
-                                    </div>
-                                    <div style={styles.formGroup}>
-                                        <label style={styles.formLabel}><FaWeight style={styles.iconLabel}/> Cân nặng (kg)</label>
-                                        <input type="number" name="weight" value={profileData.weight} onChange={handleProfileChange} style={styles.formInput} />
+                                {/* Cột 2: Thông tin cá nhân */}
+                                <div className="section-slide-in" style={{animationDelay: '0.2s'}}>
+                                    <div style={styles.sectionTitle}>2. Thông tin cá nhân</div>
+                                    <div style={styles.gridRow}>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaBirthdayCake style={styles.iconLabel}/> Ngày sinh</label>
+                                            <input 
+                                                type="date" 
+                                                name="date_of_birth" 
+                                                value={profileData.date_of_birth} 
+                                                onChange={handleProfileChange} 
+                                                style={styles.formInput} 
+                                                className="smooth-input"
+                                            />
+                                        </div>
+
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaVenusMars style={styles.iconLabel}/> Giới tính</label>
+                                            <select name="gender" value={profileData.gender} onChange={handleProfileChange as any} style={styles.formInput} className="smooth-input" >
+                                                <option value="">-- Chọn --</option>
+                                                <option value="Male">Nam</option>
+                                                <option value="Female">Nữ</option>
+                                                <option value="Other">Khác</option>
+                                            </select>
+                                        </div>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaGlobe style={styles.iconLabel}/> Quốc tịch</label>
+                                            <input type="text" name="nationality" value={profileData.nationality} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Địa chỉ (Giữ nguyên) */}
-                                <div style={{marginTop: '20px'}}>
+                                {/* Cột 3: Chỉ số sức khỏe */}
+                                <div className="section-slide-in" style={{animationDelay: '0.3s'}}>
+                                    <div style={styles.sectionTitle}>3. Chỉ số cơ bản</div>
+                                    <div style={styles.gridRow}>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaIdCard style={styles.iconLabel}/> Mã BHYT</label>
+                                            <input type="text" name="insurance_id" value={profileData.insurance_id} onChange={handleProfileChange} style={styles.formInput}  className="smooth-input"/>
+                                        </div>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaRulerVertical style={styles.iconLabel}/> Chiều cao (cm)</label>
+                                            <input type="number" name="height" value={profileData.height} onChange={handleProfileChange} style={styles.formInput} className="smooth-input"/>
+                                        </div>
+                                        <div style={styles.formGroup}>
+                                            <label style={styles.formLabel}><FaWeight style={styles.iconLabel}/> Cân nặng (kg)</label>
+                                            <input type="number" name="weight" value={profileData.weight} onChange={handleProfileChange} style={styles.formInput} className="smooth-input"/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Địa chỉ */}
+                                <div className="section-slide-in" style={{animationDelay: '0.4s', marginTop: '20px'}}>
                                     <label style={styles.formLabel}><FaMapMarkerAlt style={styles.iconLabel}/> Quê quán / Địa chỉ</label>
-                                    <textarea name="hometown" rows={3} value={profileData.hometown} onChange={handleProfileChange} style={{...styles.formInput, resize:'vertical'}}></textarea>
+                                    <textarea name="hometown" rows={3} value={profileData.hometown} onChange={handleProfileChange} style={{...styles.formInput, resize:'vertical'}} className="smooth-input" ></textarea>
                                 </div>
                             </div>
                         </div>
@@ -263,7 +249,7 @@ const ProfilePage: React.FC = () => {
     );
 };
 
-// --- STYLES (Giữ nguyên toàn bộ styles cũ) ---
+// --- STYLES (Giữ nguyên styles gốc) ---
 const styles: {[key:string]: React.CSSProperties} = {
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555', backgroundColor: '#f4f6f9' },
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
@@ -277,7 +263,8 @@ const styles: {[key:string]: React.CSSProperties} = {
     menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
     menuIcon: { marginRight: '12px' },
     sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    backBtn: { width: '100%', padding: '12px 15px', background: '#eef2ff', color: '#007bff', border: '1px solid transparent', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: '600', transition: 'all 0.2s ease', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },    main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
+    backBtn: { width: '100%', padding: '12px 15px', color: '#007bff', border: '1px solid transparent', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: '600', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', backgroundColor: 'white' },
+    main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
     header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px' },
     headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
     profileBox: { display:'flex', alignItems:'center', gap:'10px' },
@@ -285,7 +272,7 @@ const styles: {[key:string]: React.CSSProperties} = {
     userNameText: { fontSize:'14px', fontWeight:'600', color: '#333' },
     contentBody: { padding: '30px', flex: 1, overflowY: 'auto' },
     pageTitle: { fontSize: '18px', margin: 0, color: '#333', fontWeight:'bold' },
-    card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow:'hidden', marginBottom:'20px', maxWidth: '1000px', margin: '0 auto' },
+    card: { backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border:'1px solid rgba(0,0,0,0.05)', overflow:'hidden', marginBottom:'20px', maxWidth: '1000px', margin: '0 auto' },
     cardHeader: { padding:'20px 30px', borderBottom:'1px solid #f0f0f0', display:'flex', justifyContent:'space-between', alignItems:'center', backgroundColor: '#fafbfc' },
     largeAvatar: { width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' },
     cameraBtn: { position:'absolute', bottom:0, right:0, background:'white', border:'1px solid #ddd', borderRadius:'50%', width:'28px', height:'28px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#555', boxShadow:'0 2px 4px rgba(0,0,0,0.1)' },
@@ -298,9 +285,195 @@ const styles: {[key:string]: React.CSSProperties} = {
     formInput: { width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dde2e5', fontSize: '14px', outline: 'none', transition: 'border 0.2s', backgroundColor: '#fff', boxSizing:'border-box' },
     primaryBtn: { padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight:'600', display:'flex', alignItems:'center', fontSize:'14px' },
 };
-// Animation Spinner
+
+// --- ENHANCED STYLESHEET - CHỈ THÊM HIỆU ỨNG MƯỢT MÀ ---
 const styleSheet = document.createElement("style");
-styleSheet.innerText = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 2s linear infinite; }`;
+styleSheet.innerText = `
+  /* 1. Smooth Animations */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+  }
+
+  @keyframes subtlePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(0, 123, 255, 0); }
+  }
+
+  /* 2. Card Fade In */
+  .card-fade-in {
+    animation: fadeInUp 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  /* 3. Section Slide In */
+  .section-slide-in {
+    animation: slideInLeft 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    opacity: 0;
+  }
+
+  /* 4. Avatar Section Fade */
+  .avatar-section-fade {
+    animation: fadeInUp 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s forwards;
+    opacity: 0;
+  }
+
+  /* 5. Smooth Input với hiệu ứng mượt mà */
+  .smooth-input {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .smooth-input:focus {
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1), 
+                0 4px 12px rgba(0, 123, 255, 0.15) !important;
+    transform: translateY(-1px);
+    background-color: #fff !important;
+  }
+  
+  .smooth-input:hover:not(:focus) {
+    border-color: #80bdff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  /* 6. Button Smooth Effects */
+  .smooth-btn {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .smooth-btn:hover {
+    background-color: #f0f7ff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2) !important;
+  }
+  
+  .smooth-btn:active { 
+    transform: translateY(0) scale(0.98); 
+  }
+
+  /* 7. Save Button Hover */
+  .save-btn-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .save-btn-hover:hover:not(:disabled) {
+    background: #0056b3 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4) !important;
+  }
+  
+  .save-btn-hover:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .save-btn-hover:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* 8. Avatar Pulse Effect */
+  .avatar-pulse {
+    animation: subtlePulse 2s ease-in-out infinite;
+    transition: all 0.3s ease;
+  }
+
+  .avatar-pulse:hover {
+    transform: scale(1.1);
+  }
+
+  /* 9. Large Avatar Hover */
+  .large-avatar-hover {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .large-avatar-hover:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 30px rgba(0, 123, 255, 0.4);
+  }
+
+  /* 10. Profile Box Hover */
+  .profile-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+
+  .profile-hover:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+  }
+
+  /* 11. Spin Animation */
+  .spin { 
+    animation: spin 1s linear infinite; 
+  }
+
+  /* 12. Smooth Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #007bff;
+    border-radius: 10px;
+    transition: background 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+  }
+
+  /* 13. Label Smooth Transition */
+  label {
+    transition: color 0.2s ease;
+  }
+
+  .smooth-input:focus + label,
+  .smooth-input:focus ~ label {
+    color: #007bff;
+  }
+
+  /* 14. Section Title Animation */
+  .section-slide-in .sectionTitle {
+    position: relative;
+  }
+
+  .section-slide-in .sectionTitle::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: #007bff;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .section-slide-in:hover .sectionTitle::after {
+    width: 100%;
+  }
+
+  /* 15. Responsive Smooth */
+  @media (max-width: 768px) {
+    .section-slide-in {
+      animation-delay: 0s !important;
+    }
+  }
+`;
 document.head.appendChild(styleSheet);
 
 export default ProfilePage;

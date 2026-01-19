@@ -110,3 +110,10 @@ class BillingRepository(IBillingRepository):
         ).filter(
             PaymentTransaction.status == "SUCCESS"
         ).order_by(desc(PaymentTransaction.created_at)).limit(limit).all()
+    
+    def get_transactions_by_user(self, user_id: UUID) -> List[PaymentTransaction]:
+        return self.db.query(PaymentTransaction).options(
+            joinedload(PaymentTransaction.package) # Join để lấy tên gói
+        ).filter(
+            PaymentTransaction.user_id == user_id
+        ).order_by(desc(PaymentTransaction.created_at)).all()

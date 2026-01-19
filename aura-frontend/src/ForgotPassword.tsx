@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './App.css'; // Dùng chung CSS với Login cho đồng bộ
+import './App.css';
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
@@ -16,7 +16,6 @@ const ForgotPassword = () => {
         setMessage('');
 
         try {
-            // Gọi API gửi yêu cầu quên mật khẩu
             const response = await fetch('http://localhost:8000/api/v1/auth/forgot-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -38,44 +37,47 @@ const ForgotPassword = () => {
     };
 
     return (
-        <div className="login-box">
-            <div className="form-title">
-                <h3>Forgot Password</h3>
+        // --- SỬA: Thêm wrapper container ---
+        <div className="login-container">
+            <div className="login-box">
+                <div className="form-title">
+                    <h3>Forgot Password</h3>
+                </div>
+                
+                <form onSubmit={handleForgotPassword}>
+                    {error && <p style={{color: '#ff6b6b', marginBottom: '15px', fontWeight: 'bold'}}>{error}</p>}
+                    {message && <p style={{color: '#4caf50', marginBottom: '15px', fontWeight: 'bold'}}>{message}</p>}
+
+                    <p style={{marginBottom: '20px', fontSize: '0.9em', color: 'rgba(255,255,255,0.9)'}}>
+                        Nhập email đăng ký của bạn, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.
+                    </p>
+
+                    <div className="input-group">
+                        <i className="fas fa-envelope icon"></i> 
+                        <input 
+                            type="email" 
+                            placeholder="Enter your email" 
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" disabled={isLoading} style={{opacity: isLoading ? 0.7 : 1}}>
+                        {isLoading ? 'Sending...' : 'Confirm Email'}
+                    </button>
+
+                    <div className="register-section" style={{marginTop: '20px'}}>
+                        <span
+                            className="register-link hover-underline"
+                            style={{cursor: 'pointer', color: '#fff'}}
+                            onClick={() => navigate('/login')} // Đổi về /login cho thống nhất
+                        >
+                            <i className="fas fa-arrow-left" style={{marginRight: '5px'}}></i> Back to Login
+                        </span>
+                    </div>
+                </form>
             </div>
-            
-            <form onSubmit={handleForgotPassword}>
-                {error && <p style={{color: '#ff6b6b', marginBottom: '15px'}}>{error}</p>}
-                {message && <p style={{color: '#4caf50', marginBottom: '15px'}}>{message}</p>}
-
-                <p style={{marginBottom: '15px', fontSize: '0.9em', color: '#ffffffff'}}>
-                    Nhập email đăng ký của bạn, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.
-                </p>
-
-                <div className="input-group">
-                    <i className="fas fa-envelope icon"></i> 
-                    <input 
-                        type="email" 
-                        placeholder="Enter your email" 
-                        value={email} 
-                        onChange={(e) => setEmail(e.target.value)} 
-                        required
-                    />
-                </div>
-
-                <button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Sending...' : 'Confirm Email'}
-                </button>
-
-                <div className="register-section" style={{marginTop: '20px'}}>
-                    <span
-                        className="register-link"
-                        style={{cursor: 'pointer'}}
-                        onClick={() => navigate('/')}
-                    >
-                        <i className="fas fa-arrow-left"></i> Back to Login
-                    </span>
-                </div>
-            </form>
         </div>
     );
 };

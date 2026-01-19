@@ -24,6 +24,14 @@ interface UserSubscription {
     expiry: string | null;
 }
 
+interface Transaction {
+    id: string;
+    package_name: string;
+    amount: number;
+    status: string;
+    created_at: string;
+}
+
 // --- Dashboard Component (USER / PATIENT) ---
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -67,11 +75,12 @@ const Dashboard: React.FC = () => {
 
     // State bảo mật
     const [privacyConsent, setPrivacyConsent] = useState(false);
-// --- 2. THÊM STATE CHO BILLING ---
+    // --- 2. THÊM STATE CHO BILLING ---
     const [packages, setPackages] = useState<ServicePackage[]>([]);
     const [mySub, setMySub] = useState<UserSubscription>({ active: false, credits: 0, plan_name: 'Free', expiry: null });
+    
     const [isBuying, setIsBuying] = useState(false);
-
+    const [transactions, setTransactions] = useState<Transaction[]>([]); 
     
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
@@ -294,6 +303,9 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         const initData = async () => {
+            // Giả lập delay nhỏ để thấy hiệu ứng loading
+            await new Promise(r => setTimeout(r, 400));
+            
             const token = localStorage.getItem('token');
             if (!token) { navigate('/login'); return; }
             try {
@@ -355,7 +367,6 @@ const Dashboard: React.FC = () => {
         if (!token) return;
 
         try {
-            // 1. Lấy danh sách gói
             const pkgRes = await fetch('http://localhost:8000/api/v1/billing/packages', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -365,8 +376,7 @@ const Dashboard: React.FC = () => {
                 setPackages(userPackages);
             }
 
-            // 2. Lấy thông tin ví hiện tại
-            const subRes = await fetch('http://localhost:8000/api/v1/billing/my-usage', { // Hoặc /my-subscription tùy API bạn đặt
+            const subRes = await fetch('http://localhost:8000/api/v1/billing/my-usage', { 
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (subRes.ok) {
@@ -378,10 +388,17 @@ const Dashboard: React.FC = () => {
                     expiry: subData.expiry || subData.expires_at || null
                 });
             }
+
+            const txRes = await fetch('http://localhost:8000/api/v1/billing/my-transactions', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (txRes.ok) {
+                const txData = await txRes.json();
+                setTransactions(txData);
+            }
         } catch (error) { console.error("Lỗi billing:", error); }
     }, []);
 
-    // --- HÀM 2: MUA GÓI ---
     const handleBuyPackage = async (pkg: ServicePackage) => {
         if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
         
@@ -400,7 +417,7 @@ const Dashboard: React.FC = () => {
             const data = await res.json();
             if (res.ok) {
                 alert(`✅ Đăng ký thành công! Bạn có thêm ${data.credits_left || pkg.analysis_limit} lượt.`);
-                fetchBillingData(); // Load lại dữ liệu ví
+                fetchBillingData(); 
             } else {
                 alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
             }
@@ -414,36 +431,25 @@ const Dashboard: React.FC = () => {
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
     const goToProfilePage = () => { setShowUserMenu(false); navigate('/profile'); };
     const goToUpload = () => {
-        // 1. Kiểm tra xem người dùng có lượt phân tích nào không
         if (mySub.credits <= 0) {
-            // 2. Nếu không còn lượt -> Hiển thị thông báo
             const confirmRegister = window.confirm(
                 "⚠️ Bạn chưa đăng ký gói dịch vụ hoặc đã hết lượt phân tích.\n\nBạn có muốn đi đến trang Đăng ký gói ngay không?"
             );
-            
-            // 3. Nếu người dùng bấm OK -> Chuyển sang tab Thanh toán
-            if (confirmRegister) {
-                setActiveTab('payments');
-            }
-            return; // Dừng lại, không cho chuyển sang trang upload
+            if (confirmRegister) setActiveTab('payments');
+            return;
         }
-
-        // 4. Nếu còn lượt -> Cho phép đi tiếp
         navigate('/upload');
     };
     const goToDetail = (recordId: string) => navigate(`/analysis-result/${recordId}`);
     
-    // Logic hiển thị màu sắc theo MỨC ĐỘ RỦI RO (Giống Clinic)
     const getStatusColor = (result: string) => {
         if (!result) return 'black';
         const r = result.toLowerCase();
-        if (r.includes('nặng') || r.includes('severe') || r.includes('pdr')) return '#dc3545'; // Đỏ
-        if (r.includes('vừa') || r.includes('moderate')) return '#fd7e14'; // Cam
-        if (r.includes('bình thường') || r.includes('normal') || r.includes('không')) return '#28a745'; // Xanh
-        return '#007bff'; // Xanh dương (Mặc định)
+        if (r.includes('nặng') || r.includes('severe') || r.includes('pdr')) return '#dc3545'; 
+        if (r.includes('vừa') || r.includes('moderate')) return '#fd7e14'; 
+        if (r.includes('bình thường') || r.includes('normal') || r.includes('không')) return '#16a34a'; 
+        return '#007bff'; 
     };
-
-
 
     const totalScans = historyData.length;
     const highRiskCount = historyData.filter(item => {
@@ -455,70 +461,65 @@ const Dashboard: React.FC = () => {
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
 
     useEffect(() => {
-    if (activeTab === 'payments') {
-        fetchBillingData();
-    } else if (activeTab === 'home') {
-        fetchMedicalRecords();
-        fetchBillingData();
-    } else if (activeTab === 'messages') {
-        fetchChatData();
-    }
-}, [activeTab]); // Chạy ngay lập tức mỗi khi activeTab thay đổi
+        if (activeTab === 'payments') fetchBillingData();
+        else if (activeTab === 'home') { fetchMedicalRecords(); fetchBillingData(); }
+        else if (activeTab === 'messages') fetchChatData();
+    }, [activeTab]);
 
     // --- RENDER CONTENT ---
     const renderContent = () => {
         // --- 1. RENDER FORM ĐĂNG KÝ ---
         if (activeTab === 'clinic-register') {
             return (
-                <div style={styles.card}>
+                <div style={styles.card} className="slide-up-card">
                     <div style={styles.cardHeader}>
                         <h2 style={styles.pageTitle}><FaHospital style={{marginRight: 10}}/>Đăng ký Phòng khám</h2>
                     </div>
-                    <div style={{padding: '25px'}}>
-                        <p style={{ color: '#666', marginBottom: '20px' }}>Vui lòng điền thông tin và tải lên giấy tờ chứng thực (Giấy phép kinh doanh / CCHN).</p>
+                    <div style={{padding: '30px'}}>
+                        <p style={{ color: '#64748b', marginBottom: '25px', fontSize:'14px' }}>Vui lòng điền thông tin và tải lên giấy tờ chứng thực (Giấy phép kinh doanh / CCHN).</p>
                         
                         <form onSubmit={handleClinicSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
                                 <div>
                                     <label style={styles.formLabel}>Tên phòng khám <span style={{color:'red'}}>*</span></label>
-                                    <input required type="text" style={styles.formInput} placeholder="Nhập tên phòng khám..." value={clinicForm.name} onChange={(e) => setClinicForm({...clinicForm, name: e.target.value})} />
+                                    <input className="input-focus" required type="text" style={styles.formInput} placeholder="Nhập tên phòng khám..." value={clinicForm.name} onChange={(e) => setClinicForm({...clinicForm, name: e.target.value})} />
                                 </div>
                                  <div>
                                     <label style={styles.formLabel}>Mã số giấy phép <span style={{color:'red'}}>*</span></label>
-                                    <input required type="text" style={styles.formInput} placeholder="GPKD/CCHN..." value={clinicForm.license} onChange={(e) => setClinicForm({...clinicForm, license: e.target.value})} />
+                                    <input className="input-focus" required type="text" style={styles.formInput} placeholder="GPKD/CCHN..." value={clinicForm.license} onChange={(e) => setClinicForm({...clinicForm, license: e.target.value})} />
                                 </div>
                             </div>
 
                             <div>
                                 <label style={styles.formLabel}>Địa chỉ <span style={{color:'red'}}>*</span></label>
-                                <input required type="text" style={styles.formInput} placeholder="Số nhà, đường, phường/xã..." value={clinicForm.address} onChange={(e) => setClinicForm({...clinicForm, address: e.target.value})} />
+                                <input className="input-focus" required type="text" style={styles.formInput} placeholder="Số nhà, đường, phường/xã..." value={clinicForm.address} onChange={(e) => setClinicForm({...clinicForm, address: e.target.value})} />
                             </div>
                             
                             <div>
                                 <label style={styles.formLabel}>Số điện thoại <span style={{color:'red'}}>*</span></label>
-                                <input required type="text" style={styles.formInput} placeholder="0912..." value={clinicForm.phone} onChange={(e) => setClinicForm({...clinicForm, phone: e.target.value})} />
+                                <input className="input-focus" required type="text" style={styles.formInput} placeholder="0912..." value={clinicForm.phone} onChange={(e) => setClinicForm({...clinicForm, phone: e.target.value})} />
                             </div>
 
                             {/* --- PHẦN UPLOAD ẢNH --- */}
                             <div style={{marginTop: '10px'}}>
                                 <label style={styles.formLabel}>Ảnh chứng thực giấy tờ <span style={{color:'red'}}>*</span></label>
                                 <div style={styles.uploadGrid}>
-                                    <div style={styles.uploadBox}>
+                                    <div style={styles.uploadBox} className="upload-box-hover">
                                         {previewImages.front ? (
                                             <div style={styles.previewContainer}>
                                                 <img src={previewImages.front} alt="Front" style={styles.previewImage} />
-                                                <button type="button" onClick={() => removeImage('front')} style={styles.removeBtn}><FaTrash /></button>
+                                                <button type="button" onClick={() => removeImage('front')} style={styles.removeBtn} className="btn-secondary-hover"><FaTrash /></button>
                                             </div>
                                         ) : (
                                             <label style={styles.uploadLabel}>
-                                                <FaImage size={30} color="#007bff" />
-                                                <span style={{marginTop: '10px', fontSize:'14px', color:'#666'}}>Ảnh mặt trước</span>
+                                                <FaImage size={30} color="#007bff" style={{marginBottom:10}} />
+                                                <span style={{fontSize:'14px', color:'#64748b'}}>Ảnh mặt trước</span>
                                                 <input type="file" accept="image/*" hidden onChange={(e) => handleFileSelect(e, 'front')} />
                                             </label>
                                         )}
                                     </div>
 
-                                    <div style={styles.uploadBox}>
+                                    <div style={styles.uploadBox} className="upload-box-hover">
                                         {clinicImages.back ? (
                                             <div style={styles.previewContainer}>
                                                 {clinicImages.back.type.startsWith('image/') ? (
@@ -531,27 +532,27 @@ const Dashboard: React.FC = () => {
                                                         </span>
                                                     </div>
                                                 )}
-                                                <button type="button" onClick={() => removeImage('back')} style={styles.removeBtn}><FaTrash /></button>
+                                                <button type="button" onClick={() => removeImage('back')} style={styles.removeBtn} className="btn-secondary-hover"><FaTrash /></button>
                                             </div>
                                         ) : (
                                             <label style={styles.uploadLabel}>
-                                                <FaFileAlt size={30} color="#007bff" />
-                                                <span style={{marginTop: '10px', fontSize:'14px', color:'#666'}}>Ảnh mặt sau/PDF</span>
+                                                <FaFileAlt size={30} color="#007bff" style={{marginBottom:10}} />
+                                                <span style={{fontSize:'14px', color:'#64748b'}}>Ảnh mặt sau/PDF</span>
                                                 <input type="file" accept='.pdf, .doc, .docx, .xls, .xlsx, .csv, image/*' hidden onChange={(e) => handleFileSelect(e, 'back')} />
                                             </label>
                                         )}
                                     </div>
                                 </div>
-                                <p style={{fontSize:'12px', color:'#999', marginTop:'8px'}}>* Định dạng hỗ trợ: JPG, PNG, PDF. Dung lượng tối đa 5MB.</p>
+                                <p style={{fontSize:'12px', color:'#94a3b8', marginTop:'8px'}}>* Định dạng hỗ trợ: JPG, PNG, PDF. Dung lượng tối đa 5MB.</p>
                             </div>
 
                             <div>
                                 <label style={styles.formLabel}>Giới thiệu ngắn</label>
-                                <textarea rows={3} style={{...styles.formInput, resize: 'vertical'}} placeholder="Mô tả về chuyên khoa, dịch vụ..." value={clinicForm.description} onChange={(e) => setClinicForm({...clinicForm, description: e.target.value})} />
+                                <textarea className="input-focus" rows={3} style={{...styles.formInput, resize: 'vertical'}} placeholder="Mô tả về chuyên khoa, dịch vụ..." value={clinicForm.description} onChange={(e) => setClinicForm({...clinicForm, description: e.target.value})} />
                             </div>
 
-                            <button type="submit" style={{...styles.primaryBtn, width: 'fit-content', opacity: isSubmittingClinic ? 0.7 : 1}} disabled={isSubmittingClinic}>
-                                {isSubmittingClinic ? 'Đang gửi hồ sơ...' : 'Gửi hồ sơ đăng ký'}
+                            <button type="submit" className="btn-primary-hover pulse-on-active" style={{...styles.primaryBtn, width: 'fit-content', opacity: isSubmittingClinic ? 0.7 : 1}} disabled={isSubmittingClinic}>
+                                {isSubmittingClinic ? <><span className="spin">⏳</span> Đang gửi hồ sơ...</> : 'Gửi hồ sơ đăng ký'}
                             </button>
                         </form>
                     </div>
@@ -562,17 +563,17 @@ const Dashboard: React.FC = () => {
         // 2. CHAT
 if (activeTab === 'messages') {
             return (
-                <div style={styles.messengerCard}>
+                <div style={styles.messengerCard} className="slide-up-card">
                     {/* LIST BÊN TRÁI */}
                     <div style={styles.chatListPanel}>
-                        <div style={styles.chatHeaderLeft}><h2 style={{margin: 0, fontSize: '20px'}}>Tin nhắn</h2></div>
+                        <div style={styles.chatHeaderLeft}><h2 style={{margin: 0, fontSize: '20px', color: '#1e293b'}}>Tin nhắn</h2></div>
                         <div style={styles.chatListScroll}>
                             {chatData.map(msg => (
-                                <div key={msg.id} style={{...styles.chatListItem, backgroundColor: selectedChatId === msg.id ? '#ebf5ff' : 'transparent'}} onClick={() => openChat(msg.id)}>
+                                <div key={msg.id} className="chat-item-hover" style={{...styles.chatListItem, backgroundColor: selectedChatId === msg.id ? '#eff6ff' : 'transparent'}} onClick={() => openChat(msg.id)}>
                                     <div style={styles.avatarLarge}>{(msg.full_name || msg.sender || 'U').charAt(0).toUpperCase()}</div>
                                     <div style={{flex: 1, overflow: 'hidden'}}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between'}}><span style={{fontWeight: msg.unread ? '800' : '500', fontSize: '15px', color: '#050505'}}>{msg.full_name || msg.sender}</span></div>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '5px'}}><p style={{margin: 0, fontSize: '13px', color: msg.unread ? '#050505' : '#65676b', fontWeight: msg.unread ? 'bold' : 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{msg.preview}</p><span style={{fontSize: '11px', color: '#65676b'}}>• {msg.time}</span></div>
+                                        <div style={{display: 'flex', justifyContent: 'space-between'}}><span style={{fontWeight: msg.unread ? '800' : '600', fontSize: '15px', color: '#334155'}}>{msg.full_name || msg.sender}</span></div>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '5px'}}><p style={{margin: 0, fontSize: '13px', color: msg.unread ? '#0f172a' : '#64748b', fontWeight: msg.unread ? '700' : '400', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{msg.preview}</p><span style={{fontSize: '11px', color: '#94a3b8'}}>• {msg.time}</span></div>
                                     </div>
                                     {msg.unread && <div style={styles.unreadBlueDot}></div>}
                                 </div>
@@ -586,11 +587,11 @@ if (activeTab === 'messages') {
                             <>
                                 <div style={styles.chatWindowHeader}>
                                     <div style={styles.avatarMedium}>{(chatData.find(c => c.id === selectedChatId)?.full_name || chatData.find(c => c.id === selectedChatId)?.sender || '').charAt(0).toUpperCase()}</div>
-                                    <div style={{flex: 1}}><h4 style={{margin: 0, fontSize: '16px'}}>{chatData.find(c => c.id === selectedChatId)?.full_name || chatData.find(c => c.id === selectedChatId)?.sender}</h4><span style={{fontSize: '12px', color: '#65676b'}}>{selectedChatId === 'system' ? 'Hệ thống' : 'Bác sĩ'}</span></div>
+                                    <div style={{flex: 1}}><h4 style={{margin: 0, fontSize: '16px', color:'#1e293b'}}>{chatData.find(c => c.id === selectedChatId)?.full_name || chatData.find(c => c.id === selectedChatId)?.sender}</h4><span style={{fontSize: '12px', color: '#64748b'}}>{selectedChatId === 'system' ? 'Hệ thống' : 'Bác sĩ'}</span></div>
                                 </div>
                                 <div style={styles.messagesBody}>
                                     {currentMessages.map((msg, idx) => (
-                                        <div key={idx} style={{
+                                        <div key={idx} className="pop-in" style={{
                                             ...styles.messageRow, 
                                             justifyContent: msg.is_me ? 'flex-end' : 'flex-start'
                                         }}>
@@ -605,14 +606,14 @@ if (activeTab === 'messages') {
                                                 </div>
                                             )}
                                             
-                                            <div style={{display:'flex', flexDirection:'column', alignItems: msg.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
+                                            <div style={{display:'flex', flexDirection:'column', alignItems: msg.is_me ? 'flex-end' : 'flex-start', maxWidth:'75%'}}>
                                                 <div style={msg.is_me ? styles.bubbleMe : styles.bubbleOther}>
                                                     {msg.content}
                                                 </div>
                                                 <div style={{
                                                     display:'flex', alignItems:'center', gap:'4px', 
-                                                    marginTop:'2px', marginBottom:'10px', 
-                                                    fontSize:'11px', color:'#999',
+                                                    marginTop:'4px', marginBottom:'10px', 
+                                                    fontSize:'11px', color:'#94a3b8',
                                                     paddingRight: msg.is_me ? '5px' : '0',
                                                     paddingLeft: !msg.is_me ? '5px' : '0'
                                                 }}>
@@ -624,7 +625,7 @@ if (activeTab === 'messages') {
                                                                     <FaCheckDouble size={10}/> 
                                                                 </span>
                                                             ) : (
-                                                                <span title="Đã gửi" style={{color: '#ccc'}}>
+                                                                <span title="Đã gửi" style={{color: '#cbd5e1'}}>
                                                                     <FaCheck size={10}/>
                                                                 </span>
                                                             )}
@@ -638,13 +639,13 @@ if (activeTab === 'messages') {
                                 </div>
                                 {selectedChatId !== 'system' && (
                                     <div style={styles.chatInputArea}>
-                                        <form onSubmit={handleSendMessage} style={{flex: 1, display: 'flex'}}><input type="text" placeholder="Nhắn tin..." value={newMessageText} onChange={(e) => setNewMessageText(e.target.value)} style={styles.messengerInput} /></form>
-                                        <div onClick={handleSendMessage} style={{cursor: 'pointer'}}><FaPaperPlane size={20} color="#007bff" /></div>
+                                        <form onSubmit={handleSendMessage} style={{flex: 1, display: 'flex'}}><input className="input-focus" type="text" placeholder="Nhập tin nhắn..." value={newMessageText} onChange={(e) => setNewMessageText(e.target.value)} style={styles.messengerInput} /></form>
+                                        <div onClick={handleSendMessage} className="btn-icon-hover" style={{cursor: 'pointer', padding:'10px', borderRadius:'50%'}}><FaPaperPlane size={20} color="#007bff" /></div>
                                     </div>
                                 )}
                             </>
                         ) : (
-                            <div style={styles.emptyChatState}><div style={{width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px'}}><FaComments size={40} color="#007bff"/></div><h3>Chào mừng đến với AURA Chat</h3><p>Chọn một cuộc trò chuyện để bắt đầu nhắn tin.</p></div>
+                            <div style={styles.emptyChatState}><div className="icon-pulse" style={{width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px'}}><FaComments size={40} color="#007bff"/></div><h3>Chào mừng đến với AURA Chat</h3><p>Chọn một cuộc trò chuyện để bắt đầu.</p></div>
                         )}
                     </div>
                 </div>
@@ -653,55 +654,56 @@ if (activeTab === 'messages') {
         
         // 3. PAYMENTS
         if (activeTab === 'payments') return (
-            <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+            <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:'25px'}}>
                 
                 {/* THẺ VÍ CỦA TÔI */}
-                <div style={styles.card}>
+                <div style={styles.card} className="slide-up-card">
                     <div style={styles.cardHeader}>
                         <h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10}}/>Ví & Dịch vụ</h2>
                     </div>
-                    <div style={{padding:'25px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'linear-gradient(135deg, #007bff 0%, #0056b3 100%)', margin:'20px', borderRadius:'12px', color:'white'}}>
+                    <div style={{padding:'30px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', margin:'20px', borderRadius:'16px', color:'white', boxShadow: '0 8px 20px rgba(37, 99, 235, 0.3)'}}>
                         <div>
-                            <p style={{margin:0, opacity:0.8, fontSize:'14px'}}>Gói hiện tại</p>
-                            <h2 style={{margin:'5px 0', fontSize:'24px'}}>{mySub.plan_name}</h2>
-                            {mySub.expiry && <small style={{opacity:0.9}}>Hết hạn: {new Date(mySub.expiry).toLocaleDateString('vi-VN')}</small>}
+                            <p style={{margin:0, opacity:0.85, fontSize:'14px', fontWeight:500}}>Gói hiện tại</p>
+                            <h2 style={{margin:'8px 0', fontSize:'28px', fontWeight: 700, letterSpacing: '0.5px'}}>{mySub.plan_name}</h2>
+                            {mySub.expiry && <small style={{opacity:0.9, background:'rgba(255,255,255,0.2)', padding:'4px 10px', borderRadius:'20px'}}>Hết hạn: {new Date(mySub.expiry).toLocaleDateString('vi-VN')}</small>}
                         </div>
                         <div style={{textAlign:'right'}}>
-                            <p style={{margin:0, opacity:0.8, fontSize:'14px'}}>Số lượt còn lại</p>
-                            <h1 style={{margin:0, fontSize:'48px', fontWeight:'800'}}>{mySub.credits}</h1>
+                            <p style={{margin:0, opacity:0.85, fontSize:'14px', fontWeight:500}}>Số lượt còn lại</p>
+                            <h1 style={{margin:0, fontSize:'52px', fontWeight:'800', textShadow: '0 2px 4px rgba(0,0,0,0.2)'}}>{mySub.credits}</h1>
                         </div>
                     </div>
                 </div>
 
                 {/* DANH SÁCH GÓI DỊCH VỤ */}
                 <div>
-                    <h3 style={{color:'#333', marginBottom:'15px', display:'flex', alignItems:'center'}}>
+                    <h3 style={{color:'#1e293b', marginBottom:'20px', display:'flex', alignItems:'center', fontSize: '18px'}}>
                         <FaHospital style={{marginRight:10, color:'#007bff'}}/> Gói dịch vụ có sẵn
                     </h3>
                     
                     {packages.length === 0 ? (
-                        <div style={{textAlign:'center', padding:'40px', color:'#999'}}>Chưa có gói dịch vụ nào.</div>
+                        <div style={{textAlign:'center', padding:'40px', color:'#94a3b8', background:'white', borderRadius:'12px'}}>Chưa có gói dịch vụ nào.</div>
                     ) : (
                         <div style={styles.pricingGrid}>
                             {packages.map(pkg => (
-                                <div key={pkg.id} style={styles.pricingCard}>
+                                <div key={pkg.id} style={styles.pricingCard} className="pricing-card-hover slide-up-card">
                                     <div style={styles.pricingHeader}>
-                                        <h4 style={{margin:0, fontSize:'18px', color:'#333'}}>{pkg.name}</h4>
+                                        <h4 style={{margin:0, fontSize:'18px', color:'#334155', fontWeight: 700}}>{pkg.name}</h4>
                                         <div style={styles.priceTag}>
                                             {pkg.price === 0 ? 'Miễn phí' : `${pkg.price.toLocaleString('vi-VN')} đ`}
                                         </div>
                                     </div>
                                     <div style={styles.pricingBody}>
-                                        <p style={{fontSize:'13px', color:'#666', minHeight:'40px'}}>{pkg.description || 'Gói dịch vụ tiêu chuẩn'}</p>
-                                        <ul style={{paddingLeft:'20px', margin:'15px 0', color:'#444', fontSize:'14px'}}>
-                                            <li style={{marginBottom:'8px'}}>⏳ Thời hạn: <b>{pkg.duration_days} ngày</b></li>
-                                            <li style={{marginBottom:'8px'}}>🧠 Số lượt AI: <b>{pkg.analysis_limit} lượt</b></li>
+                                        <p style={{fontSize:'14px', color:'#64748b', minHeight:'40px', lineHeight: 1.5}}>{pkg.description || 'Gói dịch vụ tiêu chuẩn'}</p>
+                                        <ul style={{paddingLeft:'20px', margin:'20px 0', color:'#475569', fontSize:'14px'}}>
+                                            <li style={{marginBottom:'10px'}}>⏳ Thời hạn: <b>{pkg.duration_days} ngày</b></li>
+                                            <li style={{marginBottom:'10px'}}>🧠 Số lượt AI: <b>{pkg.analysis_limit} lượt</b></li>
                                             <li>👨‍⚕️ Hỗ trợ bác sĩ: <b>Có</b></li>
                                         </ul>
                                         <button 
+                                            className="btn-primary-hover pulse-on-active"
                                             onClick={() => handleBuyPackage(pkg)} 
                                             disabled={isBuying}
-                                            style={{...styles.primaryBtn, width:'100%', background: isBuying ? '#ccc' : '#007bff'}}
+                                            style={{...styles.primaryBtn, width:'100%', background: isBuying ? '#cbd5e1' : 'linear-gradient(135deg, #007bff, #0069d9)'}}
                                         >
                                             {isBuying ? 'Đang xử lý...' : 'Đăng ký ngay'}
                                         </button>
@@ -711,29 +713,75 @@ if (activeTab === 'messages') {
                         </div>
                     )}
                 </div>
+
+                <div style={{marginTop: '30px'}}>
+                    <h3 style={{color:'#1e293b', marginBottom:'20px', display:'flex', alignItems:'center', fontSize:'18px'}}>
+                        <FaHistory style={{marginRight:10, color:'#007bff'}}/> Lịch sử giao dịch
+                    </h3>
+                    
+                    <div style={styles.card} className="slide-up-card">
+                        <table style={styles.table} className="table-hover">
+                            <thead>
+                                <tr>
+                                    <th style={styles.th}>Thời gian</th>
+                                    <th style={styles.th}>Gói dịch vụ</th>
+                                    <th style={styles.th}>Số tiền</th>
+                                    <th style={styles.th}>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {transactions.length === 0 ? (
+                                    <tr><td colSpan={4} style={styles.emptyCell}>Chưa có giao dịch nào.</td></tr>
+                                ) : (
+                                    transactions.map(tx => (
+                                        <tr key={tx.id} style={styles.tr}>
+                                            <td style={styles.td}>
+                                                {new Date(tx.created_at).toLocaleDateString('vi-VN')} <br/>
+                                                <small style={{color:'#94a3b8'}}>{new Date(tx.created_at).toLocaleTimeString('vi-VN')}</small>
+                                            </td>
+                                            <td style={styles.td}><b style={{color:'#334155'}}>{tx.package_name}</b></td>
+                                            <td style={{...styles.td, fontWeight:'bold', color:'#16a34a'}}>
+                                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)}
+                                            </td>
+                                            <td style={styles.td}>
+                                                <span style={{
+                                                    background: tx.status === 'SUCCESS' ? '#dcfce7' : '#fee2e2',
+                                                    color: tx.status === 'SUCCESS' ? '#166534' : '#991b1b',
+                                                    padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold'
+                                                }}>
+                                                    {tx.status === 'SUCCESS' ? 'Thành công' : 'Thất bại'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         );
 
         if (activeTab === 'settings') {
             return (
-                <div style={styles.card}>
+                <div style={styles.card} className="slide-up-card">
                     <div style={styles.cardHeader}>
                         <h2 style={styles.pageTitle}><FaUserShield style={{marginRight:10, color:'#007bff'}}/> Quyền riêng tư & Dữ liệu</h2>
                     </div>
-                    <div style={{padding:'30px'}}>
-                        <div style={{
+                    <div style={{padding:'35px'}}>
+                        <div className="hover-lift" style={{
                             display:'flex', justifyContent:'space-between', alignItems:'center', 
-                            padding:'20px', border:'1px solid #e2e8f0', borderRadius:'12px',
-                            background: privacyConsent ? '#f0fdf4' : '#fff'
+                            padding:'25px', border:'1px solid #e2e8f0', borderRadius:'16px',
+                            background: privacyConsent ? '#f0fdf4' : '#fff', transition: 'all 0.3s'
                         }}>
                             <div style={{maxWidth:'80%'}}>
-                                <h4 style={{margin:'0 0 5px 0', fontSize:'16px', color:'#333'}}>Đồng ý chia sẻ dữ liệu ẩn danh</h4>
-                                <p style={{margin:0, fontSize:'13px', color:'#666', lineHeight:'1.5'}}>
+                                <h4 style={{margin:'0 0 8px 0', fontSize:'16px', color:'#1e293b', fontWeight: 600}}>Đồng ý chia sẻ dữ liệu ẩn danh</h4>
+                                <p style={{margin:0, fontSize:'14px', color:'#64748b', lineHeight:'1.6'}}>
                                     Cho phép AURA sử dụng hình ảnh võng mạc của bạn (đã được xóa tên và thông tin cá nhân) để huấn luyện và cải thiện độ chính xác của AI.
                                 </p>
                             </div>
-                            <div onClick={handleTogglePrivacy} style={{cursor:'pointer', fontSize:'35px', color: privacyConsent ? '#16a34a' : '#ccc', display:'flex', alignItems:'center'}}>
-                                {privacyConsent ? <FaToggleOn size={40}/> : <FaToggleOff size={40}/>}
+                            <div onClick={handleTogglePrivacy} style={{cursor:'pointer', fontSize:'40px', color: privacyConsent ? '#16a34a' : '#cbd5e1', display:'flex', alignItems:'center', transition:'color 0.3s'}}>
+                                {privacyConsent ? <FaToggleOn size={45}/> : <FaToggleOff size={45}/>}
                             </div>
                         </div>
                     </div>
@@ -741,31 +789,32 @@ if (activeTab === 'messages') {
             );
         }
 
-        // 4. HOME (DASHBOARD) - PHẦN QUAN TRỌNG ĐÃ ĐƯỢC FIX
+        // 4. HOME (DASHBOARD)
         return (
-            <div style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
+            <div className="fade-in" style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
                 {/* Stats Cards */}
-                <div style={styles.card}>
+                <div style={styles.card} className="slide-up-card">
                     <div style={styles.cardHeader}><h2 style={styles.pageTitle}>📊 Tổng quan sức khỏe</h2></div>
-                    <div style={{padding:'25px', display: 'flex', gap: '50px'}}>
-                         <div><span style={{ fontSize: '14px', color: '#666' }}>Tổng lần khám</span><h1 style={{ margin: '5px 0 0', color: '#007bff' }}>{totalScans}</h1></div>
-                         <div><span style={{ fontSize: '14px', color: '#666' }}>Nguy cơ cao</span><h1 style={{ margin: '5px 0 0', color: highRiskCount > 0 ? '#dc3545' : '#28a745' }}>{highRiskCount}</h1></div>
+                    <div style={{padding:'30px', display: 'flex', gap: '60px'}}>
+                         <div><span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>TỔNG LẦN KHÁM</span><h1 style={{ margin: '8px 0 0', color: '#007bff', fontSize: '36px' }}>{totalScans}</h1></div>
+                         <div><span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>NGUY CƠ CAO</span><h1 style={{ margin: '8px 0 0', color: highRiskCount > 0 ? '#dc3545' : '#16a34a', fontSize: '36px' }}>{highRiskCount}</h1></div>
                     </div>
                 </div>
 
-                {/* --- History Table (Giao diện chuẩn Clinic) --- */}
-                <div style={styles.card}>
+                {/* --- History Table --- */}
+                <div className="slide-up-card" style={{...styles.card, animationDelay: '0.1s'}}>
                     <div style={styles.cardHeader}>
-                        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                        <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
                             <h3 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/> Lịch sử Phân tích AI</h3>
                             <span style={styles.badge}>{historyData.length} Ca khám</span>
                         </div>
                         <button 
+                            className="btn-primary-hover pulse-on-active"
                             onClick={goToUpload} 
                             style={{
                                 ...styles.primaryBtn,
-                                display:'flex', alignItems:'center', gap:'8px', padding: '8px 15px', fontSize:'13px',
-                                background: mySub.credits > 0 ? '#007bff' : '#6c757d'
+                                display:'flex', alignItems:'center', gap:'8px', padding: '10px 18px', fontSize:'13px',
+                                background: mySub.credits > 0 ? 'linear-gradient(135deg, #007bff, #0069d9)' : '#64748b'
                             }}
                         >
                             {mySub.credits > 0 ? <FaCamera /> : <FaLock />}       
@@ -773,7 +822,7 @@ if (activeTab === 'messages') {
                         </button>
                     </div>
 
-                    <table style={styles.table}>
+                    <table style={styles.table} className="table-hover">
                         <thead>
                             <tr>
                                 <th style={styles.th}>Thời gian</th>
@@ -788,20 +837,20 @@ if (activeTab === 'messages') {
                                 <tr>
                                     <td colSpan={5} style={styles.emptyCell}>
                                         Chưa có dữ liệu phân tích nào. <br/>
-                                        <button onClick={goToUpload} style={{...styles.primaryBtn, marginTop:'10px', display:'inline-block', fontSize:'12px', padding:'5px 15px'}}>Bắt đầu ngay</button>
+                                        <button onClick={goToUpload} className="btn-primary-hover" style={{...styles.primaryBtn, marginTop:'15px', display:'inline-block', fontSize:'13px', padding:'8px 20px'}}>Bắt đầu ngay</button>
                                     </td>
                                 </tr>
                             ) : (
                                 historyData.map((item, i) => (
                                     <tr key={i} style={styles.tr}>
-                                        <td style={styles.td}>{item.date}<br/><small style={{color:'#999'}}>{item.time}</small></td>
+                                        <td style={styles.td}><span style={{fontWeight:500}}>{item.date}</span><br/><small style={{color:'#94a3b8'}}>{item.time}</small></td>
                                         <td style={styles.td}>
                                             {item.annotated_url ? (
-                                                <img src={item.annotated_url} alt="Scan" style={{width:'40px', height:'40px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}} />
-                                            ) : <div style={{width:'40px', height:'40px', background:'#f0f0f0', borderRadius:'4px', display:'flex', alignItems:'center', justifyContent:'center'}}><FaImage color="#ccc"/></div>}
+                                                <img src={item.annotated_url} alt="Scan" className="hover-lift" style={{width:'48px', height:'48px', objectFit:'cover', borderRadius:'8px', border:'1px solid #e2e8f0', boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}} />
+                                            ) : <div style={{width:'48px', height:'48px', background:'#f1f5f9', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center'}}><FaImage color="#cbd5e1"/></div>}
                                         </td>
                                         <td style={styles.td}>
-                                            <span style={{color: getStatusColor(item.result), fontWeight:'bold'}}>
+                                            <span style={{color: getStatusColor(item.result), fontWeight:'700', padding:'4px 0'}}>
                                                 {item.status.includes('PENDING') ? 'Đang chờ...' : item.result}
                                             </span>
                                         </td>
@@ -812,7 +861,7 @@ if (activeTab === 'messages') {
                                             }
                                         </td>
                                         <td style={styles.td}>
-                                            <button onClick={() => goToDetail(item.id)} style={styles.actionBtn}>Xem</button>
+                                            <button onClick={() => goToDetail(item.id)} className="btn-secondary-hover" style={styles.actionBtn}>Xem kết quả</button>
                                         </td>
                                     </tr>
                                 ))
@@ -824,64 +873,98 @@ if (activeTab === 'messages') {
         );
     };
 
-    if (isLoading) return <div style={styles.loading}>Đang tải dữ liệu...</div>;
+    if (isLoading) return <div style={styles.loading}><FaCamera className="spin" size={40} color="#007bff"/></div>;
+
+    // --- RENDER CHÍNH ---
+    // Đã thay đổi: Loại bỏ style={styles.menuItem} và dùng thuần className để tránh xung đột
 
     return (
-        <div style={styles.container}>
+        <div style={styles.container} className="fade-in">
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
-                    <div style={styles.logoRow}><FaHome size={24} color="#007bff"/><span style={styles.logoText}>AURA HEALTH</span></div>
+                    <div style={styles.logoRow}><FaHome size={26} color="#007bff"/><span style={styles.logoText}>AURA HEALTH</span></div>
                     <div style={styles.clinicName}>Dành cho Bệnh nhân</div>
                 </div>
+                
                 <nav style={styles.nav}>
-                    <div style={activeTab === 'home' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('home')}><FaHome style={styles.menuIcon} /> Trang chủ</div>
-                    <div style={activeTab === 'messages' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('messages')}><FaComments style={styles.menuIcon} /> Tin nhắn {unreadMessagesCount > 0 && <span style={styles.badgeRed}>{unreadMessagesCount}</span>}</div>
-                    <div style={activeTab === 'clinic-register' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('clinic-register')}><FaHospital style={styles.menuIcon} /> Đăng ký Phòng khám</div>
-                    <div style={activeTab === 'payments' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('payments')}><FaCreditCard style={styles.menuIcon} /> Thanh toán</div>
-                    <div style={activeTab === 'settings' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('settings')}><FaCog style={styles.menuIcon} /> Cài đặt</div>
+                    <div 
+                        className={`sidebar-item ${activeTab === 'home' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('home')}
+                    >
+                        <FaHome style={styles.menuIcon} /> Trang chủ
+                    </div>
+
+                    <div 
+                        className={`sidebar-item ${activeTab === 'messages' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('messages')}
+                    >
+                        <FaComments style={styles.menuIcon} /> Tin nhắn {unreadMessagesCount > 0 && <span style={styles.badgeRed}>{unreadMessagesCount}</span>}
+                    </div>
+
+                    <div 
+                        className={`sidebar-item ${activeTab === 'clinic-register' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('clinic-register')}
+                    >
+                        <FaHospital style={styles.menuIcon} /> Đăng ký Phòng khám
+                    </div>
+
+                    <div 
+                        className={`sidebar-item ${activeTab === 'payments' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('payments')}
+                    >
+                        <FaCreditCard style={styles.menuIcon} /> Thanh toán
+                    </div>
+
+                    <div 
+                        className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('settings')}
+                    >
+                        <FaCog style={styles.menuIcon} /> Cài đặt
+                    </div>
                 </nav>
-                <div style={styles.sidebarFooter}><button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button></div>
+
+                <div style={styles.sidebarFooter}><button onClick={handleLogout} style={styles.logoutBtn} className="btn-secondary-hover"><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button></div>
             </aside>
             <main style={styles.main}>
                 <header style={styles.header}>
                     <div style={styles.headerRight}>
                         <div style={{position:'relative'}} ref={notificationRef}>
-                            <button style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}><FaBell color="#555" size={18}/></button>
+                            <button className="btn-icon-hover" style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}><FaBell color="#64748b" size={20}/></button>
                             {showNotifications && (
-                                <div style={{
-                                    position: 'absolute', right: 0, top: '50px', width: '300px', 
-                                    background: 'white', boxShadow: '0 5px 15px rgba(0,0,0,0.2)', 
-                                    borderRadius: '8px', overflow: 'hidden'
+                                <div className="pop-in" style={{
+                                    position: 'absolute', right: '-10px', top: '55px', width: '320px', 
+                                    background: 'white', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', 
+                                    borderRadius: '12px', overflow: 'hidden', border:'1px solid #f1f5f9', zIndex: 100
                                 }}>
-                                    <div style={{padding: '10px', fontWeight: 'bold', borderBottom: '1px solid #eee'}}>Thông báo</div>
-                                    <div style={{maxHeight: '300px', overflowY: 'auto'}}>
-                                        {recentNotifications.length > 0 ? recentNotifications.map((n:any)=><div key={n.id} style={styles.notificationItem} onClick={()=>goToDetail(n.id)}>{n.result}</div>) : <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>}
-                                        {notifications.length > 0 ? notifications.map((n) => (
+                                    <div style={{padding: '15px', fontWeight: 'bold', borderBottom: '1px solid #f1f5f9', background:'#f8fafc', color:'#334155'}}>Thông báo</div>
+                                    <div style={{maxHeight: '350px', overflowY: 'auto'}}>
+                                        {recentNotifications.length > 0 ? recentNotifications.map((n:any)=><div key={n.id} className="notification-item-hover" style={styles.notificationItem} onClick={()=>goToDetail(n.id)}>Kết quả phân tích: <b>{n.result}</b></div>) : <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>}
+                                        {notifications.map((n) => (
                                             <div key={n.id} style={{
-                                                padding: '12px', borderBottom: '1px solid #f0f0f0',
+                                                padding: '15px', borderBottom: '1px solid #f1f5f9',
                                                 background: n.is_read ? 'white' : '#f0f9ff'
                                             }}>
-                                                <div style={{fontWeight: '600', fontSize: '13px', marginBottom: '4px'}}>{n.title}</div>
-                                                <div style={{fontSize: '12px', color: '#555'}}>{n.content}</div>
-                                                <div style={{fontSize: '10px', color: '#999', marginTop: '5px'}}>
+                                                <div style={{fontWeight: '600', fontSize: '13px', marginBottom: '4px', color:'#1e293b'}}>{n.title}</div>
+                                                <div style={{fontSize: '13px', color: '#475569', lineHeight: 1.4}}>{n.content}</div>
+                                                <div style={{fontSize: '11px', color: '#94a3b8', marginTop: '6px'}}>
                                                     {new Date(n.created_at).toLocaleString('vi-VN')}
                                                 </div>
                                             </div>
-                                        )) : <div style={{padding:'20px', textAlign:'center', color:'#999'}}>Không có thông báo</div>}
+                                        ))}
                                     </div>
                                 </div>
                             )}
                         </div>
                         <div style={{ position: 'relative' }} ref={profileRef}>
-                            <div style={styles.profileBox} onClick={() => setShowUserMenu(!showUserMenu)}>
+                            <div style={styles.profileBox} className="hover-lift" onClick={() => setShowUserMenu(!showUserMenu)}>
                                 <div style={styles.avatarCircle}>{userName ? userName.charAt(0).toUpperCase() : 'U'}</div>
                                 <span style={styles.userNameText}>{full_name || userName || 'User'}</span>
                             </div>
                             {showUserMenu && (
-                                <div style={styles.dropdownMenu}>
-                                    <div style={{padding:'15px', borderBottom:'1px solid #eee'}}><strong>{full_name}</strong><br/><small style={{color:'#666'}}>{userRole}</small></div>
-                                    <button style={styles.dropdownItem} onClick={goToProfilePage}><FaUserCircle style={{marginRight:8}}/> Hồ sơ cá nhân</button>
-                                    <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
+                                <div className="pop-in" style={styles.dropdownMenu}>
+                                    <div style={{padding:'15px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc'}}><strong>{full_name}</strong><br/><small style={{color:'#64748b'}}>{userRole}</small></div>
+                                    <button style={styles.dropdownItem} className="sidebar-item" onClick={goToProfilePage}><FaUserCircle style={{marginRight:8}}/> Hồ sơ cá nhân</button>
+                                    <button style={{...styles.dropdownItem, color: '#ef4444'}} className="sidebar-item" onClick={handleLogout}><FaSignOutAlt style={{marginRight:8}}/> Đăng xuất</button>
                                 </div>
                             )}
                         </div>
@@ -893,86 +976,153 @@ if (activeTab === 'messages') {
     );
 };
 
-// --- STYLES ---
+// --- STYLES (ENHANCED SOFT UI) ---
 const styles: { [key: string]: React.CSSProperties } = {
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
-    loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555' },
-    sidebar: { width: '260px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%' },
-    sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #f0f0f0' },
+    loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555', backgroundColor: '#f4f6f9' },
+    sidebar: { width: '270px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '4px 0 15px rgba(0,0,0,0.02)', zIndex: 10 },
+    sidebarHeader: { padding: '25px 25px', borderBottom: '1px solid #f1f5f9' },
     logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px' },
-    logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b' },
-    clinicName: { fontSize:'13px', color:'#666', marginLeft:'40px' },
-    nav: { flex: 1, padding: '20px 0', overflowY: 'auto' },
-    menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#555', display:'flex', alignItems:'center' },
-    menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
-    menuIcon: { marginRight: '12px' },
-    sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
+    logoText: { fontWeight: '800', fontSize: '20px', color: '#1e293b', letterSpacing: '-0.5px' },
+    clinicName: { fontSize:'13px', color:'#64748b', marginLeft:'40px', fontWeight: 500 },
+    nav: { flex: 1, padding: '25px 0', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' },
+    
+    // ĐÃ XÓA menuItem để tránh xung đột với CSS Class
+    menuIcon: { marginRight: '14px', fontSize: '18px' },
+    
+    sidebarFooter: { padding: '25px', borderTop: '1px solid #f1f5f9' },
+    logoutBtn: { width: '100%', padding: '12px', background: '#fef2f2', color: '#ef4444', border: 'none', borderRadius: '10px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' },
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
-    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 30px' },
-    headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
-    profileBox: { display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' },
-    avatarCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '14px', fontWeight:'600' },
-    userNameText: { fontSize:'14px', fontWeight:'600', color: '#333' },
-    iconBtn: { background:'none', border:'none', cursor:'pointer', position:'relative', padding:'5px' },
-    contentBody: { padding: '30px', flex: 1, overflowY: 'auto' },
-    card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow:'hidden', marginBottom:'20px' },
-    cardHeader: { padding:'20px 25px', borderBottom:'1px solid #f0f0f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
-    pageTitle: { fontSize: '16px', margin: 0, display:'flex', alignItems:'center', color: '#333' },
+    header: { height: '75px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 40px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' },
+    headerRight: { display: 'flex', alignItems: 'center', gap: '25px' },
+    profileBox: { display:'flex', alignItems:'center', gap:'12px', cursor:'pointer', padding: '6px 12px', borderRadius: '30px', transition: 'background 0.2s' },
+    avatarCircle: { width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg, #007bff, #0056b3)', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '15px', fontWeight:'600', boxShadow: '0 4px 8px rgba(0,123,255,0.2)' },
+    userNameText: { fontSize:'14px', fontWeight:'600', color: '#334155' },
+    iconBtn: { background:'none', border:'none', cursor:'pointer', position:'relative', padding:'8px', borderRadius: '50%', transition: 'background 0.2s' },
+    contentBody: { padding: '30px 40px', flex: 1, overflowY: 'auto' },
+    card: { backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f1f5f9', overflow:'hidden', marginBottom:'25px', transition: 'transform 0.3s' },
+    cardHeader: { padding:'20px 30px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center', background: '#fff' },
+    pageTitle: { fontSize: '18px', margin: 0, display:'flex', alignItems:'center', color: '#1e293b', fontWeight: '700' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: '14px' },
-    th: { textAlign: 'left', padding: '12px 25px', borderBottom: '1px solid #eee', color: '#8898aa', fontSize:'11px', textTransform:'uppercase', fontWeight:'700', background:'#fbfbfb' },
-    tr: { borderBottom: '1px solid #f5f5f5' },
-    td: { padding: '15px 25px', verticalAlign: 'middle', color:'#333' },
-    actionBtn: { background: '#fff', border: '1px solid #007bff', color: '#007bff', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' },
-    primaryBtn: { padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight:'600' },
-    notificationDropdown: { position: 'absolute', top: '40px', right: '-10px', width: '300px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 1100, border:'1px solid #eee' },
-    notificationItem: { padding: '12px', borderBottom: '1px solid #eee', cursor: 'pointer', fontSize:'13px', color:'#333' },
-    dropdownMenu: { position: 'absolute', top: '60px', right: '0', width: '220px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #eee' },
-    dropdownHeader: { padding: '10px 15px', borderBottom: '1px solid #eee', fontWeight: 'bold', fontSize: '13px', backgroundColor: '#f8f9fa', color: '#333' },
-    dropdownItem: { display: 'flex', alignItems:'center', width: '100%', padding: '10px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#333', fontSize:'14px' },
-    formLabel: { display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333', fontSize: '14px' },
-    formInput: { width: '100%', padding: '10px 15px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', outline: 'none', transition: 'border 0.2s', boxSizing: 'border-box', background:'#fff' },
-    uploadGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '10px' },
-    uploadBox: { border: '2px dashed #ccd0d5', borderRadius: '12px', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', position: 'relative', overflow: 'hidden' },
-    uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', width: '100%', height: '100%', justifyContent: 'center', transition: 'background 0.2s' },
+    th: { textAlign: 'left', padding: '15px 25px', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize:'12px', textTransform:'uppercase', fontWeight:'700', background:'#f8fafc', letterSpacing: '0.5px' },
+    tr: { borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' },
+    td: { padding: '18px 25px', verticalAlign: 'middle', color:'#334155' },
+    actionBtn: { background: '#f8fafc', border: '1px solid #e2e8f0', color: '#007bff', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', transition: 'all 0.2s' },
+    primaryBtn: { padding: '12px 24px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight:'600', boxShadow: '0 4px 12px rgba(0,123,255,0.2)', transition: 'all 0.2s' },
+    notificationItem: { padding: '14px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize:'13px', color:'#334155', transition: 'background 0.2s' },
+    dropdownMenu: { position: 'absolute', top: '65px', right: '0', width: '240px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #f1f5f9', overflow:'hidden' },
+    dropdownItem: { display: 'flex', alignItems:'center', width: '100%', padding: '12px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#334155', fontSize:'14px', transition: 'background 0.2s' },
+    formLabel: { display: 'block', marginBottom: '8px', fontWeight: '600', color: '#334155', fontSize: '14px' },
+    formInput: { width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box', background:'#fff', color: '#333' },
+    uploadGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px', marginTop: '10px' },
+    uploadBox: { border: '2px dashed #cbd5e1', borderRadius: '12px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fbff', position: 'relative', overflow: 'hidden', transition: 'all 0.2s' },
+    uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', width: '100%', height: '100%', justifyContent: 'center' },
     previewContainer: { width: '100%', height: '100%', position: 'relative' },
     previewImage: { width: '100%', height: '100%', objectFit: 'cover' },
-    removeBtn: { position: 'absolute', top: '10px', right: '10px', backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems:'center',justifyContent:'center',color:'#dc3545',boxShadow:'0 2px 5px rgba(0, 0, 0, 0.2)' },
-    messengerCard: { display: 'flex', height: 'calc(100vh - 140px)', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow: 'hidden' },
-    chatListPanel: { width: '320px', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' },
-    chatHeaderLeft: { padding: '20px', borderBottom: '1px solid #f0f0f0' },
-    chatListScroll: { flex: 1, overflowY: 'auto', padding: '10px' },
-    chatListItem: { display: 'flex', alignItems: 'center', padding: '12px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.1s', gap: '12px' },
-    avatarLarge: { width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', color: '#65676b', position: 'relative' },
-    unreadBlueDot: { width: '10px', height: '10px', backgroundColor: '#007bff', borderRadius: '50%' },
+    removeBtn: { position: 'absolute', top: '10px', right: '10px', backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems:'center',justifyContent:'center',color:'#ef4444',boxShadow:'0 2px 6px rgba(0, 0, 0, 0.1)' },
+    messengerCard: { display: 'flex', height: 'calc(100vh - 150px)', backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f1f5f9', overflow: 'hidden' },
+    chatListPanel: { width: '340px', borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', background: '#fff' },
+    chatHeaderLeft: { padding: '25px', borderBottom: '1px solid #f1f5f9' },
+    chatListScroll: { flex: 1, overflowY: 'auto', padding: '15px' },
+    chatListItem: { display: 'flex', alignItems: 'center', padding: '14px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', gap: '15px', marginBottom: '5px' },
+    avatarLarge: { width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, #e0e7ff, #c7d2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', color: '#4338ca', flexShrink: 0 },
+    unreadBlueDot: { width: '10px', height: '10px', backgroundColor: '#007bff', borderRadius: '50%', boxShadow: '0 0 0 2px #fff' },
     chatWindowPanel: { flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'white' },
-    chatWindowHeader: { padding: '15px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '12px' },
-    avatarMedium: { width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#65676b', fontSize:'14px' },
-    messagesBody: { flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '5px' },
-    chatInputArea: { padding: '15px', display: 'flex', alignItems: 'center', gap: '12px', borderTop: '1px solid #f0f0f0' },
-    messengerInput: { flex: 1, backgroundColor: '#f0f2f5', border: 'none', borderRadius: '20px', padding: '10px 16px', fontSize: '14px', outline: 'none' },
-    emptyChatState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999', textAlign: 'center' },
-    messageRow: { display: 'flex', marginBottom: '4px', width: '100%' },
-    bubbleMe: { padding: '10px 16px', borderRadius: '18px 18px 4px 18px', backgroundColor: '#007bff', color: 'white', maxWidth: '85%', width: 'fit-content', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
-    bubbleOther: { padding: '10px 16px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#e4e6eb', color: '#050505', maxWidth: '85%', width: 'fit-content', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
-    fabContainer: { position: 'fixed', bottom: '30px', right: '30px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', zIndex: 2000 },
-    fabButton: { width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', fontSize: '24px', border: 'none', boxShadow: '0 4px 10px rgba(0,123,255,0.4)', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    fabMenu: { marginBottom: '15px', backgroundColor: 'white', borderRadius: '12px', padding: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
-    fabMenuItem: { padding: '10px 15px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', display:'flex', alignItems:'center', fontSize:'14px', color:'#333' },
-    badge: { background:'#eef2ff', color:'#007bff', padding:'4px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'600' },
-    badgeRed: { marginLeft: 'auto', backgroundColor: '#dc3545', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' },
-    statusActive: { background: '#d4edda', color: '#155724', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' },
-    statusPending: { background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', display:'flex', alignItems:'center', gap:'5px', width:'fit-content' },
-    emptyCell: { textAlign: 'center', padding: '40px', color: '#999', fontStyle: 'italic' },
-    pricingGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' },
-    pricingCard: { backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e1e4e8', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },
-    pricingHeader: { padding: '20px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #eee', textAlign: 'center' },
-    priceTag: { fontSize: '24px', fontWeight: '800', color: '#007bff', marginTop: '10px' },
-    pricingBody: { padding: '20px' },
+    chatWindowHeader: { padding: '15px 25px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '15px', background: '#fff' },
+    avatarMedium: { width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#64748b', fontSize:'15px' },
+    messagesBody: { flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '8px', background: '#fff' },
+    chatInputArea: { padding: '20px', display: 'flex', alignItems: 'center', gap: '15px', borderTop: '1px solid #f1f5f9', background: '#fff' },
+    messengerInput: { flex: 1, backgroundColor: '#f1f5f9', border: '1px solid transparent', borderRadius: '25px', padding: '12px 20px', fontSize: '14px', outline: 'none', transition: 'all 0.2s', color: '#333' },
+    emptyChatState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', textAlign: 'center' },
+    messageRow: { display: 'flex', marginBottom: '8px', width: '100%' },
+    bubbleMe: { padding: '12px 18px', borderRadius: '20px 20px 4px 20px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', maxWidth: '100%', width: 'fit-content', fontSize: '15px', lineHeight: '1.5', boxShadow: '0 2px 5px rgba(0,123,255,0.2)', wordWrap: 'break-word' as 'break-word' },
+    bubbleOther: { padding: '12px 18px', borderRadius: '20px 20px 20px 4px', backgroundColor: '#f1f5f9', color: '#1e293b', maxWidth: '100%', width: 'fit-content', fontSize: '15px', lineHeight: '1.5', wordWrap: 'break-word' as 'break-word' },
+    badge: { background:'#eff6ff', color:'#007bff', padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'700', border: '1px solid #dbeafe' },
+    badgeRed: { marginLeft: 'auto', backgroundColor: '#ef4444', color: 'white', fontSize: '11px', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)' },
+    statusActive: { background: '#dcfce7', color: '#166534', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '700' },
+    statusPending: { background: '#fef9c3', color: '#854d0e', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '700', display:'flex', alignItems:'center', gap:'6px', width:'fit-content' },
+    emptyCell: { textAlign: 'center', padding: '50px', color: '#94a3b8', fontStyle: 'italic' },
+    pricingGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '25px' },
+    pricingCard: { backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e1e4e8', overflow: 'hidden', transition: 'all 0.3s', boxShadow: '0 4px 10px rgba(0,0,0,0.03)' },
+    pricingHeader: { padding: '25px', backgroundColor: '#f8fbff', borderBottom: '1px solid #f1f5f9', textAlign: 'center' },
+    priceTag: { fontSize: '28px', fontWeight: '800', color: '#007bff', marginTop: '10px' },
+    pricingBody: { padding: '25px' },
 };
 
+// --- GLOBAL CSS (ĐÃ FIX TRIỆT ĐỂ) ---
+const cssGlobal = `
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(25px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4); } 70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); } }
+
+.spin { animation: spin 1s linear infinite; }
+.fade-in { animation: fadeIn 0.5s ease-out forwards; }
+.slide-up-card { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+.pop-in { animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* --- SIDEBAR FIX (STABLE VERSION) --- */
+.sidebar-item {
+    padding: 12px 25px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500; /* Giữ nguyên font-weight cho cả 2 trạng thái */
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    border-left: 4px solid transparent; /* Luôn giữ chỗ cho border */
+    margin: 4px 0;
+    border-radius: 0 25px 25px 0;
+    width: 100%; 
+    box-sizing: border-box;
+}
+
+
+/* Hover Effect (Chỉ đổi màu nền nhẹ, không đẩy vị trí) */
+.sidebar-item:not(.active):hover {
+    background-color: #f8fafc;
+    color: #007bff;
+    /* Xóa transform translateX để tránh giật */
+}
+
+/* Active State */
+.sidebar-item.active {
+    background-color: #eff6ff;
+    color: #007bff;
+    border-left-color: #007bff;
+    font-weight: 600; /* Nếu vẫn bị nhảy, hãy đổi thành 500 */
+    box-shadow: 2px 2px 5px rgba(0,123,255,0.05);
+}
+/* ------------------------------------ */
+
+.btn-primary-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,123,255,0.25) !important; filter: brightness(1.05); }
+.btn-primary-hover:active { transform: translateY(0); }
+.btn-secondary-hover:hover { background-color: #e2e8f0 !important; color: #1e293b !important; }
+.btn-icon-hover:hover { background-color: #f1f5f9 !important; }
+.pulse-on-active:active { animation: pulse 0.4s; }
+
+.input-focus:focus { border-color: #007bff !important; box-shadow: 0 0 0 3px rgba(0,123,255,0.1) !important; background-color: #fff !important; }
+
+.hover-lift:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06) !important; }
+.notification-item-hover:hover { background-color: #f8fbff !important; }
+.pricing-card-hover:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.08) !important; border-color: #bfdbfe !important; }
+.chat-item-hover:hover { background-color: #f8fafc !important; }
+.upload-box-hover:hover { border-color: #007bff !important; background-color: #f0f7ff !important; }
+
+.table-hover tbody tr:hover { background-color: #f8fbff !important; }
+
+.icon-pulse { animation: pulse 2s infinite; }
+
+::-webkit-scrollbar { width: 4px; } 
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+`;
+
 const styleSheet = document.createElement("style");
-styleSheet.innerText = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`;
+styleSheet.innerText = cssGlobal;
 document.head.appendChild(styleSheet);
 
 export default Dashboard;

@@ -9,7 +9,6 @@ const ResetPassword = () => {
     const [error, setError] = useState('');
     const navigate = useNavigate();
     
-    // Lấy token từ URL (query param)
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token');
 
@@ -34,7 +33,7 @@ const ResetPassword = () => {
 
             if (response.ok) {
                 setMessage('Đặt lại mật khẩu thành công! Đang chuyển hướng...');
-                setTimeout(() => navigate('/'), 3000); // Chuyển về login sau 3s
+                setTimeout(() => navigate('/login'), 3000); 
             } else {
                 setError(data.detail || 'Token không hợp lệ hoặc đã hết hạn.');
             }
@@ -43,48 +42,57 @@ const ResetPassword = () => {
         }
     };
 
+    // Trường hợp thiếu Token
     if (!token) {
         return (
-            <div className="login-box">
-                <p style={{color: 'red'}}>Đường dẫn không hợp lệ (thiếu token).</p>
-                <button onClick={() => navigate('/')}>Back to Login</button>
+            <div className="login-container">
+                <div className="login-box" style={{textAlign: 'center', padding: '50px'}}>
+                    <h3 style={{color: '#ff6b6b', marginBottom: '20px'}}>Lỗi Truy Cập</h3>
+                    <p style={{color: 'white', marginBottom: '30px'}}>Đường dẫn không hợp lệ hoặc thiếu Token xác thực.</p>
+                    <button onClick={() => navigate('/login')} style={{width: 'auto', padding: '10px 30px', margin: '0 auto'}}>
+                        Back to Login
+                    </button>
+                </div>
             </div>
         );
     }
 
+    // Trường hợp hiển thị Form
     return (
-        <div className="login-box">
-            <div className="form-title">
-                <h3>Reset Password</h3>
+        <div className="login-container">
+            <div className="login-box">
+                <div className="form-title">
+                    <h3>Reset Password</h3>
+                </div>
+                
+                <form onSubmit={handleResetPassword}>
+                    {error && <p style={{color: '#ff6b6b', marginBottom: '15px', fontWeight: 'bold'}}>{error}</p>}
+                    {message && <p style={{color: '#4caf50', marginBottom: '15px', fontWeight: 'bold'}}>{message}</p>}
+
+                    <div className="input-group">
+                        <i className="fas fa-lock icon"></i>
+                        <input 
+                            type="password" 
+                            placeholder="New Password" 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="input-group">
+                        <i className="fas fa-lock icon"></i>
+                        <input 
+                            type="password" 
+                            placeholder="Confirm Password" 
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" style={{marginTop: '10px'}}>Change Password</button>
+                </form>
             </div>
-            
-            <form onSubmit={handleResetPassword}>
-                {error && <p style={{color: '#ff6b6b', marginBottom: '15px'}}>{error}</p>}
-                {message && <p style={{color: '#4caf50', marginBottom: '15px'}}>{message}</p>}
-
-                <div className="input-group">
-                    <i className="fas fa-lock icon"></i>
-                    <input 
-                        type="password" 
-                        placeholder="New Password" 
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                    />
-                </div>
-                <div className="input-group">
-                    <i className="fas fa-lock icon"></i>
-                    <input 
-                        type="password" 
-                        placeholder="Confirm Password" 
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                    />
-                </div>
-
-                <button type="submit">Change Password</button>
-            </form>
         </div>
     );
 };

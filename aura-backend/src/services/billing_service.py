@@ -108,3 +108,19 @@ class BillingService:
         # 3. Gọi xuống Repo để thực hiện trừ (Atomic Update)
         # Lưu ý: Repo deduct_credits nhận subscription_id, không phải user_id
         return self.billing_repo.deduct_credits(sub.id)
+    
+    def get_user_history(self, user_id: UUID):
+        txs = self.billing_repo.get_transactions_by_user(user_id)
+        
+        # Map sang dict/schema (hoặc để Pydantic tự làm ở tầng API)
+        results = []
+        for t in txs:
+            pkg_name = t.package.name if t.package else "Gói bị xóa"
+            results.append({
+                "id": t.id,
+                "amount": t.amount,
+                "status": t.status,
+                "created_at": t.created_at,
+                "package_name": pkg_name
+            })
+        return results

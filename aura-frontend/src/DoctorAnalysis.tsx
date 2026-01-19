@@ -1,5 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { 
+    FaArrowLeft, FaExpand, FaCompress, FaExclamationTriangle, 
+    FaSave, FaSpinner, FaStethoscope, FaCheckCircle, FaTimesCircle, FaEdit
+} from 'react-icons/fa';
 
 // Interface dữ liệu
 interface MedicalRecord {
@@ -17,7 +21,6 @@ const DoctorAnalysis: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     
-    // Ref cho chế độ Fullscreen API (nếu muốn ẩn cả thanh address trình duyệt)
     const containerRef = useRef<HTMLDivElement>(null);
 
     // State dữ liệu
@@ -34,7 +37,6 @@ const DoctorAnalysis: React.FC = () => {
 
     const [reportContent, setReportContent] = useState(''); 
 
-
     // --- 1. FETCH DATA ---
     const normalizeData = (rawData: any): MedicalRecord => {
         const analysisData = rawData.analysis_result || rawData.ai_analysis_result || rawData;
@@ -49,12 +51,13 @@ const DoctorAnalysis: React.FC = () => {
             ai_analysis_status: rawData.ai_analysis_status || "COMPLETED"
         };
     };
+    
     const DIAGNOSIS_OPTIONS = [
-        { value: "Normal", label: "Normal" },
-        { value: "Mild NPDR (Early Signs)", label: "Mild NPDR (Early Signs)" },
-        { value: "Moderate NPDR", label: "Moderate NPDR" },
-        { value: "Severe NPDR", label: "Severe NPDR" },
-        { value: "PDR", label: "PDR" }
+        { value: "Normal", label: "Normal (Bình thường)" },
+        { value: "Mild NPDR (Early Signs)", label: "Mild NPDR (Nhẹ)" },
+        { value: "Moderate NPDR", label: "Moderate NPDR (Trung bình)" },
+        { value: "Severe NPDR", label: "Severe NPDR (Nặng)" },
+        { value: "PDR", label: "PDR (Tăng sinh - Nguy hiểm)" }
     ];
 
     const fetchData = useCallback(async () => {
@@ -71,13 +74,8 @@ const DoctorAnalysis: React.FC = () => {
                 const normalized = normalizeData(resultRaw);
                 setData(normalized);
                 
-                // --- LOAD DỮ LIỆU CŨ VÀO STATE ĐỂ HIỂN THỊ LẠI ---
                 if (normalized.doctor_note) setInternalNote(normalized.doctor_note);
-                
-                // Nếu backend trả về kết quả bác sĩ đã lưu trước đó thì ưu tiên lấy, nếu không lấy của AI
                 setFinalDiagnosis(normalized.ai_result); 
-                
-                // Load nội dung report vào State chỉnh sửa
                 setReportContent(normalized.ai_detailed_report);
             }
         } catch (err) {
@@ -94,7 +92,6 @@ const DoctorAnalysis: React.FC = () => {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, [fetchData]);
 
-    // --- XỬ LÝ FULLSCREEN (API Trình duyệt) ---
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
             containerRef.current?.requestFullscreen().catch(err => alert(`Lỗi: ${err.message}`));
@@ -103,7 +100,6 @@ const DoctorAnalysis: React.FC = () => {
         }
     };
     
-
     // --- 2. XỬ LÝ LƯU ---
     const handleSubmitDiagnosis = async () => {
         if (!id) return;
@@ -119,7 +115,7 @@ const DoctorAnalysis: React.FC = () => {
                 doctor_diagnosis: finalDiagnosis, 
                 doctor_notes: internalNote,       
                 is_correct: isAiCorrect,
-                ai_detailed_report: reportContent // <--- THÊM TRƯỜNG NÀY
+                ai_detailed_report: reportContent 
             };
             const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
@@ -153,141 +149,206 @@ const DoctorAnalysis: React.FC = () => {
         });
     };
 
-    if (loading) return <div>Đang tải...</div>;
-    if (!data) return <div>Không tìm thấy dữ liệu.</div>;
+    if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={40} color="#007bff"/></div>;
+    if (!data) return <div style={styles.loading}>Không tìm thấy dữ liệu.</div>;
 
     const currentImage = (viewMode === 'annotated' && data.annotated_image_url) ? data.annotated_image_url : data.image_url;
 
     return (
-        <div ref={containerRef} style={styles.container}>
+        <div ref={containerRef} style={styles.container} className="fade-in">
             {/* Header Toolbar */}
-            <div style={styles.toolbar}>
+            <header style={styles.toolbar}>
                 <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                    <button onClick={() => navigate(-1)} style={styles.backBtn}>&larr; Thoát</button>
-                    <h2 style={{margin: 0, fontSize: '18px', color: '#444'}}>Thẩm định: #{data.id}</h2>
+                    <button onClick={() => navigate(-1)} style={styles.backBtn} className="btn-secondary-hover">
+                        <FaArrowLeft style={{marginRight: '6px'}}/> Thoát
+                    </button>
+                    <div style={styles.divider}></div>
+                    <div style={{display:'flex', flexDirection:'column'}}>
+                        <h2 style={{margin: 0, fontSize: '16px', color: '#1e293b', fontWeight: '700'}}>Thẩm định Hồ sơ #{data.id}</h2>
+                        <span style={{fontSize:'12px', color:'#64748b'}}>Ngày tải lên: {new Date(data.upload_date).toLocaleDateString('vi-VN')}</span>
+                    </div>
                 </div>
                 
                 <div style={{display: 'flex', gap: '10px'}}>
-                    <button onClick={toggleFullscreen} style={styles.fullscreenBtn}>
-                        {isFullscreen ? '⛶ Thu nhỏ' : '⛶ Toàn màn hình'}
+                    <button onClick={toggleFullscreen} style={styles.toolBtn} className="btn-secondary-hover" title="Toàn màn hình">
+                        {isFullscreen ? <FaCompress/> : <FaExpand/>}
                     </button>
-                    <button onClick={handleReportIssue} style={styles.reportBtn}>Báo lỗi</button>
+                    <button onClick={handleReportIssue} style={styles.reportBtn} className="btn-warning-hover">
+                        <FaExclamationTriangle style={{marginRight:'6px'}}/> Báo lỗi Model
+                    </button>
                 </div>
-            </div>
+            </header>
 
             <div style={styles.mainGrid}>
-                {/* --- CỘT TRÁI --- */}
+                {/* --- CỘT TRÁI (Hình ảnh & AI Info) --- */}
                 <div style={styles.leftPanel}>
+                    {/* Image Viewer */}
                     <div style={styles.imageBox}>
                         <img src={currentImage} alt="Retina" style={styles.image} />
                         
-                        {data.annotated_image_url && (
-                            <div style={styles.viewModeToggle}>
-                                <button 
-                                    style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}
-                                    onClick={() => setViewMode('original')}
-                                >Ảnh gốc</button>
-                                <button 
-                                    style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}
-                                    onClick={() => setViewMode('annotated')}
-                                >AI Khoanh vùng</button>
-                            </div>
-                        )}
+                        <div style={styles.overlayControls}>
+                            {data.annotated_image_url ? (
+                                <div style={styles.viewModeGroup}>
+                                    <button 
+                                        style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}
+                                        onClick={() => setViewMode('original')}
+                                    >Ảnh gốc</button>
+                                    <button 
+                                        style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}
+                                        onClick={() => setViewMode('annotated')}
+                                    >AI Khoanh vùng</button>
+                                </div>
+                            ) : <span style={{color:'white', fontSize:'12px', padding:'5px 10px', background:'rgba(0,0,0,0.5)', borderRadius:'12px'}}>Không có ảnh khoanh vùng</span>}
+                        </div>
                     </div>
                     
-                    <div style={styles.aiResultBox}>
-                        <span style={styles.aiLabel}>Đánh giá:</span>
-                        <span style={styles.aiValue}>{data.ai_result}</span>
-                    </div>
-                    {viewMode === 'annotated' && (
-                        <div style={styles.legendBox}>
-                            <div style={styles.legendGrid}>
-                                <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
-                                <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
-                                <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
-                                <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
+                    <div className="slide-up-card" style={{padding: '0 5px'}}>
+                        <div style={styles.cardInfo}>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', borderBottom:'1px solid #f1f5f9', paddingBottom:'10px'}}>
+                                <h4 style={{margin:0, color:'#1e293b', display:'flex', alignItems:'center'}}>
+                                    <FaStethoscope style={{marginRight:'8px', color:'#007bff'}}/> Kết quả AI
+                                </h4>
+                                <span style={{
+                                    ...styles.badge, 
+                                    backgroundColor: (data.ai_result||'').includes('Normal') ? '#dcfce7' : '#fee2e2',
+                                    color: (data.ai_result||'').includes('Normal') ? '#166534' : '#991b1b'
+                                }}>
+                                    {data.ai_result}
+                                </span>
+                            </div>
+
+                            {/* Legend */}
+                            {viewMode === 'annotated' && (
+                                <div style={styles.legendGrid}>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
+                                </div>
+                            )}
+
+                            {/* Editable AI Report */}
+                            <div style={{marginTop:'20px'}}>
+                                <label style={styles.label}>
+                                    <FaEdit style={{marginRight:'5px', color:'#64748b'}}/> 
+                                    Thông số chi tiết (AI trích xuất)
+                                </label>
+                                <textarea
+                                    className="input-focus"
+                                    style={styles.codeEditor}
+                                    value={reportContent}
+                                    onChange={(e) => setReportContent(e.target.value)}
+                                    placeholder="Nội dung báo cáo chi tiết..."
+                                    spellCheck={false}
+                                />
                             </div>
                         </div>
-                    )}
-                    
-                    {/* --- CẬP NHẬT PHẦN CHI TIẾT AI THÀNH EDITABLE TEXTAREA --- */}
-                    <div style={styles.detailsBox}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
-                            <h4 style={{margin: 0}}>Tham số (Có thể chỉnh sửa):</h4>
-                            <span style={{fontSize: '11px', color: '#666', fontStyle: 'italic'}}>Bác sĩ có thể sửa lại nội dung này</span>
-                        </div>
-                        <textarea
-                            style={{
-                                ...styles.textarea, 
-                                height: '200px', 
-                                fontFamily: 'Consolas, monospace', // Font dễ nhìn cho báo cáo kỹ thuật
-                                fontSize: '13px',
-                                lineHeight: '1.5'
-                            }}
-                            value={reportContent}
-                            onChange={(e) => setReportContent(e.target.value)}
-                            placeholder="Nội dung báo cáo chi tiết..."
-                        />
                     </div>
                 </div>
 
-                {/* --- CỘT PHẢI --- */}
+                {/* --- CỘT PHẢI (Form Chẩn đoán) --- */}
                 <div style={styles.rightPanel}>
-                    <h3 style={{fontSize: '24px', marginTop: 0, color: '#0056b3'}}>BÁC SĨ CHẨN ĐOÁN</h3>
+                    <div style={styles.formHeader}>
+                        <h3 style={{margin:0, color:'#0f172a', fontSize:'18px'}}>CHẨN ĐOÁN CỦA BÁC SĨ</h3>
+                        <div style={{fontSize:'13px', color:'#64748b', marginTop:'4px'}}>Vui lòng xác thực kết quả từ AI</div>
+                    </div>
                     
-                    <div style={styles.section}>
-                        <label style={styles.label}>Đánh giá kết quả AI:</label>
-                        <div style={styles.radioGroup}>
-                            <label style={{...styles.radioLabel, background: isAiCorrect ? '#d4edda' : '#fff', borderColor: isAiCorrect ? '#28a745' : '#ddd'}}>
-                                <input type="radio" checked={isAiCorrect === true} onChange={() => { setIsAiCorrect(true); setFinalDiagnosis(data.ai_result); }} />
-                                AI Đúng
-                            </label>
+                    <div style={styles.formScroll}>
+                        {/* Section 1: AI Verification */}
+                        <div style={styles.section}>
+                            <label style={styles.sectionLabel}>1. Đánh giá kết quả AI</label>
+                            <div style={styles.radioGroup}>
+                                <div 
+                                    onClick={() => { setIsAiCorrect(true); setFinalDiagnosis(data.ai_result); }}
+                                    style={{
+                                        ...styles.radioCard, 
+                                        borderColor: isAiCorrect ? '#22c55e' : '#e2e8f0',
+                                        backgroundColor: isAiCorrect ? '#f0fdf4' : '#fff'
+                                    }}
+                                >
+                                    <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                        <div style={{...styles.radioCircle, borderColor: isAiCorrect ? '#22c55e' : '#cbd5e1'}}>
+                                            {isAiCorrect && <div style={{width:'8px', height:'8px', borderRadius:'50%', background:'#22c55e'}}></div>}
+                                        </div>
+                                        <div>
+                                            <div style={{fontWeight:'600', color: isAiCorrect ? '#15803d' : '#334155'}}>Chính xác</div>
+                                            <div style={{fontSize:'12px', color:'#64748b'}}>Đồng ý với AI</div>
+                                        </div>
+                                    </div>
+                                    <FaCheckCircle style={{color: isAiCorrect ? '#22c55e' : '#e2e8f0', fontSize:'20px'}}/>
+                                </div>
 
-                            <label style={{...styles.radioLabel, background: !isAiCorrect ? '#f8d7da' : '#fff', borderColor: !isAiCorrect ? '#dc3545' : '#ddd'}}>
-                                <input type="radio" checked={isAiCorrect === false} onChange={() => { setIsAiCorrect(false); setFinalDiagnosis(''); }} />
-                                AI Sai
+                                <div 
+                                    onClick={() => { setIsAiCorrect(false); setFinalDiagnosis(''); }}
+                                    style={{
+                                        ...styles.radioCard, 
+                                        borderColor: !isAiCorrect ? '#ef4444' : '#e2e8f0',
+                                        backgroundColor: !isAiCorrect ? '#fef2f2' : '#fff'
+                                    }}
+                                >
+                                    <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                        <div style={{...styles.radioCircle, borderColor: !isAiCorrect ? '#ef4444' : '#cbd5e1'}}>
+                                            {!isAiCorrect && <div style={{width:'8px', height:'8px', borderRadius:'50%', background:'#ef4444'}}></div>}
+                                        </div>
+                                        <div>
+                                            <div style={{fontWeight:'600', color: !isAiCorrect ? '#b91c1c' : '#334155'}}>Sai lệch</div>
+                                            <div style={{fontSize:'12px', color:'#64748b'}}>Cần chẩn đoán lại</div>
+                                        </div>
+                                    </div>
+                                    <FaTimesCircle style={{color: !isAiCorrect ? '#ef4444' : '#e2e8f0', fontSize:'20px'}}/>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Final Diagnosis */}
+                        <div style={styles.section}>
+                            <label style={styles.sectionLabel}>
+                                2. Kết luận cuối cùng
+                                {!isAiCorrect && <span style={{color: 'red', marginLeft:'4px'}}>*</span>}
                             </label>
+                            
+                            <select
+                                className="input-focus"
+                                style={{
+                                    ...styles.select, 
+                                    borderColor: !isAiCorrect && !finalDiagnosis ? '#ef4444' : '#cbd5e1',
+                                    backgroundColor: isAiCorrect ? '#f8fafc' : '#fff', 
+                                    cursor: isAiCorrect ? 'not-allowed' : 'pointer',
+                                    color: isAiCorrect ? '#64748b' : '#0f172a'
+                                }}
+                                value={finalDiagnosis}
+                                onChange={(e) => setFinalDiagnosis(e.target.value)}
+                                disabled={isAiCorrect} 
+                            >
+                                <option value="" disabled>-- Chọn mức độ bệnh --</option>
+                                {DIAGNOSIS_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Section 3: Notes */}
+                        <div style={styles.section}>
+                            <label style={styles.sectionLabel}>3. Ghi chú nội bộ</label>
+                            <textarea
+                                className="input-focus"
+                                style={styles.textarea}
+                                rows={5}
+                                value={internalNote}
+                                onChange={(e) => setInternalNote(e.target.value)}
+                                placeholder="Ghi chú cho hồ sơ này (không hiển thị cho bệnh nhân)..."
+                            />
                         </div>
                     </div>
 
-                    <div style={styles.section}>
-                        <label style={styles.label}>
-                            Chẩn đoán cuối cùng:
-                            {!isAiCorrect && <span style={{color: 'red'}}> *</span>}
-                        </label>
-                        
-                        <select
-                            style={{
-                                ...styles.select, 
-                                borderColor: !isAiCorrect && !finalDiagnosis ? 'red' : '#ccc',
-                                backgroundColor: isAiCorrect ? '#e9ecef' : '#fff', 
-                                cursor: isAiCorrect ? 'not-allowed' : 'pointer'
-                            }}
-                            value={finalDiagnosis}
-                            onChange={(e) => setFinalDiagnosis(e.target.value)}
-                            disabled={isAiCorrect} 
+                    <div style={styles.formFooter}>
+                        <button 
+                            onClick={handleSubmitDiagnosis} 
+                            disabled={isSaving} 
+                            className="btn-primary-hover pulse-on-active"
+                            style={styles.saveBtn}
                         >
-                            <option value="" disabled>-- Chọn bệnh --</option>
-                            {DIAGNOSIS_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div style={styles.section}>
-                        <label style={styles.label}>Ghi chú:</label>
-                        <textarea
-                            style={styles.textarea}
-                            rows={6}
-                            value={internalNote}
-                            onChange={(e) => setInternalNote(e.target.value)}
-                            placeholder="Nhập ghi chú..."
-                        />
-                    </div>
-
-                    <div style={styles.actionFooter}>
-                        <button onClick={handleSubmitDiagnosis} disabled={isSaving} style={styles.saveBtn}>
-                            {isSaving ? 'Đang lưu...' : 'Hoàn tất & Lưu'}
+                            {isSaving ? <><FaSpinner className="spin"/> Đang lưu...</> : <><FaSave/> Xác nhận & Lưu hồ sơ</>}
                         </button>
                     </div>
                 </div>
@@ -296,104 +357,114 @@ const DoctorAnalysis: React.FC = () => {
     );
 };
 
-// Styles Update: Dùng Position Fixed để thoát khỏi layout cha
+// --- STYLES ---
 const styles: { [key: string]: React.CSSProperties } = {
+    loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', backgroundColor: '#f4f6f9', color: '#64748b' },
+    
     container: { 
-        position: 'fixed',    // MẤU CHỐT: Thoát khỏi dòng chảy layout bình thường
-        top: 0,
-        left: 0,
-        width: '100vw',       // Chiều rộng 100% viewport
-        height: '100vh',      // Chiều cao 100% viewport
-        zIndex: 9999,         // Đè lên tất cả menu, sidebar cũ
-        backgroundColor: '#f4f6f8', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        fontFamily: 'Segoe UI, sans-serif', 
-        overflow: 'hidden',
-        boxSizing: 'border-box'
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', 
+        zIndex: 9999, backgroundColor: '#f4f6f9', display: 'flex', flexDirection: 'column', 
+        fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', boxSizing: 'border-box'
     },
+    
+    // TOOLBAR
     toolbar: { 
-        height: '50px', 
-        padding: '0 20px', 
-        background: 'white', 
-        borderBottom: '1px solid #ddd', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flexShrink: 0
+        height: '60px', padding: '0 25px', background: 'white', borderBottom: '1px solid #e2e8f0', 
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, zIndex: 10
     },
-    backBtn: { background: 'none', border: '1px solid #ddd', padding: '5px 10px', borderRadius: '4px', color: '#666', cursor: 'pointer', fontWeight: '500' },
-    fullscreenBtn: { background: '#e2e6ea', border: 'none', color: '#333', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
-    reportBtn: { background: '#fff3cd', border: 'none', color: '#856404', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
+    backBtn: { background: 'white', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', color: '#64748b', cursor: 'pointer', fontWeight: '600', fontSize:'13px', display:'flex', alignItems:'center', transition: 'all 0.2s' },
+    divider: { height: '24px', width: '1px', background: '#e2e8f0', margin: '0 5px' },
+    toolBtn: { background: '#f1f5f9', border: 'none', color: '#475569', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display:'flex', alignItems:'center', transition: 'all 0.2s' },
+    reportBtn: { background: '#fffbeb', border: '1px solid #fcd34d', color: '#b45309', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', display:'flex', alignItems:'center', transition: 'all 0.2s' },
+
+    // GRID LAYOUT
+    mainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', overflow: 'hidden' },
+
+    // LEFT PANEL
+    leftPanel: { padding: '20px', overflowY: 'auto', backgroundColor: '#f1f5f9', display: 'flex', flexDirection: 'column', gap: '20px' },
     
-    mainGrid: { 
-        flex: 1, 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 400px', // Cột phải cố định 400px, cột trái co giãn
-        overflow: 'hidden' 
-    },
-    
-    // Left Panel (Image Viewer)
-    leftPanel: { 
-        padding: '20px', 
-        overflowY: 'auto', 
-        backgroundColor: '#e9ecef', // Nền tối hơn chút để nổi bật ảnh
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '15px' 
-    },
     imageBox: { 
-        width: '100%', 
-        flex: 1, // Chiếm phần lớn không gian
-        backgroundColor: '#000', 
-        borderRadius: '8px', 
-        overflow: 'hidden', 
-        position: 'relative', 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center',
-        minHeight: '400px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        width: '100%', flex: 1, minHeight: '450px', backgroundColor: '#0f172a', 
+        borderRadius: '12px', overflow: 'hidden', position: 'relative', 
+        display: 'flex', justifyContent: 'center', alignItems: 'center', 
+        boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #334155'
     },
     image: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' },
     
-    // Các nút toggle trên ảnh
-    viewModeToggle: { position: 'absolute', bottom: '20px', background: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '20px', display: 'flex', gap: '5px' },
-    toggleBtn: { background: 'transparent', border: 'none', color: '#ccc', padding: '6px 14px', cursor: 'pointer', fontSize: '13px' },
-    toggleActive: { background: '#007bff', border: 'none', color: 'white', padding: '6px 14px', borderRadius: '15px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' },
-    
-    aiResultBox: { padding: '15px', background: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
-    aiLabel: { fontWeight: 'bold', color: '#555' },
-    aiValue: { fontSize: '20px', color: '#dc3545', fontWeight: 'bold' },
-    
-    detailsBox: { background: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+    overlayControls: { position: 'absolute', bottom: '20px', width: '100%', display: 'flex', justifyContent: 'center' },
+    viewModeGroup: { background: 'rgba(255,255,255,0.15)', padding: '5px', borderRadius: '30px', display: 'flex', gap: '0', backdropFilter: 'blur(5px)', border: '1px solid rgba(255,255,255,0.2)' },
+    toggleBtn: { background: 'transparent', border: 'none', color: '#e2e8f0', padding: '8px 16px', cursor: 'pointer', fontSize: '13px', fontWeight:'500' },
+    toggleActive: { background: '#007bff', border: 'none', color: 'white', padding: '8px 18px', borderRadius: '25px', cursor: 'pointer', fontSize: '13px', fontWeight: '700', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' },
 
-    // Right Panel (Form)
+    cardInfo: { background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', border: '1px solid #e2e8f0' },
+    badge: { padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: '700' },
+    
+    legendGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '13px', marginTop: '10px', background: '#f8fafc', padding: '10px', borderRadius: '8px' },
+    legendItem: { display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontWeight: '500' },
+    dot: { width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block' },
+    
+    codeEditor: { width: '100%', height: '180px', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', fontFamily: 'Consolas, monospace', lineHeight: '1.6', color: '#334155', resize: 'vertical', marginTop: '8px', outline:'none', boxSizing: 'border-box' },
+
+    // RIGHT PANEL (FORM)
     rightPanel: { 
-        padding: '25px', 
-        backgroundColor: 'white', 
-        borderLeft: '1px solid #ddd',
-        overflowY: 'auto', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '20px',
-        boxShadow: '-2px 0 5px rgba(0,0,0,0.05)'
+        backgroundColor: 'white', borderLeft: '1px solid #e2e8f0', 
+        display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0,0,0,0.03)',
+        zIndex: 20
     },
-    section: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    label: { fontWeight: '600', fontSize: '14px', color: '#333' },
-    radioGroup: { display: 'flex', gap: '10px' },
-    radioLabel: { flex: 1, padding: '12px', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' },
-    select: { padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '14px', width: '100%', height: '42px' },
-    textarea: { padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' },
+    formHeader: { padding: '25px', borderBottom: '1px solid #f1f5f9', background: '#fff' },
+    formScroll: { flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '30px' },
     
-    actionFooter: { marginTop: 'auto', paddingTop: '20px' },
-    saveBtn: { width: '100%', padding: '14px', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' },
+    section: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    sectionLabel: { fontWeight: '700', fontSize: '14px', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' },
+    label: { fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display:'flex', alignItems:'center' },
     
-    legendBox: { marginTop: '5px', backgroundColor: 'white', padding: '10px', borderRadius: '8px' },
-    legendGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' },
-    legendItem: { display: 'flex', alignItems: 'center', gap: '8px', color: '#444', fontWeight: '500' },
-    dot: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block' },
+    radioGroup: { display: 'flex', flexDirection: 'column', gap: '15px' },
+    radioCard: { 
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+        padding: '16px', borderRadius: '10px', border: '1px solid', 
+        cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.02)'
+    },
+    radioCircle: { width: '20px', height: '20px', borderRadius: '50%', border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+
+    select: { padding: '12px', borderRadius: '8px', border: '1px solid', fontSize: '14px', width: '100%', outline: 'none', transition: 'all 0.2s' },
+    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: '"Segoe UI", sans-serif', width: '100%', outline: 'none', transition: 'all 0.2s', backgroundColor:'#fff', boxSizing:'border-box' },
+    
+    formFooter: { padding: '25px', borderTop: '1px solid #f1f5f9', background: '#fff' },
+    saveBtn: { 
+        width: '100%', padding: '14px', background: 'linear-gradient(135deg, #007bff, #0069d9)', 
+        color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', 
+        cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,123,255,0.25)', 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        transition: 'all 0.2s'
+    },
 };
+
+// --- CSS GLOBAL ---
+const cssGlobal = `
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+.spin { animation: spin 1s linear infinite; }
+.fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.slide-up-card { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+
+.input-focus:focus { border-color: #007bff !important; box-shadow: 0 0 0 3px rgba(0,123,255,0.1) !important; background-color: #fff !important; }
+.btn-secondary-hover:hover { background-color: #f1f5f9 !important; color: #1e293b !important; }
+.btn-primary-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,123,255,0.3) !important; }
+.btn-primary-hover:active { transform: translateY(0); }
+.btn-warning-hover:hover { background-color: #fef3c7 !important; color: #92400e !important; }
+.pulse-on-active:active { animation: pulse 0.3s; }
+
+::-webkit-scrollbar { width: 6px; } 
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+`;
+
+const styleSheet = document.createElement("style");
+styleSheet.innerText = cssGlobal;
+document.head.appendChild(styleSheet);
 
 export default DoctorAnalysis;

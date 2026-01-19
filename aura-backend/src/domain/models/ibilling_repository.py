@@ -54,3 +54,8 @@ class IBillingRepository(ABC):
     def get_recent_transactions(self, limit: int = 10) -> List[PaymentTransaction]:
         """Lấy danh sách giao dịch gần nhất"""
         pass
+
+    @abstractmethod
+    def get_transactions_by_user(self, user_id: UUID) -> List[PaymentTransaction]:
+        """Lấy lịch sử giao dịch của một user cụ thể"""
+        pass

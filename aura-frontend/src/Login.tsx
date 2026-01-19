@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
-import FacebookLogin from '@greatsumini/react-facebook-login'; // Import thư viện Facebook
+import FacebookLogin from '@greatsumini/react-facebook-login';
 import './App.css';
 
 const Login = () => {
@@ -12,31 +12,26 @@ const Login = () => {
     
     const navigate = useNavigate();
 
-    // --- 1. XỬ LÝ SAU KHI ĐĂNG NHẬP THÀNH CÔNG (Dùng chung cho cả Google, Facebook, Thường) ---
+    // --- XỬ LÝ SAU KHI ĐĂNG NHẬP THÀNH CÔNG ---
     const handleLoginSuccess = (data: any) => {
         localStorage.setItem('token', data.access_token);
         
+        const userInfoToSave = data.user_info || { username: userName, role: data.role };
+
         if (rememberMe) {
-            localStorage.setItem('user_info', JSON.stringify(data.user_info));
+            localStorage.setItem('user_info', JSON.stringify(userInfoToSave));
         } else {
-            sessionStorage.setItem('user_info', JSON.stringify(data.user_info));
+            sessionStorage.setItem('user_info', JSON.stringify(userInfoToSave));
         }
 
-        // Logic điều hướng
-        if (data.is_new_user) {
-            navigate('/set-username');
-        } else {
-            const userInfo = data.user_info;
-            const standardizedRole = userInfo.role ? userInfo.role.toLowerCase() : '';
-            
-            if (standardizedRole === 'admin') navigate('/admin', { replace: true });
-            else if (standardizedRole === 'doctor') navigate('/dashboarddr', { replace: true });
-            else if (standardizedRole === 'clinic') navigate('/clinic-dashboard', { replace: true });
-            else navigate('/dashboard', { replace: true });
-        }
+        const standardizedRole = data.role ? data.role.toLowerCase() : '';
+        if (standardizedRole === 'admin') navigate('/admin', { replace: true });
+        else if (standardizedRole === 'doctor') navigate('/dashboarddr', { replace: true });
+        else if (standardizedRole === 'clinic') navigate('/clinic-dashboard', { replace: true });
+        else navigate('/dashboard', { replace: true });
     };
 
-    // --- 2. LOGIC GOOGLE ---
+    // --- GOOGLE ---
     const loginWithGoogle = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             try {
@@ -52,10 +47,10 @@ const Login = () => {
                 setError('Lỗi kết nối Server (Google Login)');
             }
         },
-        onError: () => setError('Đăng nhập Google thất bại (Popup đóng)'),
+        onError: () => setError('Đăng nhập Google thất bại'),
     });
 
-    // --- 3. LOGIC FACEBOOK (MỚI) ---
+    // --- FACEBOOK ---
     const handleFacebookResponse = async (response: any) => {
         try {
             const res = await fetch('http://localhost:8000/api/v1/auth/facebook-login', {
@@ -67,191 +62,130 @@ const Login = () => {
                 })
             });
             const data = await res.json();
-            
-            if (res.ok) {
-                handleLoginSuccess(data);
-            } else {
-                setError(data.detail || "Đăng nhập Facebook thất bại");
-            }
+            if (res.ok) handleLoginSuccess(data);
+            else setError(data.detail || "Đăng nhập Facebook thất bại");
         } catch (error) {
             setError('Lỗi kết nối Server (Facebook Login)');
         }
     };
 
-// --- 4. LOGIC ĐĂNG NHẬP THƯỜNG (Đã sửa chuẩn Backend mới) ---
+    // --- LOGIN THƯỜNG ---
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-
         try {
-            // BƯỚC 1: Tạo dữ liệu dạng Form URL Encoded (Chuẩn OAuth2)
-            // Backend FastAPI mặc định không nhận JSON ở endpoint login này
             const formData = new URLSearchParams();
-            formData.append('username', userName); // Lưu ý: 'username' viết thường
+            formData.append('username', userName);
             formData.append('password', password);
 
-            // BƯỚC 2: Gọi API Login
             const response = await fetch('http://localhost:8000/api/v1/auth/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: formData.toString(), // Chuyển sang chuỗi a=1&b=2
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString(),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                // Xử lý lỗi (Backend trả về detail là mảng hoặc chuỗi)
-                const errorMsg = typeof data.detail === 'string' 
-                    ? data.detail 
-                    : 'Đăng nhập thất bại (Sai tài khoản hoặc mật khẩu)';
-                setError(errorMsg);
+                setError(typeof data.detail === 'string' ? data.detail : 'Sai tài khoản hoặc mật khẩu');
                 return;
             }
-
-            // BƯỚC 3: Xử lý dữ liệu trả về
-            // Dựa vào ảnh: response có { access_token, role, token_type }
-            
-            // 3.1. Lưu Token
-            localStorage.setItem('token', data.access_token);
-
-            // 3.2. Lưu thông tin User
-            // Vì API login mới trả về trực tiếp "role" ở ngoài, ta tạo lại object user_info giả
-            // để các trang khác trong App không bị lỗi khi get localStorage
-            const userInfoToSave = {
-                username: userName,
-                role: data.role // Lấy role từ API trả về
-            };
-
-            if (rememberMe) {
-                localStorage.setItem('user_info', JSON.stringify(userInfoToSave));
-            } else {
-                sessionStorage.setItem('user_info', JSON.stringify(userInfoToSave));
-            }
-
-            // 3.3. Điều hướng (Navigation)
-            console.log("Login Role:", data.role); // Log ra để kiểm tra
-            
-            // Chuẩn hóa role về chữ thường để so sánh cho chắc ăn
-            const role = data.role ? data.role.toLowerCase() : 'user';
-
-            if (role === 'admin') navigate('/admin', { replace: true });
-            else if (role === 'doctor') navigate('/dashboarddr', { replace: true });
-            else if (role === 'clinic') navigate('/clinic-dashboard', { replace: true });
-            else navigate('/dashboard', { replace: true });
+            // Gọi hàm xử lý thành công với dữ liệu trả về từ API Login thường
+            // API thường trả về: access_token, role, v.v.
+            handleLoginSuccess({ ...data, is_new_user: false }); 
 
         } catch (err) {
-            console.error("Lỗi đăng nhập:", err);
             setError('Không thể kết nối đến Server!');
         }
     };
 
     return (
-        <div className="login-box">
-            <div className="form-title">
-                <h3>Login</h3>
-            </div>
-            
-            <form onSubmit={handleLogin}>
-                {error && <p style={{color: '#ff6b6b', marginBottom: '15px', fontWeight: 'bold'}}>{error}</p>}
-
-                <div className="input-group">
-                    <i className="fas fa-user icon"></i> 
-                    <input 
-                        type="text" 
-                        placeholder="Email/Username" 
-                        value={userName} 
-                        onChange={(e) => setUserName(e.target.value)} 
-                        required
-                    />
-                </div>
-                <div className="input-group">
-                    <i className="fas fa-lock icon"></i>
-                    <input 
-                        type="password" 
-                        placeholder="Password" 
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                    />
+        // QUAN TRỌNG: Thêm wrapper login-container ở đây
+        <div className="login-container">
+            <div className="login-box">
+                <div className="form-title">
+                    <h3>Login</h3>
                 </div>
                 
-                <div className="login-options"> 
-                    <div className="remember-me" onClick={() => setRememberMe(!rememberMe)}>
+                <form onSubmit={handleLogin}>
+                    {error && <p style={{color: '#ff6b6b', marginBottom: '15px', fontWeight: 'bold'}}>{error}</p>}
+
+                    <div className="input-group">
+                        <i className="fas fa-user icon"></i> 
                         <input 
-                            type="checkbox" 
-                            id="remember-me" 
-                            checked={rememberMe}
-                            onChange={(e) => setRememberMe(e.target.checked)}
-                            style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                            type="text" 
+                            placeholder="Email/Username" 
+                            value={userName} 
+                            onChange={(e) => setUserName(e.target.value)} 
+                            required
                         />
-                        <label htmlFor="remember-me" style={{cursor: 'pointer'}}>Remember me</label>
                     </div>
-                    <div className="forgot-password">
-                        <span
-                            onClick={() => navigate('/forgot-password')}
-                            style={{cursor: 'pointer', color: '#ffffffff', fontSize: '0.9em'}}
-                            className='hover-underline'
-                        >
-                            Forgot Password?
-                        </span>
+                    <div className="input-group">
+                        <i className="fas fa-lock icon"></i>
+                        <input 
+                            type="password" 
+                            placeholder="Password" 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                        />
                     </div>
-                </div>
+                    
+                    <div className="login-options"> 
+                        <div className="remember-me" onClick={() => setRememberMe(!rememberMe)}>
+                            <input 
+                                type="checkbox" 
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                            />
+                            <label style={{cursor: 'pointer', marginLeft: '5px'}}>Remember me</label>
+                        </div>
+                        <div className="forgot-password">
+                            <span onClick={() => navigate('/forgot-password')} className='hover-underline' style={{cursor: 'pointer'}}>
+                                Forgot Password?
+                            </span>
+                        </div>
+                    </div>
 
-                <button type="submit">Login</button>
-                
-                <div className="divider">Or</div>
-                
-                {/* NÚT GOOGLE */}
-                <button 
-                    type="button" 
-                    className="social-button google-btn"
-                    onClick={() => loginWithGoogle()} 
-                >
-                    <i className="fab fa-google" style={{color: '#DB4437'}}></i> Login with Google
-                </button>
+                    <button type="submit">Login</button>
+                    
+                    <div className="divider">Or</div>
+                    
+                    <button type="button" className="social-button google-btn" onClick={() => loginWithGoogle()}>
+                        <i className="fab fa-google" style={{color: '#DB4437'}}></i> Login with Google
+                    </button>
 
-                {/* NÚT FACEBOOK (ĐÃ TÍCH HỢP) */}
-                <div style={{width: '100%', display: 'flex', justifyContent: 'center'}}>
+                    {/* Nút Facebook đã được làm sạch style để đồng bộ */}
                     <FacebookLogin
-                        appId="1874060756652806"  // <--- ⚠️ DÁN APP ID CỦA BẠN VÀO ĐÂY
+                        appId="1874060756652806"
                         onSuccess={handleFacebookResponse}
                         onFail={(error) => console.log('Login Failed!', error)}
+                        className="social-button facebook-btn-custom"
                         style={{
-                            width: '80%', // Khớp với CSS .social-button
-                            padding: '15px',
-                            marginBottom: '15px',
-                            borderRadius: '4rem',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: '#1877f2', // Màu xanh Facebook chuẩn
+                            // Reset style mặc định của thư viện để dùng class CSS
+                            backgroundColor: '#1877f2',
                             color: 'white',
                             border: 'none',
-                            fontSize: '0.83em',
-                            transition: 'opacity 0.2s'
+                            outline: 'none',
+                            padding: '12px' 
                         }}
-                        // Style khi hover (thư viện hỗ trợ prop style nhưng hover thì CSS class tốt hơn, tạm thời dùng style inline)
                     >
-                        <i className="fab fa-facebook-f" style={{marginRight: '10px', fontSize: '1.1em'}}></i>
-                        Login with Facebook
+                        <i className="fab fa-facebook-f"></i> Login with Facebook
                     </FacebookLogin>
-                </div>
 
-                <div className="register-section">
-                    <p>Don't have an account?</p>
-                    <span
-                        className="register-link"
-                        style={{cursor: 'pointer', marginLeft: '5px'}}
-                        onClick={() => navigate('/register')}
-                    >
-                        Register
-                    </span>
-                </div>
-            </form>
+                    <div className="register-section" style={{marginTop: '20px'}}>
+                        <p style={{display: 'inline', color: 'rgba(255,255,255,0.8)'}}>Don't have an account?</p>
+                        <span
+                            className="register-link hover-underline"
+                            style={{cursor: 'pointer', marginLeft: '5px', fontWeight: 'bold'}}
+                            onClick={() => navigate('/register')}
+                        >
+                            Register
+                        </span>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

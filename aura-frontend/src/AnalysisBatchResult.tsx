@@ -11,16 +11,15 @@ const AnalysisBatchResult: React.FC = () => {
     const [results, setResults] = useState(batchResults);
     const [filter, setFilter] = useState('ALL'); 
 
-    // --- 1. THAY ĐỔI: Dùng State thay vì biến thường để UI tự update khi có API ---
+    // --- State UI Update ---
     const [currentRole, setCurrentRole] = useState<string>('');
-    const [isRoleLoaded, setIsRoleLoaded] = useState(false); // Cờ để biết đã check role xong chưa
+    const [isRoleLoaded, setIsRoleLoaded] = useState(false);
 
-    // --- 2. LOGIC MỚI: Fetch Role từ Server (Copy từ Upload.tsx) ---
+    // --- Logic Fetch Role ---
     useEffect(() => {
         const fetchUserRole = async () => {
             const token = localStorage.getItem('token');
             if (!token) { 
-                // Fallback nếu không có token (tuỳ chọn navigate về login)
                 setIsRoleLoaded(true);
                 return; 
             }
@@ -34,20 +33,18 @@ const AnalysisBatchResult: React.FC = () => {
                     const userData = await userRes.json();
                     const info = userData.user_info || userData; 
                     const rawRole = info.role || '';
-                    // Chuyển sang UpperCase để khớp với logic so sánh cũ (CLINIC, DOCTOR)
                     setCurrentRole(rawRole.toUpperCase().trim());
                 }
             } catch (error) {
                 console.error("Lỗi lấy thông tin user:", error);
             } finally {
-                setIsRoleLoaded(true); // Đánh dấu là đã check xong
+                setIsRoleLoaded(true); 
             }
         };
 
         fetchUserRole();
     }, []);
 
-    // Biến kiểm tra quyền (được tính toán lại mỗi khi currentRole đổi)
     const isClinicOrDoctor = currentRole === 'CLINIC' || currentRole === 'DOCTOR';
 
     if (!batchResults || batchResults.length === 0) {
@@ -76,9 +73,8 @@ const AnalysisBatchResult: React.FC = () => {
         return true;
     });
 
-    // --- 3. LOGIC POLLING (Đã cập nhật dependency) ---
+    // --- 3. LOGIC POLLING (ĐÃ CẬP NHẬT LIMIT 200) ---
     useEffect(() => {
-        // Chỉ chạy polling khi đã xác định xong Role (isRoleLoaded = true)
         if (!isRoleLoaded) return;
 
         const hasPending = results.some((r: any) => 
@@ -89,8 +85,8 @@ const AnalysisBatchResult: React.FC = () => {
             const interval = setInterval(async () => {
                 const token = localStorage.getItem('token');
                 
-                // Chọn API Endpoint dựa trên Role (Role giờ đã chính xác từ Server)
-                const apiEndpoint = `http://localhost:8000/api/v1/medical-records/?limit=50&t=${Date.now()}`;
+                // CẬP NHẬT: Limit = 200 để lấy đủ danh sách nếu upload nhiều
+                const apiEndpoint = `http://localhost:8000/api/v1/medical-records/?limit=200&t=${Date.now()}`;
 
                 try {
                     const res = await fetch(apiEndpoint, {
@@ -113,7 +109,7 @@ const AnalysisBatchResult: React.FC = () => {
                                 if (serverItem) {
                                     let updatedItem = { ...localItem };
                                     
-                                    // Logic map dữ liệu server
+                                    // Map data
                                     let analysis = serverItem.analysis_result;
                                     if (!analysis && serverItem.analysis_results && serverItem.analysis_results.length > 0) {
                                         analysis = serverItem.analysis_results[0];
@@ -124,7 +120,6 @@ const AnalysisBatchResult: React.FC = () => {
                                         hasUpdate = true;
                                         updatedItem = {
                                             ...updatedItem,
-                                            // Nếu là phòng khám, cập nhật thêm tên bệnh nhân nếu có
                                             patient_name: serverItem.patient_name || localItem.patient_name, 
                                             diagnosis: risk,
                                             annotated_image_url: analysis?.annotated_image_url || serverItem.annotated_image_url,
@@ -145,7 +140,7 @@ const AnalysisBatchResult: React.FC = () => {
 
             return () => clearInterval(interval);
         }
-    }, [results, isClinicOrDoctor, isRoleLoaded]); // Thêm isRoleLoaded vào dependency
+    }, [results, isClinicOrDoctor, isRoleLoaded]);
     
     // --- HÀM XỬ LÝ CHUYỂN HƯỚNG ---
     const handleViewDetail = (item: any) => {
@@ -179,7 +174,6 @@ const AnalysisBatchResult: React.FC = () => {
                     <FaArrowLeft /> Tải thêm ảnh khác
                 </button>
                 <div style={styles.headerTitle}>
-                    {/* Hiển thị tiêu đề dựa trên role đã tải */}
                     <h2>KẾT QUẢ PHÂN TÍCH ({!isRoleLoaded ? '...' : (isClinicOrDoctor ? 'PHÒNG KHÁM' : 'CÁ NHÂN')})</h2>
                     <span style={styles.badge}>{batchResults.length} Ảnh</span>
                 </div>
@@ -206,7 +200,6 @@ const AnalysisBatchResult: React.FC = () => {
                         </div>
 
                         <div style={styles.cardBody}>
-                            {/* --- FEATURE MỚI: HIỆN TÊN BỆNH NHÂN CHO PHÒNG KHÁM --- */}
                             {isClinicOrDoctor && item.patient_name && (
                                 <div style={{marginBottom: '8px', fontSize: '13px', color: '#007bff', fontWeight: 'bold', display: 'flex', alignItems: 'center'}}>
                                      <FaUserMd style={{marginRight: 5}}/> 

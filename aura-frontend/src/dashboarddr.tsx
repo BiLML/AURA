@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaPaperPlane, FaUserMd, FaUsers, FaClipboardList, FaCommentDots, 
     FaSearch, FaTimes, FaSignOutAlt, FaBell, FaChartBar, FaStethoscope,
     FaFileAlt, FaExclamationTriangle, FaCheck, FaCheckDouble, FaRobot 
 } from 'react-icons/fa';
+// Thêm thư viện animation cho nội dung chính
+import { motion, AnimatePresence } from 'framer-motion';
 
+// --- INTERFACES ---
 interface MyReport {
     id: string;
     image_url: string | null;
@@ -16,7 +19,27 @@ interface MyReport {
     status: string;
     created_at: string;
 }
-// --- Dashboard Component (Bác sĩ) ---
+
+// --- ANIMATION VARIANTS ---
+const pageVariants = {
+    initial: { opacity: 0, y: 10 },
+    in: { opacity: 1, y: 0 },
+    out: { opacity: 0, y: -10 }
+};
+
+const pageTransition = {
+    type: "tween",
+    ease: "anticipate",
+    duration: 0.4
+} as const;
+
+const modalVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.2 } },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
+};
+
+// --- COMPONENT CHÍNH ---
 const DashboardDr: React.FC = () => {
     const navigate = useNavigate();
 
@@ -54,13 +77,13 @@ const DashboardDr: React.FC = () => {
     const notificationRef = useRef<HTMLDivElement>(null);
     const profileRef = useRef<HTMLDivElement>(null);
 
-    // --- STATE MỚI CHO TÍNH NĂNG BÁO CÁO [FR-19] ---
+    // --- STATE BÁO CÁO [FR-19] ---
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportForm, setReportForm] = useState({
         patientId: '',
         aiResult: 'Nguy cơ cao', 
         doctorDiagnosis: '',
-        accuracy: 'CORRECT', // 'CORRECT' | 'INCORRECT'
+        accuracy: 'CORRECT',
         notes: ''
     });
 
@@ -74,20 +97,18 @@ const DashboardDr: React.FC = () => {
         chart_data: { safe: 0, mild: 0, moderate: 0, severe: 0, pdr: 0 }
     });
 
-    // 1. Hàm lấy danh sách báo cáo
-    // 1. Hàm lấy danh sách báo cáo (ĐÃ SỬA URL VÀ CÁCH LẤY DATA)
+    // --- LOGIC API ---
+
     const fetchMyReports = useCallback(async () => {
         setLoadingReports(true);
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            // Lưu ý: Kiểm tra lại URL prefix xem là /doctor hay /doctors
             const res = await fetch('http://localhost:8000/api/v1/doctor/reports/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                // Backend trả về mảng trực tiếp, không có key .reports
                 setMyReports(Array.isArray(data) ? data : []);
             }
         } catch (error) {
@@ -97,13 +118,6 @@ const DashboardDr: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
-        if (activeTab === 'reports') {
-            fetchMyReports();
-        }
-    }, [activeTab, fetchMyReports]);
-
-    // 2. Hàm gửi báo cáo
     const submitReport = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
@@ -127,8 +141,8 @@ const DashboardDr: React.FC = () => {
                 body: JSON.stringify({
                     doctor_diagnosis: reportForm.doctorDiagnosis,
                     doctor_notes: reportForm.notes,
-                    feedback_for_ai: reportForm.notes, // Gửi thêm trường này để Admin xem được feedback
-                    is_correct: reportForm.accuracy === 'CORRECT' // Gửi trạng thái đúng/sai
+                    feedback_for_ai: reportForm.notes,
+                    is_correct: reportForm.accuracy === 'CORRECT'
                 })
             });
 
@@ -136,7 +150,7 @@ const DashboardDr: React.FC = () => {
                 alert("Đã cập nhật chẩn đoán thành công!");
                 setShowReportModal(false);
                 setReportForm({ ...reportForm, doctorDiagnosis: '', notes: '' });
-                
+                // Refresh data
                 const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (patientsRes.ok) { 
                     const data = await patientsRes.json(); 
@@ -152,14 +166,6 @@ const DashboardDr: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        if (activeTab === 'reports') {
-            fetchMyReports();
-        }
-    }, [activeTab, fetchMyReports]);
-
-    // --- FETCH & LOGIC ---
-    
     const fetchChatData = useCallback(async (token: string) => {
         try {
             const res = await fetch('http://localhost:8000/api/v1/chats', {
@@ -194,7 +200,6 @@ const DashboardDr: React.FC = () => {
         } catch (error) { console.error("Lỗi chat:", error); }
     }, [patientsData]);
 
-    // Xem lịch sử hồ sơ bệnh nhân
     const handleViewHistory = async (patientId: string, name: string) => {
         setShowHistoryModal(true);
         setSelectedPatientName(name);
@@ -218,7 +223,6 @@ const DashboardDr: React.FC = () => {
                             displayResult = r.analysis_result.risk_level;
                         }
                     }
-
                     return {
                         id: r.id,
                         date: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : 'N/A',
@@ -228,11 +232,7 @@ const DashboardDr: React.FC = () => {
                 });
                 setHistoryRecords(records); 
             }
-        } catch (error) { 
-            console.error(error); 
-        } finally { 
-            setHistoryLoading(false); 
-        }
+        } catch (error) { console.error(error); } finally { setHistoryLoading(false); }
     };
 
     const fetchMessageHistory = async (partnerId: string) => {
@@ -246,8 +246,6 @@ const DashboardDr: React.FC = () => {
             return data.messages || [];
         } catch (err) { return []; }
     };
-
-    
 
     const openChat = async (partnerId: string) => {
         setSelectedChatId(partnerId);
@@ -296,6 +294,13 @@ const DashboardDr: React.FC = () => {
             });
         } catch (err) { alert("Lỗi gửi tin!"); }
     };
+
+    // --- EFFECTS ---
+    useEffect(() => {
+        if (activeTab === 'reports') {
+            fetchMyReports();
+        }
+    }, [activeTab, fetchMyReports]);
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [currentMessages]);
 
@@ -356,9 +361,10 @@ const DashboardDr: React.FC = () => {
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
 
-    const unreadMessagesCount = chatData.filter(chat => chat.unread).length;
+    // --- COMPUTED DATA (MEMOIZED) ---
+    const unreadMessagesCount = useMemo(() => chatData.filter(chat => chat.unread).length, [chatData]);
     
-    const pendingRecords = patientsData
+    const pendingRecords = useMemo(() => patientsData
         .filter(p => {
             if (!p.latest_scan) return false;
             const res = (p.latest_scan.ai_result || "").toLowerCase();
@@ -375,41 +381,62 @@ const DashboardDr: React.FC = () => {
             date: new Date(p.latest_scan.upload_date).toLocaleDateString('vi-VN'),
             aiResult: p.latest_scan.ai_result,
             status: 'Chờ Bác sĩ' 
-        }));
+        })), [patientsData]);
 
     const totalPending = pendingRecords.length;
 
-    if (isLoading) return <div style={styles.loading}>Đang tải dữ liệu Bác sĩ...</div>;
+    const filteredPatients = useMemo(() => {
+        return patientsData.filter(p => {
+            const matchName = (p.full_name||p.userName).toLowerCase().includes(searchTerm.toLowerCase());
+            const res = (p.latest_scan?.ai_result || '').toLowerCase();
+            let matchRisk = true;
+            if (riskFilter === 'ALL') matchRisk = true;
+            else if (riskFilter === 'Normal') matchRisk = res.includes('normal') || res.includes('bình thường') || res.includes('no dr');
+            else if (riskFilter === 'Mild NPDR (Early Signs)') matchRisk = res.includes('mild') || res.includes('nhẹ');
+            else if (riskFilter === 'Moderate NPDR') matchRisk = res.includes('moderate') || res.includes('trung bình');
+            else if (riskFilter === 'Severe NPDR') matchRisk = res.includes('severe') || res.includes('nặng');
+            else if (riskFilter === 'PDR') matchRisk = res.includes('pdr');
+            return matchName && matchRisk;
+        });
+    }, [patientsData, searchTerm, riskFilter]);
+
+    if (isLoading) return <div style={styles.loading}><FaStethoscope className="spin" size={40} color="#007bff"/></div>;
 
     return (
-        <div style={styles.container}>
-            {/* SIDEBAR */}
+        <div style={styles.container} className="fade-in">
+            {/* SIDEBAR (UPDATED STYLE) */}
             <aside style={styles.sidebar}>
                 <div style={styles.sidebarHeader}>
                     <div style={styles.logoRow}>
-                        <FaUserMd size={24} color="#007bff" />
+                        <FaUserMd size={26} color="#007bff" />
                         <span style={styles.logoText}>AURA DOCTOR</span>
                     </div>
                     <div style={styles.clinicName}>Dành cho Bác sĩ</div>
                 </div>
+                
                 <nav style={styles.nav}>
-                    <div style={activeTab === 'home' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('home')}>
-                        <FaClipboardList style={styles.menuIcon} /> Tổng quan
-                    </div>
-                    <div style={activeTab === 'patients' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('patients')}>
-                        <FaUsers style={styles.menuIcon} /> Bệnh nhân
-                    </div>
-                    <div style={activeTab === 'chat' ? styles.menuItemActive : styles.menuItem} onClick={() => setActiveTab('chat')}>
-                        <FaCommentDots style={styles.menuIcon} /> Chat Tư vấn
-                        {unreadMessagesCount > 0 && <span style={styles.badge}>{unreadMessagesCount}</span>}
-                    </div>
-
-                    <div style={activeTab === 'reports' ? styles.menuItemActive: styles.menuItem} onClick={() => setActiveTab('reports')}>
-                        <FaFileAlt style={styles.menuIcon} /> Báo cáo
-                    </div>
+                    {[
+                        { id: 'home', icon: FaClipboardList, label: 'Tổng quan' },
+                        { id: 'patients', icon: FaUsers, label: 'Bệnh nhân' },
+                        { id: 'chat', icon: FaCommentDots, label: 'Chat Tư vấn' },
+                        { id: 'reports', icon: FaFileAlt, label: 'Báo cáo' }
+                    ].map((item) => (
+                        <div 
+                            key={item.id}
+                            className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
+                            onClick={() => setActiveTab(item.id)}
+                        >
+                            <item.icon style={styles.menuIcon} /> 
+                            {item.label}
+                            {item.id === 'chat' && unreadMessagesCount > 0 && <span style={styles.badgeRed}>{unreadMessagesCount}</span>}
+                        </div>
+                    ))}
                 </nav>
+
                 <div style={styles.sidebarFooter}>
-                    <button onClick={handleLogout} style={styles.logoutBtn}><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button>
+                    <button onClick={handleLogout} style={styles.logoutBtn} className="btn-secondary-hover">
+                        <FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất
+                    </button>
                 </div>
             </aside>
 
@@ -418,441 +445,170 @@ const DashboardDr: React.FC = () => {
                 <header style={styles.header}>
                     <div style={styles.headerRight}>
                          <div style={{position:'relative'}} ref={notificationRef}>
-                            <button style={styles.iconBtn} onClick={() => setShowNotifications(!showNotifications)}>
-                                <FaBell color="#555" size={18}/>
+                            <motion.button 
+                                whileTap={{ scale: 0.9 }}
+                                style={styles.iconBtn} 
+                                onClick={() => setShowNotifications(!showNotifications)}
+                            >
+                                <FaBell color="#64748b" size={20}/>
                                 {totalPending > 0 && <span style={styles.bellBadge}></span>}
-                            </button>
-                            {showNotifications && (
-                                <div style={styles.notificationDropdown}>
-                                    <div style={styles.dropdownHeader}>Thông báo</div>
-                                    <div style={{padding:'15px', color:'#666', fontSize:'13px'}}>
-                                        {totalPending > 0 ? `Có ${totalPending} hồ sơ bệnh nhân rủi ro cao.` : "Không có thông báo mới."}
-                                    </div>
-                                </div>
-                            )}
+                            </motion.button>
+                            <AnimatePresence>
+                                {showNotifications && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                                        style={styles.notificationDropdown}
+                                    >
+                                        <div style={styles.dropdownHeader}>Thông báo</div>
+                                        <div style={{padding:'15px', color:'#666', fontSize:'13px'}}>
+                                            {totalPending > 0 ? `Có ${totalPending} hồ sơ bệnh nhân rủi ro cao.` : "Không có thông báo mới."}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                         <div style={{position:'relative'}} ref={profileRef}>
-                            <div style={styles.profileBox} onClick={() => setShowUserMenu(!showUserMenu)}>
-                                <div style={styles.avatarCircle}>{userName.charAt(0).toUpperCase()}</div>
-                                <span style={styles.userNameText}>{full_name}</span>
+                            <div style={styles.profileBox} className="hover-lift" onClick={() => setShowUserMenu(!showUserMenu)}>
+                                <div style={styles.avatarCircle}>{userName ? userName.charAt(0).toUpperCase() : 'D'}</div>
+                                <span style={styles.userNameText}>{full_name || userName}</span>
                             </div>
-                            {showUserMenu && (
-                                <div style={styles.dropdownMenu}>
-                                    <div style={{padding:'15px', borderBottom:'1px solid #eee'}}>
-                                        <strong style={{color:'#333', fontSize:'14px'}}>{full_name || userName}</strong>
-                                        <br/>
-                                        <small style={{color:'#666', fontSize:'12px'}}>{userRole}</small>
-                                    </div>
-                                    <button style={styles.dropdownItem} onClick={() => navigate('/profile-dr')}>
-                                        <FaUserMd style={{marginRight:8}}/> Hồ sơ cá nhân
-                                    </button>
-                                    <button style={{...styles.dropdownItem, color: '#dc3545'}} onClick={handleLogout}>
-                                        <FaSignOutAlt style={{marginRight:8}}/> Đăng xuất
-                                    </button>
-                                </div>
-                            )}
+                            <AnimatePresence>
+                                {showUserMenu && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                                        style={styles.dropdownMenu}
+                                    >
+                                        <div style={{padding:'15px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc'}}>
+                                            <strong style={{color:'#334155', fontSize:'14px'}}>{full_name || userName}</strong>
+                                            <br/>
+                                            <small style={{color:'#64748b', fontSize:'12px'}}>{userRole}</small>
+                                        </div>
+                                        <button style={styles.dropdownItem} className="sidebar-item" onClick={() => navigate('/profile-dr')}>
+                                            <FaUserMd style={{marginRight:8}}/> Hồ sơ cá nhân
+                                        </button>
+                                        <button style={{...styles.dropdownItem, color: '#ef4444'}} className="sidebar-item" onClick={handleLogout}>
+                                            <FaSignOutAlt style={{marginRight:8}}/> Đăng xuất
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 </header>
 
                 <div style={styles.contentBody}>
-                    
-                    {/* --- TAB HOME --- */}
-                    {activeTab === 'home' && (
-                                            <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
-                                                
-                                                {/* 1. GRID: THỐNG KÊ (Đã thêm 2 thẻ mới: Đã duyệt & Độ đồng thuận) */}
-                                                <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'20px'}}>
-                                                    <div style={styles.statCard}>
-                                                        <div style={styles.statIconBox}><FaUsers color="#3498db" size={24}/></div>
-                                                        <div>
-                                                            <div style={styles.statLabel}>Bệnh nhân phụ trách</div>
-                                                            <div style={styles.statValue}>{stats.patient_count}</div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div style={styles.statCard}>
-                                                        <div style={{...styles.statIconBox, background: totalPending > 0 ? '#fdecea' : '#e8f5e9'}}>
-                                                            <FaClipboardList color={totalPending > 0 ? '#e74c3c' : '#2ecc71'} size={24}/>
-                                                        </div>
-                                                        <div>
-                                                            <div style={styles.statLabel}>Cần xử lý</div>
-                                                            <div style={{...styles.statValue, color: totalPending > 0 ? '#e74c3c' : '#2ecc71'}}>{totalPending}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* THẺ MỚI: Số ca đã duyệt */}
-                                                    <div style={styles.statCard}>
-                                                        <div style={{...styles.statIconBox, background:'#fff3e0'}}>
-                                                            <FaCheckDouble color="#f39c12" size={24}/>
-                                                        </div>
-                                                        <div>
-                                                            <div style={styles.statLabel}>Đã duyệt / Thẩm định</div>
-                                                            <div style={styles.statValue}>{stats.reviewed_count}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* THẺ MỚI: Độ đồng thuận với AI */}
-                                                    <div style={styles.statCard}>
-                                                        <div style={{...styles.statIconBox, background:'#e3f2fd'}}>
-                                                            <FaRobot color="#2980b9" size={24}/>
-                                                        </div>
-                                                        <div>
-                                                            <div style={styles.statLabel}>Đồng thuận với AI</div>
-                                                            <div style={{...styles.statValue, color:'#2980b9'}}>
-                                                                {stats.ai_agreement_rate}%
-                                                            </div>
-                                                            <div style={{fontSize:'10px', color:'#777'}}>Mức độ tin cậy model</div>
-                                                        </div>
-                                                    </div>
+                    <AnimatePresence mode="wait">
+                        {/* --- TAB HOME --- */}
+                        {activeTab === 'home' && (
+                            <motion.div 
+                                key="home" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}
+                                style={{display:'flex', flexDirection:'column', gap:'25px'}}
+                            >
+                                <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'25px'}}>
+                                    {[
+                                        { label: 'Bệnh nhân phụ trách', value: stats.patient_count, icon: FaUsers, color: '#3b82f6', bg: '#eff6ff' },
+                                        { label: 'Cần xử lý', value: totalPending, icon: FaClipboardList, color: totalPending > 0 ? '#ef4444' : '#10b981', bg: totalPending > 0 ? '#fef2f2' : '#ecfdf5' },
+                                        { label: 'Đã duyệt', value: stats.reviewed_count, icon: FaCheckDouble, color: '#f59e0b', bg: '#fffbeb' },
+                                        { label: 'Độ chính xác AI', value: `${stats.ai_agreement_rate}%`, icon: FaRobot, color: '#6366f1', bg: '#eef2ff' }
+                                    ].map((stat, idx) => (
+                                        <motion.div 
+                                            key={idx} 
+                                            whileHover={{ y: -5 }}
+                                            style={styles.statCard}
+                                            className="slide-up-card"
+                                        >
+                                            <div style={{...styles.statIconBox, background: stat.bg}}>
+                                                <stat.icon color={stat.color} size={24}/>
+                                            </div>
+                                            <div>
+                                                <div style={styles.statLabel}>{stat.label}</div>
+                                                <div style={{...styles.statValue, color: stat.color === '#ef4444' ? '#ef4444' : '#1e293b'}}>
+                                                    {stat.value}
                                                 </div>
-
-                                                <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:'20px', alignItems:'stretch'}}>
-                                                    {/* --- BIỂU ĐỒ PHÂN BỐ RỦI RO (GIAO DIỆN MỚI) --- */}
-                                <div style={styles.chartCard}>
-                                    <div style={styles.cardHeader}>
-                                        <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:10, color:'#555'}}/> Phân bố Rủi ro (Theo mức độ)</h3>
-                                    </div>
-                                    <div style={styles.chartBody}>
-                                        
-                                        {/* 1. TRỤC Y */}
-                                        <div style={styles.yAxis}>
-                                            <span>100%</span>
-                                            <span>75%</span>
-                                            <span>50%</span>
-                                            <span>25%</span>
-                                            <span>0%</span>
-                                        </div>
-
-                                        {/* 2. KHUNG VẼ */}
-                                        <div style={styles.plotArea}>
-                                            
-                                            {/* Lưới ngang */}
-                                            <div style={styles.gridContainer}>
-                                                <div style={styles.gridLine}></div>
-                                                <div style={styles.gridLine}></div>
-                                                <div style={styles.gridLine}></div>
-                                                <div style={styles.gridLine}></div>
-                                                <div style={{...styles.gridLine, borderBottom:'1px solid #eee'}}></div>
                                             </div>
-
-                                            {/* Các cột dữ liệu */}
-                                            <div style={styles.barsContainer}>
-                                                {(() => {
-                                                    const total = stats.patient_count || 1; 
-                                                    // THÊM * 0.9: Giới hạn chiều cao cột tối đa là 90% khung vẽ để tạo khoảng trống phía trên
-                                                    const getHeight = (val: number) => `${Math.max((val / total) * 100 * 0.9, 0)}%`;
-                                                    
-                                                    return (
-                                                        <>
-                                                            {/* NHÓM 1: NORMAL*/}
-                                                            <div style={styles.barColumn}>
-                                                                {/* THAY ĐỔI: Dùng background gradient */}
-                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.safe), background: 'linear-gradient(to top, #2ecc71, #58d68d)'}}>
-                                                                    <span style={styles.barValueTop}>{stats.chart_data.safe}</span>
-                                                                </div>
-                                                                <div style={styles.xAxisLabel} title="Normal">Normal</div>
-                                                            </div>
-
-                                                            {/* NHÓM 2: MILD  */}
-                                                            <div style={styles.barColumn}>
-                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.mild), background: 'linear-gradient(to top, #bd9a0d, #f2c615)'}}>
-                                                                    <span style={styles.barValueTop}>{stats.chart_data.mild}</span>
-                                                                </div>
-                                                                <div style={styles.xAxisLabel} title="Mild NPDR (Early Signs)">Mild NPDR</div>
-                                                            </div>
-
-                                                            {/* NHÓM 3: MODERATE  */}
-                                                            <div style={styles.barColumn}>
-                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.moderate), background: 'linear-gradient(to top, #e67e22, #f39c12)'}}>
-                                                                    <span style={styles.barValueTop}>{stats.chart_data.moderate}</span>
-                                                                </div>
-                                                                <div style={styles.xAxisLabel} title="Moderate NPDR">Moderate NPDR</div>
-                                                            </div>
-
-                                                            {/* NHÓM 4*/}
-                                                            <div style={styles.barColumn}>
-                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.severe), background: 'linear-gradient(to top, #e74c3c, #c25c51)'}}>
-                                                                    <span style={styles.barValueTop}>{stats.chart_data.severe}</span>
-                                                                </div>
-                                                                <div style={styles.xAxisLabel} title="Severe NPDR">Severe</div>
-                                                            </div>
-
-                                                            {/* NHÓM 5: PDR */}
-                                                            <div style={styles.barColumn}>
-                                                                <div style={{...styles.barFill, height: getHeight(stats.chart_data.pdr), background: 'linear-gradient(to top, #ff1900, #781106)'}}>
-                                                                    <span style={styles.barValueTop}>{stats.chart_data.pdr}</span>
-                                                                </div>
-                                                                <div style={styles.xAxisLabel} title="PDR">PDR</div>
-                                                            </div>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Panel phụ: Thông tin thêm hoặc Action nhanh */}
-                                <div style={{...styles.card, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', padding:'20px', textAlign:'center'}}>
-                                    <FaStethoscope size={40} color="#3498db" style={{marginBottom:'15px'}}/>
-                                    <h3 style={{margin:'0 0 10px 0'}}>Bắt đầu phiên làm việc</h3>
-                                    <p style={{color:'#666', fontSize:'13px', marginBottom:'20px'}}>
-                                        Bạn có {totalPending} hồ sơ cần xem xét ưu tiên. Hãy kiểm tra các ca có nguy cơ cao trước.
-                                    </p>
-                                    <button onClick={()=>setActiveTab('patients')} style={styles.primaryBtnSm}>
-                                        Xem danh sách bệnh nhân
-                                    </button>
-                                </div>
-                            </div>
-                            {/* 2. TABLE: CẢNH BÁO */}
-                            <div style={styles.card}>
-                                <div style={{...styles.cardHeader, borderLeft: '4px solid #e74c3c'}}>
-                                    <h3 style={{...styles.pageTitle, color: '#c0392b'}}>⚠️ Hồ sơ cần xem xét ({totalPending})</h3>
-                                </div>
-                                <table style={styles.table}>
-                                    <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả gần nhất</th><th style={styles.th}>Chi tiết</th></tr></thead>
-                                    <tbody>
-                                        {pendingRecords.length === 0 ? (
-                                            <tr><td colSpan={4} style={styles.emptyCell}>Tuyệt vời! Không có hồ sơ nào cần xử lý gấp.</td></tr>
-                                        ) : (
-                                            pendingRecords.map((item, index) => (
-                                                <tr key={index} style={styles.tr}>
-                                                    <td style={styles.td}><b>{item.patientName}</b></td>
-                                                    <td style={styles.td}>{item.date}</td>
-                                                    <td style={styles.td}><span style={{color:'#e74c3c', fontWeight:'bold'}}>{item.aiResult}</span></td>
-                                                    <td style={styles.td}>
-                                                        <button onClick={() => navigate(`/doctor/analysis/${item.id}`)} style={styles.primaryBtnSm}>
-                                                            <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- TAB PATIENTS --- */}
-                    {activeTab === 'patients' && (
-                        <div style={styles.card}>
-                            <div style={styles.cardHeader}>
-                                <h3 style={styles.pageTitle}><FaUsers style={{marginRight:8}}/> Danh sách Bệnh nhân</h3>
-                                <div style={{display:'flex', gap:'10px'}}>
-                                    <div style={styles.searchBox}>
-                                        <FaSearch color="#999" />
-                                        <input style={styles.searchInput} placeholder="Tìm kiếm bằng tên/ID" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
-                                    </div>
-                                    <select style={styles.selectInput} value={riskFilter} onChange={e=>setRiskFilter(e.target.value)}>
-                                        <option value="ALL">Tất cả mức độ</option>
-                                        <option value="PDR">PDR</option>
-                                        <option value="Severe NPDR">Severe NPDR</option>
-                                        <option value="Moderate NPDR">Moderate NPDR</option>
-                                        <option value="Mild NPDR (Early Signs)">Mild NPDR (Early Signs)</option>
-                                        <option value="Normal">Normal</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <table style={styles.table}>
-                                <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Liên hệ</th><th style={styles.th}>Kết quả gần nhất</th><th style={styles.th}>Thao tác</th></tr></thead>
-                                <tbody>
-                                    {patientsData.filter(p => {
-                                        const matchName = (p.full_name||p.userName).toLowerCase().includes(searchTerm.toLowerCase());
-                                        const res = (p.latest_scan?.ai_result || '').toLowerCase();
-                                        let matchRisk = true;
-                                        if (riskFilter === 'ALL') {
-                                            matchRisk = true;
-                                        } 
-                                        else if (riskFilter === 'Normal') {
-                                            matchRisk = res.includes('normal') || res.includes('bình thường') || res.includes('no dr');
-                                        }
-                                        else if (riskFilter === 'Mild NPDR (Early Signs)') {
-                                            matchRisk = res.includes('mild') || res.includes('nhẹ');
-                                        }
-                                        else if (riskFilter === 'Moderate NPDR') {
-                                            matchRisk = res.includes('moderate') || res.includes('trung bình');
-                                        }
-                                        else if (riskFilter === 'Severe NPDR') {
-                                            matchRisk = res.includes('severe') || res.includes('nặng');
-                                        }
-                                        else if (riskFilter === 'PDR') {
-                                            matchRisk = res.includes('pdr');
-                                        }
-
-                                        return matchName && matchRisk;
-                                    }).map(p => (
-                                        <tr key={p.id} style={styles.tr}>
-                                            <td style={styles.td}><b>{p.full_name || p.userName}</b></td>
-                                            <td style={styles.td}>{p.email}<br/><small>{p.phone}</small></td>
-                                            <td style={styles.td}>
-                                                {p.latest_scan?.ai_result ? (
-                                                     <span style={{
-                                                        color: p.latest_scan.ai_result.toLowerCase().includes('nặng') ? '#e74c3c' : 
-                                                               p.latest_scan.ai_result.toLowerCase().includes('trung bình') ? '#e67e22' : '#2ecc71',
-                                                        fontWeight:'bold'
-                                                     }}>{p.latest_scan.ai_result}</span>
-                                                ) : <span style={{color:'#999'}}>Chưa khám</span>}
-                                            </td>
-                                            <td style={styles.td}>
-                                                <div style={{display:'flex', gap:'5px'}}>
-                                                    <button onClick={() => {setActiveTab('chat'); openChat(p.id)}} style={styles.actionBtn}>Chat</button>
-                                                    <button onClick={() => handleViewHistory(p.id, p.full_name)} style={styles.actionBtn}>Hồ sơ</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* --- TAB CHAT --- */}
-                    {activeTab === 'chat' && (
-                        <div style={styles.messengerCard}>
-                            <div style={styles.chatListPanel}>
-                                <div style={styles.chatHeaderLeft}>
-                                    <h3 style={{margin:0, fontSize:'16px'}}>Tư vấn Trực tuyến</h3>
-                                </div>
-                                <div style={styles.chatListScroll}>
-                                    {chatData.map(c => (
-                                        <div key={c.id} onClick={()=>openChat(c.id)} style={{...styles.chatListItem, background: selectedChatId === c.id ? '#f0f8ff' : 'transparent'}}>
-                                            <div style={styles.avatarLarge}>{(c.display_name||c.sender).charAt(0).toUpperCase()}</div>
-                                            <div style={{flex:1, overflow:'hidden'}}>
-                                                <div style={{fontWeight: c.unread?'bold':'normal', fontSize:'14px'}}>{c.display_name||c.sender}</div>
-                                                <div style={{fontSize:'12px', color: c.unread?'#333':'#888', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.preview}</div>
-                                            </div>
-                                            {c.unread && <div style={styles.unreadDot}></div>}
-                                        </div>
+                                        </motion.div>
                                     ))}
                                 </div>
-                            </div>
 
-                            <div style={styles.chatWindowPanel}>
-                                {selectedChatId ? (
-                                    <>
-                                        <div style={styles.chatWindowHeader}>
-                                            <h4 style={{margin:0}}>{chatData.find(c=>c.id===selectedChatId)?.display_name}</h4>
+                                <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:'25px', alignItems:'stretch'}}>
+                                    {/* CHART */}
+                                    <div style={styles.chartCard} className="slide-up-card">
+                                        <div style={styles.cardHeader}>
+                                            <h3 style={styles.pageTitle}><FaChartBar style={{marginRight:10, color:'#007bff'}}/> Phân bố Rủi ro</h3>
                                         </div>
-                                        
-                                        <div style={styles.messagesBody}>
-                                            {currentMessages.map((m, i) => (
-                                                <div key={i} style={{
-                                                    ...styles.messageRow, 
-                                                    justifyContent: m.is_me ? 'flex-end' : 'flex-start'
-                                                }}>
-                                                    {!m.is_me && (
-                                                        <div style={{
-                                                            width:'28px', height:'28px', borderRadius:'50%', 
-                                                            background:'#ddd', marginRight:'8px', display:'flex', 
-                                                            alignItems:'center', justifyContent:'center', fontSize:'10px',
-                                                            alignSelf: 'flex-end', marginBottom: '20px'
-                                                        }}>
-                                                            {(chatData.find(c=>c.id===selectedChatId)?.display_name || '').charAt(0)}
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <div style={{display:'flex', flexDirection:'column', alignItems: m.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
-                                                        <div style={m.is_me ? styles.bubbleMe : styles.bubbleOther}>
-                                                            {m.content}
-                                                        </div>
-                                                        <div style={{
-                                                            display:'flex', alignItems:'center', gap:'4px', 
-                                                            marginTop:'2px', marginBottom:'10px', 
-                                                            fontSize:'11px', color:'#999',
-                                                            paddingRight: m.is_me ? '5px' : '0',
-                                                            paddingLeft: !m.is_me ? '5px' : '0'
-                                                        }}>
-                                                            <span>{m.time}</span>
-                                                            {m.is_me && (
-                                                                <span style={{marginLeft:'2px', display:'flex', alignItems:'center'}}>
-                                                                    {m.is_read ? (
-                                                                        <span title="Đã xem" style={{display:'flex', alignItems:'center', color: '#007bff'}}>
-                                                                            <FaCheckDouble size={10}/> 
-                                                                            <span style={{fontSize:'10px', marginLeft:'2px'}}>Đã xem</span>
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span title="Đã gửi" style={{color: '#ccc'}}>
-                                                                            <FaCheck size={10}/>
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                        <div style={styles.chartBody}>
+                                            <div style={styles.yAxis}>
+                                                <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+                                            </div>
+                                            <div style={styles.plotArea}>
+                                                <div style={styles.gridContainer}>
+                                                    {[...Array(5)].map((_,i) => <div key={i} style={styles.gridLine}></div>)}
                                                 </div>
-                                            ))}
-                                            <div ref={messagesEndRef}/>
+                                                <div style={styles.barsContainer}>
+                                                    {(() => {
+                                                        const total = stats.patient_count || 1; 
+                                                        const dataPoints = [
+                                                            { label: 'Normal', val: stats.chart_data.safe, color1: '#22c55e', color2: '#4ade80' },
+                                                            { label: 'Mild', val: stats.chart_data.mild, color1: '#eab308', color2: '#facc15' },
+                                                            { label: 'Moderate', val: stats.chart_data.moderate, color1: '#f97316', color2: '#fb923c' },
+                                                            { label: 'Severe', val: stats.chart_data.severe, color1: '#ef4444', color2: '#f87171' },
+                                                            { label: 'PDR', val: stats.chart_data.pdr, color1: '#dc2626', color2: '#ef4444' },
+                                                        ];
+                                                        return dataPoints.map((dp, idx) => (
+                                                            <div key={idx} style={styles.barColumn}>
+                                                                <motion.div 
+                                                                    initial={{ height: '0%' }}
+                                                                    animate={{ height: `${Math.max((dp.val / total) * 100 * 0.9, 4)}%` }} 
+                                                                    transition={{ duration: 1, delay: idx * 0.1, type: 'spring' }}
+                                                                    style={{...styles.barFill, background: `linear-gradient(to top, ${dp.color1}, ${dp.color2})`}}
+                                                                >
+                                                                    <span style={styles.barValueTop}>{dp.val}</span>
+                                                                </motion.div>
+                                                                <div style={styles.xAxisLabel} title={dp.label}>{dp.label}</div>
+                                                            </div>
+                                                        ));
+                                                    })()}
+                                                </div>
+                                            </div>
                                         </div>
-
-                                        <form onSubmit={handleSendMessage} style={styles.chatInputArea}>
-                                            <input style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/>
-                                            <button type="submit" style={{border:'none', background:'none', cursor:'pointer'}}><FaPaperPlane color="#3498db" size={20}/></button>
-                                        </form>
-                                    </>
-                                ) : (
-                                    <div style={styles.emptyChatState}><FaCommentDots size={50} color="#ddd"/><p>Chọn bệnh nhân để chat</p></div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- TAB REPORTS (BÁO CÁO) --- */}
-                    {activeTab === 'reports' && (
-                        <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
-                            
-                            {/* Form gửi báo cáo mới */}
-                            <div style={styles.reportBox}>
-                                <h3 style={{margin:'0 0 10px 0', color:'#007bff'}}>Gửi báo cáo lỗi mới</h3>
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                    <p style={{fontSize:'13px', color:'#666', margin:0}}>
-                                        Nếu phát hiện AI chẩn đoán sai, hãy vào <strong>Chi tiết bệnh nhân</strong> {'->'} <strong>Báo cáo sai sót</strong>.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Danh sách báo cáo đã gửi */}
-                            <div style={styles.card}>
-                                <div style={styles.cardHeader}>
-                                    <h3 style={{margin:0, fontSize:'16px', display:'flex', alignItems:'center'}}>
-                                        <FaExclamationTriangle style={{marginRight:10, color:'#e67e22'}}/> 
-                                        Lịch sử báo cáo của tôi
-                                    </h3>
-                                    <button onClick={fetchMyReports} style={styles.btnSecondary}><FaChartBar/> Làm mới</button>
+                                    </div>
+                                    
+                                    {/* Action Panel */}
+                                    <motion.div 
+                                        className="slide-up-card"
+                                        whileHover={{ scale: 1.01 }}
+                                        style={{...styles.card, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', padding:'30px', textAlign:'center', height: 'auto'}}
+                                    >
+                                        <div className="icon-pulse" style={{width:'80px', height:'80px', borderRadius:'50%', background:'#eff6ff', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'20px'}}>
+                                            <FaStethoscope size={40} color="#3b82f6"/>
+                                        </div>
+                                        <h3 style={{margin:'0 0 10px 0', color: '#1e293b'}}>Phiên làm việc</h3>
+                                        <p style={{color:'#64748b', fontSize:'14px', marginBottom:'25px'}}>
+                                            Bạn có <b style={{color:'#ef4444'}}>{totalPending}</b> hồ sơ rủi ro cao cần xem xét ưu tiên.
+                                        </p>
+                                        <button onClick={()=>setActiveTab('patients')} className="btn-primary-hover pulse-on-active" style={styles.primaryBtn}>Xem danh sách</button>
+                                    </motion.div>
                                 </div>
                                 
-                                <div style={{padding:'20px'}}>
-                                    <table style={{width:'100%', borderCollapse:'collapse', fontSize:'14px'}}>
-                                        <thead>
-                                            <tr style={{background:'#f8f9fa', color:'#555', borderBottom:'2px solid #eee'}}>
-                                                <th style={{padding:'12px', textAlign:'left'}}>Thời gian</th>
-                                                <th style={{padding:'12px', textAlign:'left'}}>Ảnh Scan</th>
-                                                <th style={{padding:'12px', textAlign:'left'}}>Nội dung báo cáo</th>
-                                            </tr>
-                                        </thead>
+                                <div style={styles.card} className="slide-up-card">
+                                    <div style={styles.cardHeader}>
+                                        <h3 style={styles.pageTitle}><FaExclamationTriangle style={{marginRight:10, color:'#ef4444'}}/> Hồ sơ cần chú ý ({totalPending})</h3>
+                                    </div>
+                                    <table style={styles.table} className="table-hover">
+                                        <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Thao tác</th></tr></thead>
                                         <tbody>
-                                            {loadingReports ? (
-                                                <tr><td colSpan={5} style={{padding:'20px', textAlign:'center'}}>Đang tải...</td></tr>
-                                            ) : myReports.length === 0 ? (
-                                                <tr><td colSpan={5} style={{padding:'20px', textAlign:'center', color:'#999'}}>Bạn chưa gửi báo cáo nào.</td></tr>
+                                            {pendingRecords.length === 0 ? (
+                                                <tr><td colSpan={4} style={styles.emptyCell}>Hiện tại không có hồ sơ nguy hiểm cần xử lý.</td></tr>
                                             ) : (
-                                                myReports.map(report => (
-                                                    <tr key={report.id} style={{borderBottom:'1px solid #eee'}}>
-                                                        <td style={{padding:'12px'}}>
-                                                            {new Date(report.created_at).toLocaleDateString('vi-VN')}<br/>
-                                                            <small style={{color:'#999'}}>{new Date(report.created_at).toLocaleTimeString('vi-VN')}</small>
-                                                        </td>
-                                                        <td style={{padding:'12px'}}>
-                                                            {report.image_url ? (
-                                                                <a href={report.image_url} target="_blank" rel="noreferrer">
-                                                                    <img src={report.image_url} alt="Scan" style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}}/>
-                                                                </a>
-                                                            ) : <span style={{color:'#ccc'}}>Không có ảnh</span>}
-                                                        </td>
-                                                        <td style={{padding:'12px'}}>
-                                                            <div style={{fontWeight:'bold', color:'#333'}}>BS: {report.doctor_confirm}</div>
-                                                            <div style={{color:'#555', marginTop:'4px'}}>{report.report_content}</div>
-                                                            <div style={{fontSize:'11px', color:'#999', marginTop:'2px'}}>AI: {report.ai_result}</div>
+                                                pendingRecords.map((item, index) => (
+                                                    <tr key={index} style={styles.tr}>
+                                                        <td style={styles.td}><b>{item.patientName}</b></td>
+                                                        <td style={styles.td}>{item.date}</td>
+                                                        <td style={styles.td}><span style={{color:'#ef4444', fontWeight:'700', background:'#fef2f2', padding:'4px 10px', borderRadius:'6px'}}>{item.aiResult}</span></td>
+                                                        <td style={styles.td}>
+                                                            <button onClick={() => navigate(`/doctor/analysis/${item.id}`)} className="btn-primary-hover" style={{...styles.primaryBtnSm, background: 'linear-gradient(135deg, #ef4444, #dc2626)'}}>
+                                                                <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))
@@ -860,320 +616,425 @@ const DashboardDr: React.FC = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
-                        </div>
-                    )}
+                            </motion.div>
+                        )}
 
-            {/* --- MODAL FORM BÁO CÁO --- */}
-            {showReportModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modalContent}>
-                        <div style={styles.modalHeader}>
-                            <h3>📝 Báo cáo Chuyên môn & Huấn luyện AI</h3>
-                            <button onClick={()=>setShowReportModal(false)} style={styles.closeBtn}><FaTimes/></button>
-                        </div>
-                        <form onSubmit={submitReport} style={{padding:'20px'}}>
-                            
-                            <div style={{marginBottom:'15px'}}>
-                                <label style={styles.label}>Chọn Bệnh nhân:</label>
-                                <select 
-                                    style={styles.inputForm} 
-                                    value={reportForm.patientId} 
-                                    onChange={e => {
-                                        const selectedId = e.target.value;
-                                        const selectedPatient = patientsData.find(p => p.id === parseInt(selectedId));
-                                        const aiRes = selectedPatient?.latest_scan?.ai_result || 'Chưa có kết quả AI';
-
-                                        setReportForm({
-                                            ...reportForm, 
-                                            patientId: selectedId,
-                                            aiResult: aiRes 
-                                        });
-                                    }}
-                                    required
-                                >
-                                    <option value="">-- Chọn hồ sơ --</option>
-                                    {patientsData.map(p => (
-                                        <option key={p.id} value={p.id}>{p.full_name || p.userName}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {reportForm.patientId && (
-                                <div style={{marginBottom:'15px', background:'#f0f8ff', padding:'10px', borderRadius:'6px', border:'1px dashed #3498db'}}>
-                                    <div style={{fontSize:'12px', color:'#555'}}>🤖 AI Chẩn đoán:</div>
-                                    <div style={{fontWeight:'bold', color:'#2980b9', fontSize:'15px'}}>{reportForm.aiResult}</div>
+                        {/* --- TAB PATIENTS --- */}
+                        {activeTab === 'patients' && (
+                            <motion.div 
+                                key="patients" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}
+                                style={styles.card} className="slide-up-card"
+                            >
+                                <div style={styles.cardHeader}>
+                                    <h3 style={styles.pageTitle}><FaUsers style={{marginRight:10, color:'#007bff'}}/> Danh sách Bệnh nhân</h3>
+                                    <div style={{display:'flex', gap:'15px'}}>
+                                        <div style={styles.searchBox}>
+                                            <FaSearch color="#94a3b8" />
+                                            <input style={styles.searchInput} placeholder="Tìm tên/ID..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
+                                        </div>
+                                        <select style={styles.selectInput} value={riskFilter} onChange={e=>setRiskFilter(e.target.value)}>
+                                            <option value="ALL">Tất cả mức độ</option>
+                                            <option value="PDR">PDR (Nguy hiểm)</option>
+                                            <option value="Severe NPDR">Severe NPDR</option>
+                                            <option value="Moderate NPDR">Moderate NPDR</option>
+                                            <option value="Mild NPDR (Early Signs)">Mild NPDR</option>
+                                            <option value="Normal">Normal</option>
+                                        </select>
+                                    </div>
                                 </div>
-                            )}
-
-                            <div style={{marginBottom:'15px'}}>
-                                <label style={styles.label}>Đánh giá kết quả AI:</label>
-                                <div style={{display:'flex', gap:'20px', marginTop:'5px'}}>
-                                    <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
-                                        <input type="radio" name="accuracy" value="CORRECT" checked={reportForm.accuracy === 'CORRECT'} onChange={()=>setReportForm({...reportForm, accuracy:'CORRECT'})} /> 
-                                        <span style={{color:'#2ecc71', fontWeight:'bold'}}>AI Chính xác</span>
-                                    </label>
-                                    <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
-                                        <input type="radio" name="accuracy" value="INCORRECT" checked={reportForm.accuracy === 'INCORRECT'} onChange={()=>setReportForm({...reportForm, accuracy:'INCORRECT'})} /> 
-                                        <span style={{color:'#e74c3c', fontWeight:'bold'}}>AI Sai lệch (Cần sửa)</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div style={{marginBottom:'15px'}}>
-                                <label style={styles.label}>Chẩn đoán của Bác sĩ (Ground Truth):</label>
-                                <input 
-                                    style={styles.inputForm} 
-                                    placeholder="Ví dụ: Viêm da cơ địa giai đoạn 2..." 
-                                    value={reportForm.doctorDiagnosis}
-                                    onChange={e => setReportForm({...reportForm, doctorDiagnosis: e.target.value})}
-                                    required
-                                />
-                            </div>
-
-                            <div style={{marginBottom:'20px'}}>
-                                <label style={styles.label}>Ghi chú chi tiết / Đề xuất:</label>
-                                <textarea 
-                                    style={{...styles.inputForm, height:'80px'}} 
-                                    placeholder="Mô tả chi tiết để đội ngũ kỹ thuật cải thiện model..."
-                                    value={reportForm.notes}
-                                    onChange={e => setReportForm({...reportForm, notes: e.target.value})}
-                                />
-                            </div>
-
-                            <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                <button type="button" onClick={()=>setShowReportModal(false)} style={styles.actionBtn}>Hủy</button>
-                                <button type="submit" style={styles.primaryBtnSm}>Gửi Báo cáo</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-                </div>
-            </main>
-
-            {showHistoryModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modalContent}>
-                        <div style={styles.modalHeader}><h3>Hồ sơ: {selectedPatientName}</h3><button onClick={()=>setShowHistoryModal(false)} style={styles.closeBtn}><FaTimes/></button></div>
-                        <div style={{padding:'20px', maxHeight:'60vh', overflowY:'auto'}}>
-                            {historyLoading ? <div style={{textAlign:'center'}}>Đang tải...</div> : (
-                                <table style={styles.table}>
-                                    <thead><tr><th>Ngày</th><th>Kết quả</th><th>Chi tiết</th></tr></thead>
+                                <table style={styles.table} className="table-hover">
+                                    <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Liên hệ</th><th style={styles.th}>Kết quả gần nhất</th><th style={styles.th}>Thao tác</th></tr></thead>
                                     <tbody>
-                                        {historyRecords.length > 0 ? historyRecords.map((r,i)=>(
-                                            <tr key={i} style={styles.tr}>
-                                                <td style={styles.td}>{r.date}</td>
-                                                <td style={styles.td}><b style={{color: (r.result||"").includes('Nặng')?'red':'green'}}>{r.result}</b></td>
+                                        {filteredPatients.map((p) => (
+                                            <tr key={p.id} style={styles.tr}>
+                                                <td style={styles.td}><b>{p.full_name || p.userName}</b></td>
+                                                <td style={styles.td}>{p.email}<br/><small style={{color:'#94a3b8'}}>{p.phone}</small></td>
                                                 <td style={styles.td}>
-                                                    <button onClick={()=>navigate(`/doctor/analysis/${r.id}`)} style={styles.primaryBtnSm}>Xem</button>
+                                                    {p.latest_scan?.ai_result ? (
+                                                         <span style={{
+                                                            color: p.latest_scan.ai_result.toLowerCase().includes('nặng') ? '#dc2626' : 
+                                                                   p.latest_scan.ai_result.toLowerCase().includes('trung bình') ? '#ea580c' : '#16a34a',
+                                                            fontWeight:'700'
+                                                         }}>{p.latest_scan.ai_result}</span>
+                                                    ) : <span style={{color:'#94a3b8'}}>--</span>}
+                                                </td>
+                                                <td style={styles.td}>
+                                                    <div style={{display:'flex', gap:'8px'}}>
+                                                        <button onClick={() => {setActiveTab('chat'); openChat(p.id)}} className="btn-secondary-hover" style={styles.actionBtn}>Chat</button>
+                                                        <button onClick={() => handleViewHistory(p.id, p.full_name)} className="btn-secondary-hover" style={styles.actionBtn}>Hồ sơ</button>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        )) : <tr><td colSpan={3} style={styles.emptyCell}>Chưa có lịch sử khám</td></tr>}
+                                        ))}
                                     </tbody>
                                 </table>
-                            )}
-                        </div>
-                    </div>
+                            </motion.div>
+                        )}
+
+                        {/* --- TAB CHAT --- */}
+                        {activeTab === 'chat' && (
+                            <motion.div 
+                                key="chat" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}
+                                style={styles.messengerCard} className="slide-up-card"
+                            >
+                                <div style={styles.chatListPanel}>
+                                    <div style={styles.chatHeaderLeft}><h3 style={{margin:0, fontSize:'18px', color:'#1e293b'}}>Tư vấn Trực tuyến</h3></div>
+                                    <div style={styles.chatListScroll}>
+                                        {chatData.map(c => (
+                                            <div 
+                                                key={c.id} onClick={()=>openChat(c.id)} 
+                                                className="chat-item-hover"
+                                                style={{...styles.chatListItem, background: selectedChatId === c.id ? '#eff6ff' : 'transparent'}}
+                                            >
+                                                <div style={styles.avatarLarge}>{(c.display_name||c.sender).charAt(0).toUpperCase()}</div>
+                                                <div style={{flex:1, overflow:'hidden'}}>
+                                                    <div style={{fontWeight: c.unread?'700':'500', fontSize:'15px', color:'#334155'}}>{c.display_name||c.sender}</div>
+                                                    <div style={{fontSize:'13px', color: c.unread?'#0f172a':'#64748b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.preview}</div>
+                                                </div>
+                                                {c.unread && <div style={styles.unreadDot}></div>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div style={styles.chatWindowPanel}>
+                                    {selectedChatId ? (
+                                        <>
+                                            <div style={styles.chatWindowHeader}>
+                                                <div style={styles.avatarMedium}>{(chatData.find(c=>c.id===selectedChatId)?.display_name || '').charAt(0)}</div>
+                                                <h4 style={{margin:0, color:'#1e293b'}}>{chatData.find(c=>c.id===selectedChatId)?.display_name}</h4>
+                                            </div>
+                                            <div style={styles.messagesBody}>
+                                                {currentMessages.map((m, i) => (
+                                                    <div 
+                                                        key={i} className="pop-in"
+                                                        style={{...styles.messageRow, justifyContent: m.is_me ? 'flex-end' : 'flex-start'}}
+                                                    >
+                                                        {!m.is_me && (
+                                                            <div style={{width:'32px', height:'32px', borderRadius:'50%', background:'#e2e8f0', marginRight:'10px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', alignSelf: 'flex-end', marginBottom: '20px', color:'#64748b'}}>
+                                                                {(chatData.find(c=>c.id===selectedChatId)?.display_name || '').charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <div style={{display:'flex', flexDirection:'column', alignItems: m.is_me ? 'flex-end' : 'flex-start', maxWidth:'70%'}}>
+                                                            <div style={m.is_me ? styles.bubbleMe : styles.bubbleOther}>{m.content}</div>
+                                                            <div style={{display:'flex', alignItems:'center', gap:'4px', marginTop:'4px', marginBottom:'10px', fontSize:'11px', color:'#94a3b8', paddingRight: m.is_me ? '5px' : '0', paddingLeft: !m.is_me ? '5px' : '0'}}>
+                                                                <span>{m.time}</span>
+                                                                {m.is_me && (
+                                                                    <span style={{marginLeft:'2px', display:'flex', alignItems:'center'}}>
+                                                                        {m.is_read ? <span title="Đã xem" style={{color:'#007bff', display:'flex'}}><FaCheckDouble size={10}/></span> : <span title="Đã gửi" style={{color:'#cbd5e1'}}><FaCheck size={10}/></span>}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div ref={messagesEndRef}/>
+                                            </div>
+                                            <form onSubmit={handleSendMessage} style={styles.chatInputArea}>
+                                                <input className="input-focus" style={styles.messengerInput} value={newMessageText} onChange={e=>setNewMessageText(e.target.value)} placeholder="Nhập tin nhắn..."/>
+                                                <button className="btn-icon-hover" type="submit" style={{border:'none', background:'none', cursor:'pointer', padding:'5px', width: '150px', height: '40px'}}><FaPaperPlane color="#007bff" size={15}/></button>
+                                            </form>
+                                        </>
+                                    ) : (
+                                        <div style={styles.emptyChatState}><div className="icon-pulse" style={{padding:'20px', background:'#f1f5f9', borderRadius:'50%', marginBottom:'20px'}}><FaCommentDots size={40} color="#007bff"/></div><p>Chọn bệnh nhân để chat</p></div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* --- TAB REPORTS --- */}
+                        {activeTab === 'reports' && (
+                            <motion.div 
+                                key="reports" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}
+                                style={{display:'flex', flexDirection:'column', gap:'25px'}}
+                            >
+                                <div style={styles.reportBox} className="slide-up-card">
+                                    <h3 style={{margin:'0 0 10px 0', color:'#007bff'}}>Gửi báo cáo sai lệch AI</h3>
+                                    <p style={{fontSize:'14px', color:'#475569', margin:0}}>Nếu phát hiện AI chẩn đoán sai, hãy vào <strong>Bệnh nhân &rarr; Chi tiết &rarr; Chẩn đoán</strong> để cập nhật Ground Truth.</p>
+                                </div>
+                                <div style={styles.card} className="slide-up-card">
+                                    <div style={styles.cardHeader}>
+                                        <h3 style={{margin:0, fontSize:'18px', display:'flex', alignItems:'center', color:'#1e293b'}}><FaChartBar style={{marginRight:10, color:'#007bff'}}/> Lịch sử báo cáo của tôi</h3>
+                                        <button onClick={fetchMyReports} className="btn-secondary-hover" style={styles.btnSecondary}><FaChartBar style={{marginRight:5}}/> Làm mới</button>
+                                    </div>
+                                    <div style={{padding:'0'}}>
+                                        <table style={styles.table} className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th style={styles.th}>Thời gian</th><th style={styles.th}>Ảnh Scan</th><th style={styles.th}>Nội dung báo cáo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {loadingReports ? <tr><td colSpan={5} style={styles.emptyCell}>Đang tải dữ liệu...</td></tr> : myReports.length === 0 ? <tr><td colSpan={5} style={styles.emptyCell}>Bạn chưa gửi báo cáo nào.</td></tr> : myReports.map(report => (
+                                                    <tr key={report.id} style={styles.tr}>
+                                                        <td style={styles.td}>{new Date(report.created_at).toLocaleDateString('vi-VN')}<br/><small style={{color:'#94a3b8'}}>{new Date(report.created_at).toLocaleTimeString('vi-VN')}</small></td>
+                                                        <td style={styles.td}>{report.image_url ? <a href={report.image_url} target="_blank" rel="noreferrer"><img src={report.image_url} alt="Scan" className="hover-lift" style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'8px', border:'1px solid #e2e8f0'}}/></a> : <span style={{color:'#ccc'}}>Không có ảnh</span>}</td>
+                                                        <td style={styles.td}><div style={{fontWeight:'700', color:'#334155'}}>BS: {report.doctor_confirm}</div><div style={{color:'#64748b', marginTop:'4px', fontSize:'13px'}}>{report.report_content}</div><div style={{fontSize:'12px', color:'#94a3b8', marginTop:'4px'}}>AI: {report.ai_result}</div></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* MODAL BÁO CÁO */}
+                    <AnimatePresence>
+                        {showReportModal && (
+                            <div style={styles.modalOverlay}>
+                                <motion.div 
+                                    variants={modalVariants} initial="hidden" animate="visible" exit="exit"
+                                    style={styles.modalContent}
+                                >
+                                    <div style={styles.modalHeader}>
+                                        <h3 style={{margin:0, color:'#1e293b'}}>📝 Chẩn đoán & Huấn luyện AI</h3>
+                                        <button onClick={()=>setShowReportModal(false)} style={styles.closeBtn} className="btn-icon-hover"><FaTimes/></button>
+                                    </div>
+                                    <form onSubmit={submitReport} style={{padding:'25px'}}>
+                                        <div style={{marginBottom:'20px'}}>
+                                            <label style={styles.label}>Chọn Bệnh nhân:</label>
+                                            <select style={styles.inputForm} className="input-focus" value={reportForm.patientId} onChange={e => {
+                                                const selectedId = e.target.value;
+                                                const selectedPatient = patientsData.find(p => p.id === parseInt(selectedId));
+                                                setReportForm({ ...reportForm, patientId: selectedId, aiResult: selectedPatient?.latest_scan?.ai_result || 'Chưa có kết quả AI' });
+                                            }} required>
+                                                <option value="">-- Chọn hồ sơ --</option>
+                                                {patientsData.map(p => (<option key={p.id} value={p.id}>{p.full_name || p.userName}</option>))}
+                                            </select>
+                                        </div>
+                                        {reportForm.patientId && (
+                                            <div style={{marginBottom:'20px', background:'#eff6ff', padding:'15px', borderRadius:'8px', border:'1px dashed #3b82f6'}}>
+                                                <div style={{fontSize:'12px', color:'#64748b', marginBottom:'4px'}}>🤖 AI Chẩn đoán:</div>
+                                                <div style={{fontWeight:'bold', color:'#2563eb', fontSize:'16px'}}>{reportForm.aiResult}</div>
+                                            </div>
+                                        )}
+                                        <div style={{marginBottom:'20px'}}>
+                                            <label style={styles.label}>Đánh giá AI:</label>
+                                            <div style={{display:'flex', gap:'20px', marginTop:'8px'}}>
+                                                <label style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}><input type="radio" name="accuracy" value="CORRECT" checked={reportForm.accuracy === 'CORRECT'} onChange={()=>setReportForm({...reportForm, accuracy:'CORRECT'})} /> <span style={{color:'#16a34a', fontWeight:'600'}}>Chính xác</span></label>
+                                                <label style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}><input type="radio" name="accuracy" value="INCORRECT" checked={reportForm.accuracy === 'INCORRECT'} onChange={()=>setReportForm({...reportForm, accuracy:'INCORRECT'})} /> <span style={{color:'#dc2626', fontWeight:'600'}}>Sai lệch</span></label>
+                                            </div>
+                                        </div>
+                                        <div style={{marginBottom:'20px'}}>
+                                            <label style={styles.label}>Chẩn đoán của Bác sĩ (Ground Truth):</label>
+                                            <input style={styles.inputForm} className="input-focus" placeholder="Ví dụ: Viêm da cơ địa giai đoạn 2..." value={reportForm.doctorDiagnosis} onChange={e => setReportForm({...reportForm, doctorDiagnosis: e.target.value})} required />
+                                        </div>
+                                        <div style={{marginBottom:'25px'}}>
+                                            <label style={styles.label}>Ghi chú chi tiết / Đề xuất:</label>
+                                            <textarea style={{...styles.inputForm, height:'100px'}} className="input-focus" placeholder="Mô tả chi tiết để đội ngũ kỹ thuật cải thiện model..." value={reportForm.notes} onChange={e => setReportForm({...reportForm, notes: e.target.value})}/>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'flex-end', gap:'15px'}}>
+                                            <button type="button" onClick={()=>setShowReportModal(false)} className="btn-secondary-hover" style={styles.actionBtn}>Hủy</button>
+                                            <button type="submit" className="btn-primary-hover pulse-on-active" style={styles.primaryBtnSm}>Gửi Báo cáo</button>
+                                        </div>
+                                    </form>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* MODAL LỊCH SỬ */}
+                    <AnimatePresence>
+                        {showHistoryModal && (
+                            <div style={styles.modalOverlay}>
+                                <motion.div 
+                                    variants={modalVariants} initial="hidden" animate="visible" exit="exit"
+                                    style={styles.modalContent}
+                                >
+                                    <div style={styles.modalHeader}><h3>Hồ sơ: {selectedPatientName}</h3><button onClick={()=>setShowHistoryModal(false)} className="btn-icon-hover" style={styles.closeBtn}><FaTimes/></button></div>
+                                    <div style={{padding:'0', maxHeight:'60vh', overflowY:'auto'}}>
+                                        {historyLoading ? <div style={{textAlign:'center', padding:'30px'}}>Đang tải...</div> : (
+                                            <table style={styles.table} className="table-hover">
+                                                <thead><tr><th style={styles.th}>Ngày</th><th style={styles.th}>Kết quả</th><th style={styles.th}>Chi tiết</th></tr></thead>
+                                                <tbody>
+                                                    {historyRecords.length > 0 ? historyRecords.map((r,i)=>(
+                                                        <tr key={i} style={styles.tr}>
+                                                            <td style={styles.td}>{r.date}</td>
+                                                            <td style={styles.td}><b style={{color: (r.result||"").includes('Nặng')?'#dc2626':'#16a34a'}}>{r.result}</b></td>
+                                                            <td style={styles.td}><button onClick={()=>navigate(`/doctor/analysis/${r.id}`)} className="btn-secondary-hover" style={styles.actionBtn}>Xem</button></td>
+                                                        </tr>
+                                                    )) : <tr><td colSpan={3} style={styles.emptyCell}>Chưa có lịch sử khám</td></tr>}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
                 </div>
-            )}
+            </main>
         </div>
     );
 };
 
-// --- STYLES ---
+// --- STYLES (MATCHED TO USER DASHBOARD) ---
 const styles: {[key:string]: React.CSSProperties} = {
-    loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555' },
+    loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', color:'#555', fontSize:'18px', backgroundColor: '#f4f6f9' },
     container: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', backgroundColor: '#f4f6f9', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', zIndex: 1000 },
     
-    sidebar: { width: '260px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%' },
-    sidebarHeader: { padding: '25px 20px', borderBottom: '1px solid #f0f0f0' },
+    // SIDEBAR
+    sidebar: { width: '270px', backgroundColor: '#fff', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '4px 0 15px rgba(0,0,0,0.02)', zIndex: 10 },
+    sidebarHeader: { padding: '25px 25px', borderBottom: '1px solid #f1f5f9' },
     logoRow: { display:'flex', alignItems:'center', gap:'10px', marginBottom: '5px' },
-    logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b' },
-    clinicName: { fontSize:'13px', color:'#666', marginLeft:'35px' },
-    nav: { flex: 1, padding: '20px 0', overflowY: 'auto' },
-    menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#555', display:'flex', alignItems:'center', transition:'0.2s' },
-    menuItemActive: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#007bff', borderRight: '3px solid #007bff', display:'flex', alignItems:'center' },
-    menuIcon: { marginRight: '12px' },
-    sidebarFooter: { padding: '20px', borderTop: '1px solid #f0f0f0' },
-    logoutBtn: { width: '100%', padding: '10px', background: '#fff0f0', color: '#d32f2f', border: 'none', borderRadius: '6px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center' },
-    
+    logoText: { fontWeight: '800', fontSize: '20px', color: '#1e293b', letterSpacing: '-0.5px' },
+    clinicName: { fontSize:'13px', color:'#64748b', marginLeft:'36px', fontWeight: 500 },
+    nav: { flex: 1, padding: '25px 0', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' },
+    menuIcon: { marginRight: '14px', fontSize: '18px' },
+    badgeRed: { marginLeft: 'auto', backgroundColor: '#ef4444', color: 'white', fontSize: '11px', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)' },
+    sidebarFooter: { padding: '25px', borderTop: '1px solid #f1f5f9' },
+    logoutBtn: { width: '100%', padding: '12px', background: '#fef2f2', color: '#ef4444', border: 'none', borderRadius: '10px', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' },
+
+    // HEADER & MAIN
     main: { flex: 1, display: 'flex', flexDirection: 'column', height: '100%' },
-    header: { height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 30px' },
-    headerLeft: { display:'flex', alignItems:'center', gap:'15px' },
-    headerAlert: { background:'#fdecea', color:'#e74c3c', padding:'5px 10px', borderRadius:'20px', fontSize:'12px', fontWeight:'bold' },
-    headerRight: { display: 'flex', alignItems: 'center', gap: '20px' },
-    profileBox: { display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' },
-    avatarCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#3498db', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', fontWeight:'bold' },
-    userNameText: { fontSize:'14px', fontWeight:'600', color: '#333' },
-    iconBtn: { background:'none', border:'none', cursor:'pointer', position:'relative', padding:'5px' },
-    bellBadge: { position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', backgroundColor: '#e74c3c', borderRadius: '50%' },
+    header: { height: '75px', backgroundColor: '#fff', borderBottom: '1px solid #e1e4e8', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 40px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' },
+    headerRight: { display: 'flex', alignItems: 'center', gap: '25px' },
+    profileBox: { display:'flex', alignItems:'center', gap:'12px', cursor:'pointer', padding: '6px 12px', borderRadius: '30px', transition: 'background 0.2s' },
+    avatarCircle: { width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg, #007bff, #0056b3)', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '15px', fontWeight:'600', boxShadow: '0 4px 8px rgba(0,123,255,0.2)' },
+    userNameText: { fontSize:'14px', fontWeight:'600', color: '#334155' },
+    iconBtn: { background:'none', border:'none', cursor:'pointer', position:'relative', padding:'8px', borderRadius: '50%', transition: 'background 0.2s' },
+    bellBadge: { position: 'absolute', top: '5px', right: '5px', width: '8px', height: '8px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid #fff' },
     
-    contentBody: { padding: '30px', flex: 1, overflowY: 'auto' },
+    contentBody: { padding: '30px 40px', flex: 1, overflowY: 'auto', position: 'relative' },
 
-    card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border:'1px solid #eaeaea', overflow:'hidden', marginBottom:'20px' },
-    cardHeader: { padding:'20px 25px', borderBottom:'1px solid #f0f0f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
-    pageTitle: { fontSize: '16px', margin: 0, display:'flex', alignItems:'center', color: '#333' },
+    card: { backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f1f5f9', overflow:'hidden', marginBottom:'25px', transition: 'transform 0.3s' },
+    cardHeader: { padding:'20px 30px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center', background: '#fff' },
+    pageTitle: { fontSize: '18px', margin: 0, display:'flex', alignItems:'center', color: '#1e293b', fontWeight: '700' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: '14px' },
-    th: { textAlign: 'left', padding: '12px 25px', borderBottom: '1px solid #eee', color: '#8898aa', fontSize:'11px', textTransform:'uppercase', fontWeight:'700', background:'#fbfbfb' },
-    tr: { borderBottom: '1px solid #f5f5f5' },
-    td: { padding: '15px 25px', verticalAlign: 'middle', color:'#333' },
-    emptyCell: { textAlign: 'center', padding: '30px', color: '#999', fontStyle: 'italic' },
+    th: { textAlign: 'left', padding: '15px 25px', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize:'12px', textTransform:'uppercase', fontWeight:'700', background:'#f8fafc', letterSpacing: '0.5px' },
+    tr: { borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' },
+    td: { padding: '18px 25px', verticalAlign: 'middle', color:'#334155' },
+    emptyCell: { textAlign: 'center', padding: '50px', color: '#94a3b8', fontStyle: 'italic' },
     
-    // --- STATS & CHART (ĐÃ SỬA) ---
-    statsGrid: { display:'grid', gridTemplateColumns:'1fr 2fr', gap:'20px', marginBottom:'20px', alignItems: 'stretch' }, // alignItems: stretch để cột trái bằng cột phải
     statCard: { 
-        background:'white', 
-        padding:'20px', 
-        borderRadius:'12px', 
-        boxShadow:'0 2px 10px rgba(0,0,0,0.03)', 
-        display:'flex', 
-        alignItems:'center', 
-        gap:'15px', 
-        border:'1px solid #eaeaea',
-        flex: 1 // Quan trọng: Để card tự giãn lấp đầy chiều cao
+        background:'white', padding:'25px', borderRadius:'16px', boxShadow:'0 10px 30px rgba(0,0,0,0.04)', 
+        display:'flex', alignItems:'center', gap:'20px', border:'1px solid #f1f5f9', flex: 1, cursor: 'default' 
     },
-    statIconBox: { width:'50px', height:'50px', borderRadius:'12px', background:'#eaf2f8', display:'flex', alignItems:'center', justifyContent:'center' },
-    statLabel: { fontSize:'13px', color:'#666', marginBottom:'5px' },
-    statValue: { fontSize:'24px', fontWeight:'bold', color:'#333' },
+    statIconBox: { width:'56px', height:'56px', borderRadius:'14px', display:'flex', alignItems:'center', justifyContent:'center' },
+    statLabel: { fontSize:'14px', color:'#64748b', marginBottom:'4px', fontWeight: 600 },
+    statValue: { fontSize:'26px', fontWeight:'800', color:'#1e293b' },
     
-    // Chart Container
-chartCard: { 
-        background:'white', 
-        borderRadius:'12px', 
-        boxShadow:'0 2px 10px rgba(0,0,0,0.03)', 
-        border:'1px solid #eaeaea', 
-        display:'flex', 
-        flexDirection:'column',
-        height: '380px', // Tăng chiều cao để thoáng hơn
-        position: 'relative'
-    },
-    chartBody: {
-        display: 'flex',
-        padding: '20px',
-        flex: 1,
-        alignItems: 'stretch',
-        position: 'relative', // QUAN TRỌNG: Giữ các cột nằm trong khung
-    },
-    yAxis: {
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        paddingRight: '15px',
-        borderRight: '1px solid #eee',
-        color: '#999',
-        fontSize: '11px',
-        textAlign: 'right',
-        minWidth: '40px',
-        paddingBottom: '30px' // Khớp với chiều cao nhãn trục X
-    },
-    plotArea: {
-        flex: 1,
-        position: 'relative', // Khung tọa độ cho các cột
-        marginLeft: '15px',
-        display: 'flex',
-        flexDirection: 'column'
-    },
-    gridContainer: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 30, // Bottom 30 để chừa chỗ cho trục X
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        zIndex: 0
-    },
-    gridLine: {
-        width: '100%',
-        borderBottom: '1px dashed #eee',
-        height: '0px'
-    },
-    barsContainer: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 1,
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        paddingBottom: '30px' // Đẩy cột lên trên nhãn trục X
-    },
-    barColumn: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        height: '100%',
-        width: '12%', // Độ rộng cột
-        position: 'relative'
-    },
-    barFill: {
-        width: '100%',
-        borderRadius: '6px 6px 0 0',
-        position: 'relative',
-        transition: 'height 0.8s cubic-bezier(0.4, 0, 0.2, 1)', // Hiệu ứng mượt
-        minHeight: '4px', // Luôn hiện 1 chút dù giá trị là 0
-        cursor: 'pointer'
-    },
-    barValueTop: {
-        position: 'absolute',
-        top: '-25px',
-        width: '100%',
-        textAlign: 'center',
-        fontSize: '13px',
-        fontWeight: 'bold',
-        color: '#333'
-    },
-    xAxisLabel: {
-        position: 'absolute',
-        bottom: '-30px',
-        width: '150%',
-        textAlign: 'center',
-        fontSize: '11px',
-        color: '#666',
-        fontWeight: '600',
-        whiteSpace: 'nowrap'
-    },
-    barLabel: { marginTop:'10px', fontSize:'12px', color:'#666', textAlign:'center' },
+    chartCard: { background:'white', borderRadius:'16px', boxShadow:'0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f1f5f9', display:'flex', flexDirection:'column', height: '400px', position: 'relative', overflow:'hidden' },
+    chartBody: { display: 'flex', padding: '25px', flex: 1, alignItems: 'stretch', position: 'relative' },
+    yAxis: { display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '15px', borderRight: '1px solid #f1f5f9', color: '#94a3b8', fontSize: '11px', textAlign: 'right', minWidth: '40px', paddingBottom: '30px' },
+    plotArea: { flex: 1, position: 'relative', marginLeft: '15px', display: 'flex', flexDirection: 'column' },
+    gridContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 30, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', zIndex: 0 },
+    gridLine: { width: '100%', borderBottom: '1px dashed #e2e8f0', height: '0px' },
+    barsContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1, display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: '30px' },
+    barColumn: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', width: '12%', position: 'relative' },
+    barFill: { width: '100%', borderRadius: '6px 6px 0 0', position: 'relative', minHeight: '4px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' },
+    barValueTop: { position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', color: '#334155' },
+    xAxisLabel: { position: 'absolute', bottom: '-35px', width: '150%', textAlign: 'center', fontSize: '12px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' },
 
-    primaryBtnSm: { background: '#3498db', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', display:'flex', alignItems:'center' },
-    actionBtn: { background: '#fff', border: '1px solid #3498db', color: '#3498db', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
+    primaryBtn: { padding: '12px 24px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight:'600', boxShadow: '0 4px 12px rgba(0,123,255,0.2)', transition: 'all 0.2s', fontSize: '14px' },
+    primaryBtnSm: { background: '#007bff', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', display:'flex', alignItems:'center', fontWeight: '600', transition: 'background 0.2s' },
+    btnSecondary: { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', display:'flex', alignItems:'center', fontWeight: '600' },
+    actionBtn: { background: '#f8fafc', border: '1px solid #e2e8f0', color: '#007bff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', transition: 'all 0.2s' },
 
-    searchBox: { display: 'flex', alignItems: 'center', background: '#f8f9fa', borderRadius: '6px', padding: '5px 10px', border: '1px solid #ddd' },
-    searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '5px', width: '150px' },
-    selectInput: { padding: '5px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' },
+    searchBox: { display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '8px 14px', border: '1px solid transparent' },
+    searchInput: { border: 'none', background: 'transparent', outline: 'none', marginLeft: '8px', width: '180px', fontSize:'14px', color:'#333' },
+    selectInput: { padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', outline:'none', background:'white', color:'#333' },
 
-    messengerCard: { display: 'flex', height: 'calc(100vh - 140px)', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', border:'1px solid #e1e4e8', overflow: 'hidden' },
-    chatListPanel: { width: '300px', borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa' },
-    chatHeaderLeft: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#f9f9f9' },
-    chatListScroll: { flex: 1, overflowY: 'auto' },
-    chatListItem: { display: 'flex', alignItems: 'center', padding: '12px', cursor: 'pointer', gap: '10px', borderBottom:'1px solid #fcfcfc' },
-    avatarLarge: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#555' },
-    unreadDot: { width:'10px', height:'10px', borderRadius:'50%', background:'#3498db' },
+    messengerCard: { display: 'flex', height: 'calc(100vh - 150px)', backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f1f5f9', overflow: 'hidden' },
+    chatListPanel: { width: '340px', borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' },
+    chatHeaderLeft: { padding: '25px', borderBottom: '1px solid #f1f5f9', background:'#fff' },
+    chatListScroll: { flex: 1, overflowY: 'auto', padding: '15px' },
+    chatListItem: { display: 'flex', alignItems: 'center', padding: '14px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', gap: '15px', marginBottom: '5px' },
+    avatarLarge: { width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, #e0e7ff, #c7d2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', color: '#4338ca', flexShrink: 0 },
+    unreadDot: { width:'10px', height:'10px', backgroundColor: '#007bff', borderRadius: '50%', boxShadow: '0 0 0 2px #fff' },
 
     chatWindowPanel: { flex: 1, display: 'flex', flexDirection: 'column', backgroundColor:'white' },
-    chatWindowHeader: { padding: '15px', borderBottom: '1px solid #f0f0f0', background:'#fff', display: 'flex', alignItems: 'center', gap: '12px' },
-    messagesBody: { flex: 1, padding: '20px', overflowY: 'auto', background:'#fdfdfd', display: 'flex', flexDirection: 'column', gap: '5px' },
+    chatWindowHeader: { padding: '15px 25px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '15px', background: '#fff' },
+    avatarMedium: { width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#64748b', fontSize:'15px' },
+    messagesBody: { flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '8px', background: '#fff' },
+    chatInputArea: { padding: '20px', display: 'flex', alignItems: 'center', gap: '15px', borderTop: '1px solid #f1f5f9', background: '#fff' },
+    messengerInput: { flex: 1, backgroundColor: '#f1f5f9', border: '1px solid transparent', borderRadius: '25px', padding: '12px 20px', fontSize: '14px', outline: 'none', transition: 'all 0.2s', color: '#333' },
+    emptyChatState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', textAlign: 'center' },
     
-    chatInputArea: { padding: '15px 20px', borderTop: '1px solid #f0f0f0', display:'flex', gap:'10px', alignItems: 'center', flexShrink: 0},
-    messengerInput: { flex:1, padding:'10px', borderRadius:'20px', border:'1px solid #ddd', outline:'none', backgroundColor: '#f0f2f5' },
-    emptyChatState: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#999' },
+    messageRow: { display: 'flex', marginBottom: '8px', width: '100%' },
+    bubbleMe: { padding: '12px 18px', borderRadius: '20px 20px 4px 20px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', maxWidth: '75%', width:'fit-content', fontSize: '15px', lineHeight: '1.5', boxShadow: '0 2px 5px rgba(0,123,255,0.2)', wordWrap: 'break-word' as 'break-word' },
+    bubbleOther: { padding: '12px 18px', borderRadius: '20px 20px 20px 4px', backgroundColor: '#f1f5f9', color: '#1e293b', maxWidth: '75%', width:'fit-content', fontSize: '15px', lineHeight: '1.5', wordWrap: 'break-word' as 'break-word' },
     
-    messageRow: { display: 'flex', marginBottom: '4px', width: '100%' },
-    bubbleMe: { padding: '10px 16px', borderRadius: '18px 18px 4px 18px', backgroundColor: '#3498db', color: 'white', maxWidth: '65%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
-    bubbleOther: { padding: '10px 16px', borderRadius: '18px 18px 18px 4px', backgroundColor: '#f1f0f0', color: '#1c1e21', maxWidth: '65%', fontSize: '14.5px', lineHeight: '1.5', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordWrap: 'break-word' as 'break-word' },
+    notificationDropdown: { position: 'absolute', top: '55px', right: '-10px', width: '320px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 1100, border:'1px solid #f1f5f9', overflow: 'hidden' },
+    dropdownMenu: { position: 'absolute', top: '65px', right: '0', width: '240px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #f1f5f9', overflow: 'hidden' },
+    dropdownHeader: { padding: '15px', background:'#f8fafc', fontSize:'14px', fontWeight:'700', borderBottom:'1px solid #f1f5f9', color:'#334155' },
+    dropdownItem: { display: 'flex', alignItems:'center', width: '100%', padding: '12px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#334155', fontSize:'14px', transition: 'background 0.2s' },
     
-    notificationDropdown: { position: 'absolute', top: '40px', right: '-10px', width: '300px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)', zIndex: 1100, border:'1px solid #eee' },
-    dropdownMenu: { position: 'absolute', top: '50px', right: '0', width: '160px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', zIndex: 1000, border: '1px solid #eee' },
-    dropdownHeader: { padding: '10px', background:'#f8f9fa', fontSize:'13px', fontWeight:'bold', borderBottom:'1px solid #eee' },
-    dropdownItem: { display: 'flex', alignItems:'center', width: '100%', padding: '10px 15px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#333', fontSize:'14px' },
-    modalOverlay: { position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 2000 },
-    modalContent: { background:'white', padding:'0', borderRadius:'12px', width:'600px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', overflow:'hidden' },
-    modalHeader: { padding:'15px 20px', background:'#f8f9fa', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center' },
-    closeBtn: { border:'none', background:'none', fontSize:'16px', cursor:'pointer', color:'#666' },
-    reportBox: { background:'#f8f9fa', padding:'15px', borderRadius:'8px', boxShadow:'0 2px 5px rgba(0,0,0,0.02)' },
-    reportLabel: { fontSize:'13px', color:'#7f8c8d', marginBottom:'5px', textTransform:'uppercase', fontWeight:'600' as '600' }, 
-    reportValue: { fontSize:'28px', fontWeight:'bold', color:'#2c3e50' },
-    label: { display:'block', marginBottom:'5px', fontSize:'13px', fontWeight:'600', color:'#555' },
-    inputForm: { width:'100%', padding:'10px', borderRadius:'6px', border:'1px solid #ddd', fontSize:'14px', outline:'none' },
+    modalOverlay: { position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.4)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 2000, backdropFilter: 'blur(3px)' },
+    modalContent: { background:'white', padding:'0', borderRadius:'16px', width:'600px', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', overflow:'hidden' },
+    modalHeader: { padding:'20px 25px', background:'#fff', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' },
+    closeBtn: { border:'none', background:'none', fontSize:'18px', cursor:'pointer', color:'#94a3b8', padding:'5px' },
+    reportBox: { background:'#eff6ff', padding:'25px', borderRadius:'16px', boxShadow:'0 4px 15px rgba(0,123,255,0.05)', border: '1px solid #dbeafe' },
+    label: { display:'block', marginBottom:'8px', fontSize:'14px', fontWeight:'600', color:'#334155' },
+    inputForm: { width:'100%', padding:'12px 16px', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'14px', outline:'none', transition: 'all 0.2s', boxSizing: 'border-box' as 'border-box', background:'#fff' },
 };
+
+// --- GLOBAL CSS (Inject same as User Dashboard) ---
+const cssGlobal = `
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(25px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4); } 70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); } }
+
+.spin { animation: spin 1s linear infinite; }
+.fade-in { animation: fadeIn 0.5s ease-out forwards; }
+.slide-up-card { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+.pop-in { animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* --- SIDEBAR CSS --- */
+.sidebar-item {
+    padding: 12px 25px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    border-left: 4px solid transparent;
+    margin: 4px 0;
+    border-radius: 0 25px 25px 0;
+    width: 100%; 
+    box-sizing: border-box;
+}
+
+.sidebar-item:not(.active):hover {
+    background-color: #f8fafc;
+    color: #007bff;
+}
+
+.sidebar-item.active {
+    background-color: #eff6ff;
+    color: #007bff;
+    border-left-color: #007bff;
+    font-weight: 600;
+    box-shadow: 2px 2px 5px rgba(0,123,255,0.05);
+}
+
+.btn-primary-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,123,255,0.25) !important; filter: brightness(1.05); }
+.btn-primary-hover:active { transform: translateY(0); }
+.btn-secondary-hover:hover { background-color: #e2e8f0 !important; color: #1e293b !important; }
+.btn-icon-hover:hover { background-color: #f1f5f9 !important; }
+.pulse-on-active:active { animation: pulse 0.4s; }
+
+.input-focus:focus { border-color: #007bff !important; box-shadow: 0 0 0 3px rgba(0,123,255,0.1) !important; background-color: #fff !important; }
+
+.hover-lift:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06) !important; }
+.chat-item-hover:hover { background-color: #f8fafc !important; }
+.table-hover tbody tr:hover { background-color: #f8fbff !important; }
+
+.icon-pulse { animation: pulse 2s infinite; }
+
+::-webkit-scrollbar { width: 4px; } 
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+`;
+
+const styleSheet = document.createElement("style");
+styleSheet.innerText = cssGlobal;
+document.head.appendChild(styleSheet);
 
 export default DashboardDr;
