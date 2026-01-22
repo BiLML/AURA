@@ -1,25 +1,36 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
-import Dashboard from './dashboard';
-import DashboardDr from './dashboarddr';
-import DashboardAdmin from './DashboardAdmin'; 
-import ClinicDashboard from './ClinicDashboard';
-import './App.css';
-import Register from './Register';
-import Upload from './Upload';
-import Analysis from './Analysis'; 
-import SetUsername from './setUsername'; 
-import ProfilePage from './ProfilePage';
-import ProfileDr from './ProfileDr';
-import ForgotPassword from './ForgotPassword';
-import ResetPassword from './ResetPassword';
-import DoctorAnalysis from './DoctorAnalysis';
-import DoctorReport from './DoctorReport';
-import ClinicAnalysisResult from './ClinicAnalysisResult';
-import AnalysisBatchResult from './AnalysisBatchResult';
 
-// --- HÀM HỖ TRỢ ĐỌC ROLE TỪ LOCAL STORAGE ---
+// --- 1. IMPORT ĐÚNG TỪ CẤU TRÚC FOLDER MỚI ---
+// Auth
+import Login from './features/auth/Login';
+import Register from './features/auth/Register';
+import ForgotPassword from './features/auth/ForgotPassword';
+import ResetPassword from './features/auth/ResetPassword';
+
+// Dashboards
+import Dashboard from './features/dashboards/dashboard';
+import DashboardDr from './features/dashboards/dashboarddr';
+import DashboardAdmin from './features/dashboards/DashboardAdmin'; 
+import ClinicDashboard from './features/dashboards/ClinicDashboard';
+
+// Analysis
+import Upload from './features/analysis/Upload';
+import Analysis from './features/analysis/Analysis'; 
+import DoctorAnalysis from './features/analysis/DoctorAnalysis';
+import DoctorReport from './features/analysis/DoctorReport';
+import ClinicAnalysisResult from './features/analysis/ClinicAnalysisResult';
+import AnalysisBatchResult from './features/analysis/AnalysisBatchResult';
+
+// Profile
+import SetUsername from './features/profile/setUsername'; 
+import ProfilePage from './features/profile/ProfilePage';
+import ProfileDr from './features/profile/ProfileDr';
+
+// Styles
+import './styles/App.css'; 
+
+// --- (CÁC PHẦN LOGIC BÊN DƯỚI GIỮ NGUYÊN) ---
 const getUserRoleFromStorage = () => {
     try {
         const userInfoString = localStorage.getItem('user_info');
@@ -33,7 +44,6 @@ const getUserRoleFromStorage = () => {
     return null;
 };
 
-// 🛡️ Component Bảo Vệ Tuyến Đường
 const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
     const isAuthenticated = !!localStorage.getItem('token');
     if (!isAuthenticated) {
@@ -42,7 +52,6 @@ const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) 
     return element;
 };
 
-// ⭐ COMPONENT ĐIỀU HƯỚNG MẶC ĐỊNH ⭐
 const DefaultRedirect: React.FC = () => {
     const isAuthenticated = !!localStorage.getItem('token');
     const role = getUserRoleFromStorage();
@@ -59,41 +68,27 @@ const App: React.FC = () => {
         <Router>
             <div className="app-container">
                 <Routes>
-                    {/* --- CÁC ROUTE CÔNG KHAI --- */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
 
-                    {/* --- DASHBOARDS --- */}
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/admin" element={<DashboardAdmin />} />
                     <Route path="/clinic-dashboard" element={<ClinicDashboard />} />
                     <Route path="/dashboarddr" element={<ProtectedRoute element={<DashboardDr />} />} />
 
-                    {/* --- CÁC ROUTE XỬ LÝ ẢNH & PHÂN TÍCH (QUAN TRỌNG) --- */}
-                    
-                    {/* 1. Trang Upload & Batch Result (Dùng chung) */}
                     <Route path="/upload" element={<ProtectedRoute element={<Upload />} />} />
                     <Route path="/analysis-result-batch" element={<AnalysisBatchResult />} />
-
-                    {/* 2. Trang Chi tiết dành cho USER THƯỜNG */}
                     <Route path="/analysis-result/:id" element={<ProtectedRoute element={<Analysis />} />} />
-
-                    {/* 3. Trang Chi tiết dành cho PHÒNG KHÁM (CLINIC) */}
                     <Route path="/clinic/analysis/:id" element={<ProtectedRoute element={<ClinicAnalysisResult />} />} />
-
-                    {/* 4. Trang dành cho BÁC SĨ (DOCTOR) */}
                     <Route path="/doctor/analysis/:id" element={<DoctorAnalysis />} />
                     <Route path="/doctor/report/:id" element={<DoctorReport />} />
 
-
-                    {/* --- USER PROFILE --- */}
                     <Route path="/profile-dr" element={<ProtectedRoute element={<ProfileDr />} />} />
                     <Route path="/set-username" element={<ProtectedRoute element={<SetUsername />} />} />
                     <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
 
-                    {/* --- DEFAULT & 404 --- */}
                     <Route path="/" element={<DefaultRedirect />} />
                     <Route path="*" element={<div style={{ padding: '20px', textAlign: 'center' }}><h1>404</h1><p>Page Not Found</p></div>} />
                 </Routes>

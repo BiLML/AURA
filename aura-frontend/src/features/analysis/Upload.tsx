@@ -267,7 +267,7 @@ const Upload: React.FC = () => {
                                             value={selectedPatientId}
                                             onChange={(e) => setSelectedPatientId(e.target.value)}
                                         >
-                                            <option value="">-- Khách vãng lai / Chưa chọn --</option>
+                                            <option value="">-- Không chọn --</option>
                                             {patients.map(p => (
                                                 <option key={p.id} value={p.id}>{p.full_name} - {p.phone}</option>
                                             ))}

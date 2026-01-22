@@ -288,7 +288,7 @@ class UserService:
             data={"sub": str(user.id), "type": "reset"},
             expires_delta=timedelta(minutes=15)
         )
-        reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+        reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
         html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px;">
             <h2 style="color: #007bff;">AURA - Yêu cầu đặt lại mật khẩu</h2>

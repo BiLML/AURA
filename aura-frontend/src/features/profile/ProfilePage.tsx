@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
     FaUser, FaEnvelope, FaPhone, FaArrowLeft, FaSave, 
     FaIdCard, FaGlobe, FaVenusMars, FaRulerVertical, FaWeight, 
-    FaMapMarkerAlt, FaSignOutAlt, FaCamera, FaSpinner, 
+    FaMapMarkerAlt, FaSpinner, 
     FaBirthdayCake
 } from 'react-icons/fa';
 
@@ -36,6 +36,7 @@ const ProfilePage: React.FC = () => {
     
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [errors, setErrors] = useState<{[key: string]: string}>({});
 
     // --- FETCH DATA ---
     useEffect(() => {
@@ -91,8 +92,14 @@ const ProfilePage: React.FC = () => {
     const handleSaveProfile = async () => {
         const token = localStorage.getItem('token');
         setIsSaving(true);
+        setErrors({});
         try {
             const API_URL = 'http://localhost:8000/api/v1/users/me';
+
+            const payload = { ...profileData };
+            if (!payload.date_of_birth) {
+                (payload as any).date_of_birth = null; 
+            }
 
             const res = await fetch(API_URL, {
                 method: 'PUT',
@@ -106,14 +113,42 @@ const ProfilePage: React.FC = () => {
             });
             
             const data = await res.json(); 
-            if (res.ok) { alert("Cập nhật hồ sơ thành công!"); } 
-            else { alert(data.detail ? JSON.stringify(data.detail) : "Lỗi khi lưu hồ sơ."); }
-        } catch (error) {
-            console.error(error);
-            alert("Lỗi kết nối server.");
-        } finally {
-            setIsSaving(false);
+            if (res.ok) { alert("Cập nhật hồ sơ thành công!"); 
+
+            } else if (res.status === 422) {
+            // Xử lý lỗi validation từ FastAPI/Pydantic
+            const newErrors: {[key: string]: string} = {};
+            
+            data.detail.forEach((err: any) => {
+                // err.loc thường là ["body", "date_of_birth"]
+                const fieldName = err.loc[err.loc.length - 1];
+                let friendlyMsg = "";
+
+                // Map tin nhắn lỗi sang tiếng Việt
+                switch(err.type) {
+                    case "date_from_datetime_parsing":
+                        friendlyMsg = "Ngày sinh không đúng định dạng hoặc bị trống.";
+                        break;
+                    case "value_error.missing":
+                        friendlyMsg = "Thông tin này là bắt buộc.";
+                        break;
+                    default:
+                        friendlyMsg = err.msg; // Mặc định từ server
+                }
+                newErrors[fieldName] = friendlyMsg;
+            });
+
+            setErrors(newErrors);
+            alert("Vui lòng kiểm tra lại các thông tin nhập liệu.");
+        } else {
+            alert(data.detail || "Lỗi khi lưu hồ sơ.");
         }
+    } catch (error) {
+        console.error(error);
+        alert("Lỗi kết nối server.");
+    } finally {
+        setIsSaving(false);
+    }
     };
 
     const handleBack = () => {
@@ -122,7 +157,6 @@ const ProfilePage: React.FC = () => {
         else navigate('/dashboard');
     };
     
-    const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
 
     if (isLoading) return <div style={styles.loading}><FaSpinner className="spin" style={{marginRight: 10}}/> Đang tải hồ sơ...</div>;
 
@@ -169,14 +203,17 @@ const ProfilePage: React.FC = () => {
                                 <div className="section-slide-in" style={{animationDelay: '0.1s'}}>
                                     <div style={styles.sectionTitle}>1. Thông tin liên hệ</div>
                                     <div style={styles.gridRow}>
+                                        
                                         <div style={styles.formGroup}>
                                             <label style={styles.formLabel}><FaUser style={styles.iconLabel}/> Họ và tên</label>
                                             <input type="text" name="full_name" value={profileData.full_name} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
                                         </div>
+
                                         <div style={styles.formGroup}>
                                             <label style={styles.formLabel}><FaEnvelope style={styles.iconLabel}/> Email</label>
                                             <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
                                         </div>
+
                                         <div style={styles.formGroup}>
                                             <label style={styles.formLabel}><FaPhone style={styles.iconLabel}/> Số điện thoại</label>
                                             <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} style={styles.formInput} className="smooth-input" />
@@ -198,6 +235,11 @@ const ProfilePage: React.FC = () => {
                                                 style={styles.formInput} 
                                                 className="smooth-input"
                                             />
+                                            {errors.date_of_birth && (
+                                                <span style={{ color: '#ff4d4f', fontSize: '12px', marginTop: '4px' }}>
+                                                    {errors.date_of_birth}
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div style={styles.formGroup}>

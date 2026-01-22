@@ -59,3 +59,8 @@ class IBillingRepository(ABC):
     def get_transactions_by_user(self, user_id: UUID) -> List[PaymentTransaction]:
         """Lấy lịch sử giao dịch của một user cụ thể"""
         pass
+    
+    @abstractmethod
+    def get_revenue_trend(self, days: int = 7) -> List[dict]:
+        """Lấy doanh thu nhóm theo ngày trong khoảng thời gian nhất định"""
+        pass

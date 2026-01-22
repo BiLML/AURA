@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaUserMd, FaPhone, FaEnvelope, FaMapMarkerAlt, 
-    FaVenusMars, FaSave, FaArrowLeft, FaCamera, 
+    FaVenusMars, FaSave, FaArrowLeft, 
     FaSpinner, FaBirthdayCake, FaHome, FaHospital, FaPen 
 } from 'react-icons/fa';
 
@@ -84,21 +84,25 @@ const ProfileDr: React.FC = () => {
         setMessage({ type: '', content: '' });
 
         try {
+            // 1. XỬ LÝ DỮ LIỆU TRƯỚC KHI GỬI (Fix lỗi 422 từ gốc)
+            // Nếu date_of_birth là chuỗi rỗng "", backend sẽ báo lỗi định dạng -> chuyển thành null
+            const payload = {
+                full_name: profile.full_name,
+                email: profile.email,
+                phone: profile.phone,
+                date_of_birth: profile.date_of_birth === "" ? null : profile.date_of_birth, 
+                hometown: profile.hometown,
+                gender: profile.gender,
+                nationality: profile.nationality
+            };
+
             const res = await fetch('http://localhost:8000/api/v1/users/me', {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}` 
                 },
-                body: JSON.stringify({
-                    full_name: profile.full_name,
-                    email: profile.email,
-                    phone: profile.phone,
-                    date_of_birth: profile.date_of_birth,
-                    hometown: profile.hometown,
-                    gender: profile.gender,
-                    nationality: profile.nationality
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
@@ -107,12 +111,31 @@ const ProfileDr: React.FC = () => {
                 setMessage({ type: 'success', content: 'Cập nhật hồ sơ thành công!' });
                 setIsEditing(false);
             } else {
-                setMessage({ type: 'error', content: data.detail || 'Lỗi cập nhật. Vui lòng thử lại.' });
+                // 2. XỬ LÝ LỖI HIỂN THỊ (Fix lỗi trắng trang)
+                let errorMsg = 'Lỗi cập nhật. Vui lòng thử lại.';
+                
+                if (data.detail) {
+                    if (typeof data.detail === 'string') {
+                        // Trường hợp lỗi là chuỗi đơn giản
+                        errorMsg = data.detail;
+                    } else if (Array.isArray(data.detail)) {
+                        // Trường hợp lỗi 422 (Pydantic trả về mảng) -> Lấy lỗi đầu tiên
+                        // Ví dụ: "date_of_birth: Input should be a valid date"
+                        const firstError = data.detail[0];
+                        errorMsg = `${firstError.loc ? firstError.loc[firstError.loc.length - 1] : 'Lỗi'}: ${firstError.msg}`;
+                    } else if (typeof data.detail === 'object') {
+                        errorMsg = JSON.stringify(data.detail);
+                    }
+                }
+                
+                setMessage({ type: 'error', content: errorMsg });
             }
         } catch (error) {
+            console.error(error);
             setMessage({ type: 'error', content: 'Lỗi kết nối server.' });
         } finally {
             setIsSaving(false);
+            // Tự động ẩn thông báo sau 3s
             setTimeout(() => setMessage({ type: '', content: '' }), 3000);
         }
     };
@@ -169,11 +192,6 @@ const ProfileDr: React.FC = () => {
                                 <div style={styles.avatar}>
                                     {profile.username ? profile.username.charAt(0).toUpperCase() : 'D'}
                                 </div>
-                                {isEditing && (
-                                    <div style={styles.cameraIcon} className="hover-lift">
-                                        <FaCamera color="white" size={14}/>
-                                    </div>
-                                )}
                             </div>
                             <div style={styles.nameSection}>
                                 <h2 style={{margin: '0 0 5px', color: '#1e293b', fontSize: '22px'}}>{profile.full_name || profile.username}</h2>
@@ -221,7 +239,7 @@ const ProfileDr: React.FC = () => {
                                     </div>
 
                                     <div style={styles.formGroup}>
-                                        <label style={styles.label}>Họ và tên <span style={{color:'red'}}>*</span></label>
+                                        <label style={styles.label}>Họ và tên</label>
                                         <div style={styles.inputWrapper}>
                                             <FaPen style={styles.inputIcon}/>
                                             <input 
@@ -274,7 +292,7 @@ const ProfileDr: React.FC = () => {
                                     <h4 style={styles.sectionTitle}>Liên hệ & Địa chỉ</h4>
 
                                     <div style={styles.formGroup}>
-                                        <label style={styles.label}>Email</label>
+                                        <label style={styles.label}>Email <span style={{color:'red'}}>*</span></label>
                                         <div style={styles.inputWrapper}>
                                             <FaEnvelope style={styles.inputIcon}/>
                                             <input 

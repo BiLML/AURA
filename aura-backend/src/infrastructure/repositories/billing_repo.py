@@ -1,4 +1,4 @@
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, cast, Date
 from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 from datetime import date, timedelta
@@ -117,3 +117,23 @@ class BillingRepository(IBillingRepository):
         ).filter(
             PaymentTransaction.user_id == user_id
         ).order_by(desc(PaymentTransaction.created_at)).all()
+    
+    def get_revenue_trend(self, days: int = 7) -> List[dict]:
+        # Tính ngày bắt đầu (Ví dụ: 7 ngày trước)
+        start_date = date.today() - timedelta(days=days)
+        
+        # Query: Select DATE(created_at), SUM(amount) WHERE ... GROUP BY DATE
+        results = self.db.query(
+            cast(PaymentTransaction.created_at, Date).label('date'),
+            func.sum(PaymentTransaction.amount).label('total')
+        ).filter(
+            PaymentTransaction.status == "SUCCESS",
+            PaymentTransaction.created_at >= start_date
+        ).group_by(
+            cast(PaymentTransaction.created_at, Date)
+        ).order_by(
+            cast(PaymentTransaction.created_at, Date)
+        ).all()
+
+        # Format lại dữ liệu trả về
+        return [{"date": r.date, "value": float(r.total)} for r in results]

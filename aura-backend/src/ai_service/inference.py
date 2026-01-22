@@ -115,27 +115,54 @@ def run_aura_inference(image_bytes):
         def process_and_draw(key, input_tensor, color, min_size=0, is_contour=False):
             if key in loaded_sessions:
                 try:
+                    # Chạy AI
                     session = loaded_sessions[key]
-                    t_in = input_tensor
-                    # Đảm bảo batch dim (1, H, W, C)
-                    if t_in.ndim == 3: t_in = np.expand_dims(t_in, axis=0)
+                    pred = session.run(None, {session.get_inputs()[0].name: input_tensor})[0]
                     
-                    pred = session.run(None, {session.get_inputs()[0].name: t_in})[0]
-                    mask_cleaned = clean_mask(pred[0,:,:,0], min_size)
+                    # Lấy mask gốc (float 0.0 -> 1.0)
+                    mask_small = pred[0,:,:,0]
+                    
+                    # Clean mask nhưng giữ nguyên độ mượt (không threshold cứng ở đây nếu muốn đẹp)
+                    # Nếu clean_mask của bạn đang trả về 0/1, hãy sửa nó để trả về soft mask hoặc chấp nhận clean xong mới resize
+                    mask_cleaned = clean_mask(mask_small, min_size)
+                    
                     findings[key] = np.sum(mask_cleaned)
                     
                     if findings[key] > 0:
+                        # 1. Resize mượt mà lên kích thước gốc
                         mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-                        _, mask_binary = cv2.threshold(mask_full, 0.5, 1, cv2.THRESH_BINARY)
-                        mask_binary = mask_binary.astype(np.uint8)
                         
                         if is_contour:
-                            contours, _ = cv2.findContours(mask_binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            # Với Gai thị (OD), vẫn cần viền nên giữ logic contour
+                            _, mask_bin = cv2.threshold(mask_full, 0.5, 1, cv2.THRESH_BINARY)
+                            contours, _ = cv2.findContours(mask_bin.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                             cv2.drawContours(overlay_full, contours, -1, color, 2)
                         else:
-                            overlay_full[mask_binary > 0] = color
-                except Exception as e: 
-                    print(f"❌ ERROR drawing {key}: {e}")
+                            # 2. VỚI CÁC BỆNH KHÁC: Dùng Alpha Blending thay vì tô bệt
+                            # Biến color thành mảng numpy
+                            color_np = np.array(color, dtype=np.float32)
+                            
+                            # Tạo vùng ảnh màu tại vị trí mask
+                            # mask_full lúc này là độ đậm nhạt (0.0 đến 1.0) tại từng pixel
+                            
+                            # Lấy vùng ảnh hiện tại trên overlay
+                            current_region = overlay_full.astype(np.float32)
+                            
+                            # Công thức cộng màu: Màu Mới * Độ Đậm Mask
+                            # Ta lặp qua 3 kênh màu (B, G, R)
+                            for c in range(3):
+                                # Chỉ cộng màu vào nơi có mask, giữ nguyên nơi khác
+                                # Cách này tạo hiệu ứng "phát sáng" (Glow)
+                                current_region[:, :, c] = np.maximum(
+                                    current_region[:, :, c], 
+                                    mask_full * color_np[c]
+                                )
+                                
+                            # Gán ngược lại overlay_full
+                            np.copyto(overlay_full, current_region.astype(np.uint8))
+                            
+                except Exception as e:
+                    print(f"Lỗi xử lý {key}: {e}")
 
         # --- A. XỬ LÝ RIÊNG CHO VESSELS (512x512, Grayscale) ---
         if 'Vessels' in loaded_sessions:

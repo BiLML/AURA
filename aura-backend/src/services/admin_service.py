@@ -161,6 +161,9 @@ class AdminService:
         current_config = self.config_repo.get_config() 
         model_ver = current_config.model_version if current_config else "Unknown"
 
+        #6. Lấy biểu đồ doanh thu 7 ngày gần nhất
+        revenue_chart = self.billing_repo.get_revenue_trend(7)
+
         # Format danh sách giao dịch để trả về Frontend
         tx_list = []
         for tx in recent_tx:
@@ -181,6 +184,7 @@ class AdminService:
             "total_users": total_users,
             "total_scans": total_scans,
             "total_revenue": total_revenue,
+            "revenue_chart": revenue_chart, # <--- TRẢ VỀ FIELD MỚI Ở ĐÂY
             "recent_transactions": tx_list,
             "ai_performance": {
                 "accuracy": round(accuracy, 1), # VD: 92.5

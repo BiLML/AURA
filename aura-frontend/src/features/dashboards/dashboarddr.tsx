@@ -432,12 +432,6 @@ const DashboardDr: React.FC = () => {
                         </div>
                     ))}
                 </nav>
-
-                <div style={styles.sidebarFooter}>
-                    <button onClick={handleLogout} style={styles.logoutBtn} className="btn-secondary-hover">
-                        <FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất
-                    </button>
-                </div>
             </aside>
 
             {/* MAIN CONTENT */}

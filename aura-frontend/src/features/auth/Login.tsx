@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import FacebookLogin from '@greatsumini/react-facebook-login';
-import './App.css';
+import '../../styles/App.css';
 
 const Login = () => {
     const [userName, setUserName] = useState('');

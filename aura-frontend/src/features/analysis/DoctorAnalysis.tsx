@@ -174,7 +174,7 @@ const DoctorAnalysis: React.FC = () => {
                         {isFullscreen ? <FaCompress/> : <FaExpand/>}
                     </button>
                     <button onClick={handleReportIssue} style={styles.reportBtn} className="btn-warning-hover">
-                        <FaExclamationTriangle style={{marginRight:'6px'}}/> Báo lỗi Model
+                        <FaExclamationTriangle style={{marginRight:'6px'}}/> Báo lỗi
                     </button>
                 </div>
             </header>
@@ -329,14 +329,14 @@ const DoctorAnalysis: React.FC = () => {
 
                         {/* Section 3: Notes */}
                         <div style={styles.section}>
-                            <label style={styles.sectionLabel}>3. Ghi chú nội bộ</label>
+                            <label style={styles.sectionLabel}>3. Ghi chú</label>
                             <textarea
                                 className="input-focus"
                                 style={styles.textarea}
                                 rows={5}
                                 value={internalNote}
                                 onChange={(e) => setInternalNote(e.target.value)}
-                                placeholder="Ghi chú cho hồ sơ này (không hiển thị cho bệnh nhân)..."
+                                placeholder="Ghi chú cho hồ sơ bệnh nhân"
                             />
                         </div>
                     </div>

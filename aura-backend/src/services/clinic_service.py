@@ -21,6 +21,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+
 class ClinicService:
     # 2. INJECT THÊM USER REPO VÀO HÀM KHỞI TẠO
     def __init__(self, 
@@ -38,10 +39,8 @@ class ClinicService:
         self.noti_template_repo = noti_template_repo
         self.user_noti_repo = user_noti_repo
         self.db = db
+
     def register_clinic(self, admin_id: UUID, name: str, address: str, phone_number: str, image_url: str = None, description: str = None) -> Clinic:
-        # Code cũ: existing_clinic = self.clinic_repo.db.query... -> SAI (Vi phạm encapsulation)
-        # Code mới: Bạn nên thêm hàm check_exist vào IClinicRepository
-        # Nhưng để chạy tạm, bạn có thể dùng self.db.query(...)
         return self.clinic_repo.create_clinic(admin_id, name, address, phone_number, image_url, description)
 
     def get_clinic_info(self, clinic_id: str) -> Clinic:
@@ -59,24 +58,22 @@ class ClinicService:
             
         # TRƯỜNG HỢP 2: User là CHỦ PHÒNG KHÁM (tìm trong bảng clinics cột admin_id)
         else:
-            # Code cũ của bạn: self.db.query(Clinic)... -> Nên chuyển vào Repo nếu được, nhưng để tạm đây cũng chạy được
             clinic = self.db.query(Clinic).filter(Clinic.admin_id == current_user.id).first()
         
         if not clinic:
             return None
         
-        # B. Lấy thông tin Admin (Dùng Repo thay vì query trực tiếp)
-        admin_user = self.user_repo.get_by_id(clinic.admin_id) # <--- Dùng Repo
+        # B. Lấy thông tin Admin
+        admin_user = self.user_repo.get_by_id(clinic.admin_id)
         admin_name = "Clinic Admin"
         if admin_user and admin_user.profile and admin_user.profile.full_name:
             admin_name = admin_user.profile.full_name
 
-        # --- XỬ LÝ BÁC SĨ (Code mới: Gọi Repo) ---
-        doctors = self.user_repo.get_doctors_by_clinic_id(clinic.id) # <--- SẠCH HƠN HẲN!
+        # --- XỬ LÝ BÁC SĨ ---
+        doctors = self.user_repo.get_doctors_by_clinic_id(clinic.id)
 
         formatted_doctors = []
         for doc in doctors:
-            # Gọi Repo để đếm số bệnh nhân
             p_counts = self.user_repo.count_patients_by_doctor_id(doc.id) 
 
             formatted_doctors.append({
@@ -93,11 +90,10 @@ class ClinicService:
             })
 
         # --- XỬ LÝ BỆNH NHÂN ---
-        patients_query = self.user_repo.get_patients_by_clinic_id(clinic.id) # <--- QUÁ GỌN!
+        patients_query = self.user_repo.get_patients_by_clinic_id(clinic.id)
 
         formatted_patients = []
         for p in patients_query:
-            # 1. Xử lý tên Bác sĩ phụ trách
             doc_name = "Chưa phân công"
             assigned_doctor_id = None 
 
@@ -150,38 +146,37 @@ class ClinicService:
         }
     
     def add_user_to_clinic_context(self, current_user: User, target_user_id: UUID):
-        
-        # 1. LOGIC TÌM CLINIC ID (Đã chuyển từ Router sang đây)
         clinic_id = None
         
         if current_user.role == UserRole.CLINIC:
-            # Gọi Repo thay vì db.query trực tiếp
             clinic = self.clinic_repo.get_by_admin_id(current_user.id) 
             if clinic:
                 clinic_id = clinic.id
         elif current_user.clinic_id:
             clinic_id = current_user.clinic_id
 
-        # Kiểm tra
         if not clinic_id:
             raise HTTPException(400, "Bạn chưa sở hữu hoặc không thuộc về phòng khám nào.")
 
-        # 2. GỌI HÀM LOGIC CŨ ĐỂ THÊM (Tái sử dụng code)
         return self.add_user_to_clinic(clinic_id, target_user_id)
     
     def add_user_to_clinic(self, clinic_id: UUID, user_id: UUID):
-        # 1. Lấy User (Gọi User Repo)
         user = self.user_repo.get_by_id(user_id)
         if not user:
             raise HTTPException(404, "User not found")
+        
+        if user.clinic_id is not None:
+            # Nếu user đã thuộc phòng khám KHÁC
+            if str(user.clinic_id) != str(clinic_id):
+                raise HTTPException(400, "Người dùng này đã thuộc về một phòng khám khác.")
+            else:
+                # Nếu đã thuộc chính phòng khám này rồi thì báo thành công luôn (hoặc báo lỗi tùy logic)
+                return True
 
-        # 2. Cập nhật bảng User (Gọi User Repo)
         user.clinic_id = clinic_id
         self.user_repo.update(user) 
 
-        # 3. Cập nhật bảng Patient (Gọi Medical Repo - CHUẨN CLEAN ARCH)
         if user.role == UserRole.USER:
-            # 👇 Thay thế đoạn logic loằng ngoằng cũ bằng 1 dòng này
             self.medical_repo.assign_patient_to_clinic(user_id, clinic_id)
 
         return True
@@ -199,66 +194,46 @@ class ClinicService:
         return self.clinic_repo.get_unverified_clinics()
 
     def process_clinic_request(self, clinic_id: str, status: str, admin_id: UUID, ip_address: str):
-        # 1. Lấy dữ liệu cũ
         clinic = self.clinic_repo.get_clinic_by_id(clinic_id)
         if not clinic:
             raise HTTPException(status_code=404, detail="Không tìm thấy phòng khám")
             
         old_status = clinic.status.value if hasattr(clinic.status, 'value') else str(clinic.status)
-
-        # 2. Cập nhật trạng thái Clinic (SUSPENDED hoặc APPROVED)
         updated_clinic = self.clinic_repo.verify_clinic(clinic_id, status)
         
-        # 3. XỬ LÝ TÀI KHOẢN & DỮ LIỆU
         if updated_clinic:
             user = self.user_repo.get_by_id(updated_clinic.admin_id)
             
             if user:
                 user_updated = False 
-
-                # --- CASE A: DUYỆT (APPROVE) / MỞ LẠI (ACTIVE) ---
                 if status == 'APPROVED' or status == 'ACTIVE': 
-                    # Nâng quyền lên CLINIC
                     if user.role == UserRole.USER:
                         user.role = UserRole.CLINIC
                         user_updated = True
-                    
-                    # Đảm bảo tài khoản Active
                     if user.status != UserStatus.ACTIVE.value:
                         user.status = UserStatus.ACTIVE.value 
                         user_updated = True
                 
-                # --- CASE B: ĐÌNH CHỈ (SUSPENDED) -> GIÁNG CHỨC & GIẢI TÁN ---
                 elif status == 'SUSPENDED':
-                    # 1. Giáng chức xuống USER thường
                     if user.role != UserRole.USER:
                         user.role = UserRole.USER
                         user_updated = True
                     
-                    # 2. Vẫn để Active để họ đăng nhập được (như User thường)
-                    # (Hoặc khóa luôn tùy bạn, nhưng theo yêu cầu là "biến thành role user")
                     if user.status != UserStatus.ACTIVE.value:
                         user.status = UserStatus.ACTIVE.value
                         user_updated = True
 
-                    # 3. [QUAN TRỌNG] Xóa sạch liên kết dữ liệu (Bác sĩ, Bệnh nhân)
                     self.user_repo.release_all_members_from_clinic(clinic.id)
                 
-                # Lưu thay đổi User chủ sở hữu
                 if user_updated:
                     self.user_repo.update(user)
 
             if status == 'APPROVED':
                 try:
-                    # Lấy mẫu "CLINIC_APPROVED" (Đã có trong DB theo ảnh bạn gửi)
                     template = self.noti_template_repo.get_by_code("CLINIC_APPROVED")
                     if template:
-                        # Điền tên phòng khám vào placeholder
-                        # Template DB: "Phòng khám {clinic_name} đã được duyệt"
                         title = template.subject.format(clinic_name=clinic.name)
                         content = template.content.format(clinic_name=clinic.name)
-                        
-                        # Gửi cho chủ phòng khám (clinic.admin_id)
                         self.user_noti_repo.create(
                             user_id=clinic.admin_id, 
                             title=title, 
@@ -267,8 +242,6 @@ class ClinicService:
                 except Exception as e:
                     print(f"⚠️ Lỗi gửi thông báo duyệt phòng khám: {e}")
                 
-
-        # 4. GHI LOG (Giữ nguyên)
         try:
             self.audit_repo.create_log(AuditLog(
                 user_id=admin_id,
@@ -284,27 +257,17 @@ class ClinicService:
         return updated_clinic
     
     def get_clinic_ai_history_split(self, admin_id: UUID):
-        """
-        Lấy lịch sử phân tích của phòng khám, chia làm 2 loại:
-        1. internal_uploads: Do bác sĩ/admin phòng khám upload.
-        2. patient_uploads: Do bệnh nhân của phòng khám tự upload ở nhà.
-        """
-        # 1. Tìm Clinic ID của admin
         clinic = self.db.query(Clinic).filter(Clinic.admin_id == admin_id).first()
         if not clinic:
             return {"clinic_uploads": [], "patient_uploads": []}
 
-        # 2. Query tất cả ảnh thuộc về bệnh nhân của phòng khám này
-        # Join Patient để lọc theo clinic_id
-        # Join User (Patient User) để so sánh uploader
-        # Join User (Uploader) để lấy tên người upload
         images = (self.db.query(RetinalImage)
                   .join(Patient, RetinalImage.patient_id == Patient.id)
                   .join(User, Patient.user_id == User.id)
                   .options(
                       joinedload(RetinalImage.analysis_result),
-                      joinedload(RetinalImage.patient).joinedload(Patient.user), # Load thông tin bệnh nhân
-                      joinedload(RetinalImage.uploader) # Load người upload
+                      joinedload(RetinalImage.patient).joinedload(Patient.user),
+                      joinedload(RetinalImage.uploader)
                   )
                   .filter(
                       or_(
@@ -319,16 +282,13 @@ class ClinicService:
         patient_uploads = []
 
         for img in images:
-            # Format dữ liệu trả về (Giống ImageResponse)
             ai_res = "Chưa xử lý"
             status = "PENDING"
             
-            # Xử lý kết quả AI
             analysis = getattr(img, "analysis_result", None)
             if analysis:
                 ai_res = analysis.risk_level
                 status = "COMPLETED"
-                # Nếu bác sĩ đã validate, ghi đè kết quả
                 if analysis.doctor_validation and analysis.doctor_validation.doctor_confirm:
                     ai_res = analysis.doctor_validation.doctor_confirm
             
@@ -345,24 +305,15 @@ class ClinicService:
                 "image_url": img.image_url,
                 "ai_result": ai_res,
                 "ai_analysis_status": status,
-                # Thông tin bệnh nhân
                 "patient_name": img.patient.user.profile.full_name if (img.patient.user.profile and img.patient.user.profile.full_name) else img.patient.user.username,
                 "patient_id": str(img.patient.user_id),
-                # Thông tin người thực hiện
                 "uploader_name": img.uploader.username
             }
 
-            # PHÂN LOẠI
-            # Nếu người upload là chính bệnh nhân -> Patient Upload
-           # Ưu tiên 1: Nếu người upload là Admin (chính là user đang đăng nhập) -> Vào "Phòng khám thực hiện"
             if img.uploader_id == admin_id:
                 clinic_uploads.append(item_data)
-            
-            # Ưu tiên 2: Nếu người upload trùng với chủ hồ sơ bệnh án -> "Bệnh nhân tự tải"
             elif img.uploader_id == img.patient.user_id:
                 patient_uploads.append(item_data)
-                
-            # Ưu tiên 3: Các trường hợp còn lại (Bác sĩ nhân viên upload) -> "Phòng khám thực hiện"
             else:
                 clinic_uploads.append(item_data)
 
@@ -372,31 +323,22 @@ class ClinicService:
         }
 
     def get_clinic_record_detail(self, record_id: str):
-        """
-        Lấy chi tiết hồ sơ dành riêng cho Clinic Dashboard.
-        Trả về dictionary phẳng, không bị lỗi lazy loading hay schema.
-        """
-        # 1. Lấy record từ Repo (đã có joinedload từ bước trước)
         record = self.medical_repo.get_record_by_id(record_id)
         if not record:
             return None
 
-        # 2. Xử lý tên Bệnh nhân
         patient_name = "Unknown"
         is_internal = False
 
         if record.patient and record.patient.user:
-            # KIỂM TRA: Nếu chủ hồ sơ là Admin/Clinic/Doctor -> Đánh dấu là nội bộ
             if record.patient.user.role in [UserRole.ADMIN, UserRole.CLINIC, UserRole.DOCTOR]:
                 is_internal = True
             
-            # Lấy tên hiển thị
             if record.patient.user.profile and record.patient.user.profile.full_name:
                 patient_name = record.patient.user.profile.full_name
             else:
                 patient_name = record.patient.user.username
 
-        # 3. Xử lý Kết quả AI & Bác sĩ
         ai_res = "Chưa xử lý"
         ai_report = ""
         annotated_url = None
@@ -423,55 +365,45 @@ class ClinicService:
                     else:
                         doctor_name = val.doctor.username
 
-        # 4. Trả về JSON (Thêm is_internal vào)
         return {
             "id": str(record.id),
             "created_at": record.created_at,
             "image_url": record.image_url,
             "annotated_image_url": annotated_url,
-            
             "patient_name": patient_name,
             "ai_risk_level": ai_res,
             "ai_detailed_report": ai_report,
-            
             "is_validated": is_validated,
             "doctor_name": doctor_name,
             "doctor_diagnosis": doctor_diagnosis,
             "doctor_notes": doctor_notes,
-            
-            "is_internal": is_internal # <--- TRẢ VỀ CỜ NÀY
+            "is_internal": is_internal
         }
     
     def search_doctors(self, query: str):
-        # Gọi Repo để tìm User có role là DOCTOR
         return self.user_repo.search_users_by_role(UserRole.DOCTOR, query)
     
     def search_patients(self, query: str):
-        # Gọi Repo để tìm User có role là USER (Bệnh nhân)
         return self.user_repo.search_users_by_role(UserRole.USER, query)
     
     def generate_campaign_report(self, clinic_id: str, start_date: datetime, end_date: datetime):
         clinic_uuid = UUID(clinic_id)
         
-        # 1. Lấy thống kê tổng hợp (Group by Risk)
         raw_stats = self.clinic_repo.get_screening_stats_by_date(clinic_uuid, start_date, end_date)
         
         total_scans = 0
         distribution = []
         
-        # Map dữ liệu
         risk_map = {}
         for risk, count in raw_stats:
             if not risk: risk = "Unknown"
             risk_map[risk] = count
             total_scans += count
             
-        # Chuẩn hóa danh sách để vẽ biểu đồ
         distribution = [
             {"name": k, "value": v} for k, v in risk_map.items()
         ]
 
-        # 2. Lấy danh sách ca nguy cơ cao (High Risk)
         high_risk_cases = self.clinic_repo.get_high_risk_patients_in_range(clinic_uuid, start_date, end_date)
         
         detailed_list = []
@@ -507,53 +439,46 @@ class ClinicService:
     def export_research_csv(self, clinic_id: str, start_date: datetime, end_date: datetime):
         clinic_uuid = UUID(clinic_id)
         
-        # 1. Lấy dữ liệu từ Repo
         records = self.clinic_repo.get_research_data(clinic_uuid, start_date, end_date)
         
-        # 2. Tạo CSV trong bộ nhớ (In-memory file)
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # 3. Viết Header
         writer.writerow([
             'Record_ID', 
             'Date', 
             'Time', 
-            'Patient_ID_Anonymized', # Ẩn danh
+            'Patient_ID_Anonymized',
             'Risk_Level_AI', 
             'Confidence_Score',
             'Is_Validated',
             'Doctor_Diagnosis'
         ])
         
-        # 4. Viết từng dòng dữ liệu
         for r in records:
             ai_res = r.analysis_result
             
-            # Xử lý thông tin bác sĩ xác thực (nếu có)
-            # Lưu ý: Cần đảm bảo model AIAnalysisResult có quan hệ với DoctorValidation
-            # Nếu chưa có relationship, bạn có thể để trống hoặc query thêm.
-            # Ở đây giả định lấy thông tin cơ bản:
             is_valid = "No"
             doc_diag = ""
             
-            # Nếu object ai_res có attribute doctor_validation (tùy model bạn định nghĩa)
             if hasattr(ai_res, "doctor_validation") and ai_res.doctor_validation:
                 is_valid = "Yes"
                 doc_diag = ai_res.doctor_validation.doctor_confirm
 
-            # Viết row
+            # --- SỬA LỖI Ở ĐÂY: Dùng getattr để tránh crash khi không có field 'confidence' ---
+            confidence_val = getattr(ai_res, 'confidence', 0.0)
+            if confidence_val is None: confidence_val = 0.0
+
             writer.writerow([
                 str(r.id),
                 r.created_at.strftime("%Y-%m-%d"),
                 r.created_at.strftime("%H:%M:%S"),
-                str(r.patient_id)[:8] + "***", # Chỉ lấy 8 ký tự đầu của UUID để ẩn danh
+                str(r.patient_id)[:8] + "***",
                 ai_res.risk_level,
-                f"{ai_res.confidence:.4f}" if ai_res.confidence else "0.0000",
+                f"{confidence_val:.4f}",  # Format an toàn
                 is_valid,
                 doc_diag
             ])
             
-        # 5. Đưa con trỏ về đầu file để chuẩn bị đọc
         output.seek(0)
         return output

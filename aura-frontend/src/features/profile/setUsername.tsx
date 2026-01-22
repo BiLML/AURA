@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaCheckCircle, FaExclamationCircle, FaLock } from 'react-icons/fa';
-import './App.css';
+import '../../styles/App.css';
 
 const SetUsername = () => {
     const [newUsername, setNewUsername] = useState('');

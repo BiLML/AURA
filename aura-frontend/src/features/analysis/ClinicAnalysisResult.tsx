@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-    FaArrowLeft, FaRobot, FaUserMd, FaCalendarAlt, FaFileMedicalAlt, 
+    FaArrowLeft, FaRobot, FaUserMd, 
     FaExclamationTriangle, FaCheckCircle, FaNotesMedical, FaBrain, FaPrint 
 } from 'react-icons/fa';
 
@@ -158,6 +158,7 @@ const ClinicAnalysisResult: React.FC = () => {
                                 <div style={styles.legendItem}><span style={{...styles.dot, background:'red'}}></span> Xuất huyết</div>
                                 <div style={styles.legendItem}><span style={{...styles.dot, background:'yellow'}}></span> Xuất tiết</div>
                                 <div style={styles.legendItem}><span style={{...styles.dot, background:'blue'}}></span> Đĩa thị</div>
+                                <div style={styles.legendItem}><span style={{...styles.dot, background:'green'}}></span> Mạch máu</div>
                             </div>
                         )}
                     </div>

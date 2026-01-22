@@ -269,9 +269,15 @@ const ClinicDashboard: React.FC = () => {
             if (res.ok) {
                 setAvailableDoctors(prev => prev.filter(d => d.id !== doctorId));
                 fetchDashboardData(); 
-                alert("Thêm thành công!");
+            } else {
+                // [MỚI] Thêm phần hiển thị lỗi nếu không thành công
+                const errData = await res.json();
+                alert("Lỗi thêm bác sĩ: " + (errData.detail || "Không xác định"));
             }
-        } catch (error) { console.error(error); }
+        } catch (error) { console.error(error); 
+            console.error(error); 
+            alert("Lỗi kết nối server");
+        }
     };
 
     const searchPatients = async (query: string) => {
@@ -298,9 +304,15 @@ const ClinicDashboard: React.FC = () => {
             if (res.ok) {
                 setAvailablePatients(prev => prev.filter(p => p.id !== patientId));
                 fetchDashboardData(); 
-                alert("Thêm thành công!");
+            } else {
+                // [MỚI] Thêm phần hiển thị lỗi nếu không thành công
+                const errData = await res.json();
+                alert("Lỗi thêm bệnh nhân: " + (errData.detail || "Không xác định"));
             }
-        } catch (error) { console.error(error); }
+        } catch (error) { console.error(error); 
+            console.error(error); 
+            alert("Lỗi kết nối server");
+        }
     };
 
     const submitAssignment = async () => {
@@ -312,13 +324,13 @@ const ClinicDashboard: React.FC = () => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ patient_id: selectedPatient.id, doctor_id: targetDoctorId })
             });
-            if (res.ok) { setShowAssignModal(false); fetchDashboardData(); alert("Đã phân công thành công!"); } 
+            if (res.ok) { setShowAssignModal(false); fetchDashboardData(); } 
             else alert("Lỗi phân công.");
         } catch(e) { alert("Lỗi kết nối."); }
     };
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}"?`)) return;
+        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
@@ -327,9 +339,18 @@ const ClinicDashboard: React.FC = () => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ package_id: pkg.id })
             });
-            if (res.ok) { alert(`✅ Đăng ký thành công!`); fetchBillingData(); } 
-            else { const d = await res.json(); alert("❌ Lỗi: " + d.detail); }
-        } catch (e) { alert("Lỗi kết nối server"); } finally { setIsBuying(false); }
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ Đăng ký thành công! Bạn có thêm ${data.credits_left || pkg.analysis_limit} lượt.`);
+                fetchBillingData(); 
+            } else {
+                alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
+            }
+        } catch (e) {
+        alert("Lỗi kết nối server");
+        } finally {
+            setIsBuying(false);
+        }
     };
 
     const handleDownloadCSV = async () => {
@@ -360,7 +381,7 @@ const ClinicDashboard: React.FC = () => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ consent_for_training: newValue })
             });
-            if (!res.ok) { setPrivacyConsent(!newValue); alert("Lỗi cập nhật cài đặt!"); }
+            if (!res.ok) { setPrivacyConsent(!newValue); alert("Hiện tại không có dữ liệu để đóng góp!"); }
         } catch (e) { setPrivacyConsent(!newValue); alert("Lỗi kết nối server"); }
     };
 
@@ -397,7 +418,7 @@ const ClinicDashboard: React.FC = () => {
                 <nav style={styles.nav}>
                     {[
                         { id: 'accounts', icon: FaClipboardList, label: 'Quản lý Tổng hợp' },
-                        { id: 'ai', icon: FaRobot, label: 'Phân tích AI' },
+                        { id: 'ai', icon: FaHistory, label: 'Lịch sử Phân tích' },
                         { id: 'stats', icon: FaChartLine, label: 'Thống kê & Cảnh báo', badge: warningPatients.length },
                         { id: 'billing', icon: FaCreditCard, label: 'Gói cước & Thanh toán' },
                         { id: 'settings', icon: FaCog, label: 'Cài đặt Tài khoản' },
@@ -463,6 +484,16 @@ const ClinicDashboard: React.FC = () => {
                     {/* --- TAB 1: ACCOUNTS --- */}
                     {activeMenu === 'accounts' && (
                         <div className="fade-in" style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
+                            
+                            <div style={styles.card} className="slide-up-card">
+                                <div style={styles.cardHeader}>
+                                    <h2 style={styles.pageTitle}><FaRobot style={{marginRight: 10, color:'#007bff'}}/>Phân tích AI</h2>
+                                    <button onClick={() => navigate('/upload')} className="btn-primary-hover pulse-on-active" style={styles.primaryBtnSm}>
+                                        <FaCamera style={{marginRight:6}}/> Phân tích Mới
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Doctors */}
                             <div style={styles.card} className="slide-up-card">
                                 <div style={styles.cardHeader}>
@@ -524,17 +555,12 @@ const ClinicDashboard: React.FC = () => {
                         <div style={styles.card} className="slide-up-card">
                             <div style={styles.cardHeader}>
                                 <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
-                                    <h2 style={styles.pageTitle}><FaHistory style={{marginRight: 10, color:'#007bff'}}/>Lịch sử Phân tích</h2>
+                                    <h2 style={styles.pageTitle}>Lịch sử Phân tích</h2>
                                     <div style={{display:'flex', background:'#f1f5f9', padding:'4px', borderRadius:'8px'}}>
                                         <button onClick={() => setAiSubTab('clinic')} style={aiSubTab === 'clinic' ? styles.tabActive : styles.tabInactive}>Phòng khám ({clinicHistory.length})</button>
                                         <button onClick={() => setAiSubTab('patient')} style={aiSubTab === 'patient' ? styles.tabActive : styles.tabInactive}>Bệnh nhân ({patientHistory.length})</button>
                                     </div>
                                 </div>
-                                {aiSubTab === 'clinic' && (
-                                    <button onClick={() => navigate('/upload')} className="btn-primary-hover pulse-on-active" style={styles.primaryBtnSm}>
-                                        <FaCamera style={{marginRight:6}}/> Phân tích Mới
-                                    </button>
-                                )}
                             </div>
                             <table style={styles.table} className="table-hover">
                                 <thead>
@@ -600,7 +626,7 @@ const ClinicDashboard: React.FC = () => {
                             {/* Card 1: Thông tin ví */}
                             <div style={styles.card} className="slide-up-card">
                                 <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaCreditCard style={{marginRight:10, color:'#007bff'}}/>Thông tin Ví & Dịch vụ</h2></div>
-                                <div style={{padding:'30px', background:'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', margin:'20px', borderRadius:'16px', color:'white', boxShadow: '0 8px 20px rgba(37, 99, 235, 0.3)'}}>
+                                <div style={{padding:'30px', background:'linear-gradient(135deg, #66c7e7 30%, #0c00ef 100%)', margin:'20px', borderRadius:'16px', color:'white', boxShadow: '0 8px 20px rgba(37, 99, 235, 0.3)'}}>
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end'}}>
                                         <div>
                                             <p style={{margin:0, opacity:0.9, fontSize:'13px', textTransform:'uppercase', letterSpacing:'1px'}}>Gói Doanh nghiệp</p>

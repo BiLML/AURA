@@ -94,14 +94,18 @@ class UserRepository(IUserRepository):
         """
         Tìm kiếm User theo Role và từ khóa (Username hoặc Email)
         """
-        sql_query = self.db.query(User).filter(User.role == role)
+        sql_query = self.db.query(User).filter(
+            User.role == role,
+            User.clinic_id == None 
+        )
         
         if query:
             search_term = f"%{query}%"
             sql_query = sql_query.filter(
                 or_(
                     User.email.ilike(search_term), 
-                    User.username.ilike(search_term)
+                    User.username.ilike(search_term),
+                    User.profile.has(Profile.full_name.ilike(search_term))
                 )
             )
             

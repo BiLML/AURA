@@ -345,7 +345,7 @@ const Dashboard: React.FC = () => {
             });
             if (!res.ok) {
                 setPrivacyConsent(!newValue); // Revert nếu lỗi
-                alert("Lỗi cập nhật cài đặt!");
+                alert("Không có dữ liệu phân tích để đóng góp!");
             }
         } catch (e) {
             setPrivacyConsent(!newValue);
@@ -923,7 +923,6 @@ if (activeTab === 'messages') {
                     </div>
                 </nav>
 
-                <div style={styles.sidebarFooter}><button onClick={handleLogout} style={styles.logoutBtn} className="btn-secondary-hover"><FaSignOutAlt style={{marginRight:'8px'}}/> Đăng xuất</button></div>
             </aside>
             <main style={styles.main}>
                 <header style={styles.header}>
