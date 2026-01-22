@@ -421,7 +421,7 @@ const ClinicDashboard: React.FC = () => {
                         { id: 'ai', icon: FaHistory, label: 'Lịch sử Phân tích' },
                         { id: 'stats', icon: FaChartLine, label: 'Thống kê & Cảnh báo', badge: warningPatients.length },
                         { id: 'billing', icon: FaCreditCard, label: 'Gói cước & Thanh toán' },
-                        { id: 'settings', icon: FaCog, label: 'Cài đặt Tài khoản' },
+                        { id: 'settings', icon: FaCog, label: 'Cài đặt' },
                         { id: 'reports', icon: FaFileExport, label: 'Báo cáo Chiến dịch' }
                     ].map(item => (
                         <div 

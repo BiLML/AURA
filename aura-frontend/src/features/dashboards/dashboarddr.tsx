@@ -418,7 +418,7 @@ const DashboardDr: React.FC = () => {
                     {[
                         { id: 'home', icon: FaClipboardList, label: 'Tổng quan' },
                         { id: 'patients', icon: FaUsers, label: 'Bệnh nhân' },
-                        { id: 'chat', icon: FaCommentDots, label: 'Chat Tư vấn' },
+                        { id: 'chat', icon: FaCommentDots, label: 'Tin nhắn' },
                         { id: 'reports', icon: FaFileAlt, label: 'Báo cáo' }
                     ].map((item) => (
                         <div 

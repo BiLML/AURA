@@ -586,7 +586,7 @@ const DashboardAdmin: React.FC = () => {
                                                         <td style={styles.td}>{item.owner_name}</td>
                                                         <td style={styles.td}>
                                                             <span style={clinicViewMode === 'pending' ? styles.badgeWarning : clinicViewMode === 'suspended' ? styles.badgeDanger : styles.badgeSuccess}>
-                                                                {clinicViewMode === 'pending' ? 'Pending' : clinicViewMode === 'suspended' ? 'Suspended' : 'Active'}
+                                                                {clinicViewMode === 'pending' ? 'Chờ duyệt' : clinicViewMode === 'suspended' ? 'Đình chỉ' : 'Active'}
                                                             </span>
                                                         </td>
                                                         <td style={styles.td}>
@@ -860,12 +860,45 @@ const DashboardAdmin: React.FC = () => {
                             <button onClick={() => setShowPackageModal(false)} style={styles.closeBtn}><FaTimes/></button>
                         </div>
                         <div style={styles.modalBody}>
-                            <div style={styles.formGroup}><label style={styles.label}>Tên gói</label><input style={styles.input} type="text" value={newPackage.name} onChange={(e) => setNewPackage({...newPackage, name: e.target.value})} /></div>
-                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
-                                <div style={styles.formGroup}><label style={styles.label}>Giá (VNĐ)</label><input style={styles.input} type="number" value={newPackage.price} onChange={(e) => setNewPackage({...newPackage, price: Number(e.target.value)})} /></div>
-                                <div style={styles.formGroup}><label style={styles.label}>Đối tượng</label><select style={styles.select} value={newPackage.target_role} onChange={(e) => setNewPackage({...newPackage, target_role: e.target.value})}><option value="USER">User</option><option value="DOCTOR">Doctor</option><option value="CLINIC">Clinic</option></select></div>
+                            {/* Tên gói */}
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Tên gói</label>
+                                <input style={styles.input} type="text" value={newPackage.name} onChange={(e) => setNewPackage({...newPackage, name: e.target.value})} />
                             </div>
-                            <div style={styles.formGroup}><label style={styles.label}>Mô tả</label><input style={styles.input} type="text" value={newPackage.description} onChange={(e) => setNewPackage({...newPackage, description: e.target.value})} /></div>
+
+                            {/* Hàng 1: Giá & Đối tượng */}
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Giá (VNĐ)</label>
+                                    <input style={styles.input} type="number" value={newPackage.price} onChange={(e) => setNewPackage({...newPackage, price: Number(e.target.value)})} />
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Đối tượng</label>
+                                    <select style={styles.select} value={newPackage.target_role} onChange={(e) => setNewPackage({...newPackage, target_role: e.target.value})}>
+                                        <option value="USER">User</option>
+                                        <option value="DOCTOR">Doctor</option>
+                                        <option value="CLINIC">Clinic</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Hàng 2: Số lượt AI & Thời hạn (ĐÃ THÊM LẠI) */}
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Số lượt AI</label>
+                                    <input style={styles.input} type="number" value={newPackage.analysis_limit} onChange={(e) => setNewPackage({...newPackage, analysis_limit: Number(e.target.value)})} />
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Thời hạn (Ngày)</label>
+                                    <input style={styles.input} type="number" value={newPackage.duration_days} onChange={(e) => setNewPackage({...newPackage, duration_days: Number(e.target.value)})} />
+                                </div>
+                            </div>
+
+                            {/* Mô tả */}
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Mô tả</label>
+                                <input style={styles.input} type="text" value={newPackage.description} onChange={(e) => setNewPackage({...newPackage, description: e.target.value})} />
+                            </div>
                         </div>
                         <div style={styles.modalFooter}>
                             <button onClick={() => setShowPackageModal(false)} style={styles.btnSecondary} className="btn-hover">Hủy</button>
