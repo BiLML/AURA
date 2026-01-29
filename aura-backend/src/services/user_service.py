@@ -4,13 +4,18 @@ from sqlalchemy.orm import Session
 from domain.models.iuser_repository import IUserRepository
 from domain.models.inotification_repository import INotificationRepository
 from domain.models.iuser_notification_repository import IUserNotificationRepository
+from domain.models.iaudit_repository import IAuditRepository
 
+from models.audit_log import AuditLog
 from models.users import User, Profile
 from models.enums import UserRole
+
 from schemas.user_schema import UserCreate, UserLogin, UserProfileUpdate, UserUpdateCredentials, UserResponse
 from core.security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+
 from fastapi import HTTPException, status
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+
 import uuid
 import secrets
 import requests
@@ -38,10 +43,12 @@ class UserService:
                  user_repo: IUserRepository, 
                  noti_template_repo: INotificationRepository, 
                  user_noti_repo: IUserNotificationRepository, 
+                 audit_repo: IAuditRepository,
                  db: Session):
         self.user_repo = user_repo
         self.noti_template_repo = noti_template_repo 
         self.user_noti_repo = user_noti_repo 
+        self.audit_repo = audit_repo
         self.db = db
 
     # --- HELPER: Gửi thông báo chào mừng ---
@@ -56,16 +63,29 @@ class UserService:
             print(f"⚠️ Lỗi gửi thông báo chào mừng: {e}")
 
     # 1. REGISTER
-    def register_user(self, user_data: UserCreate):
+    def register_user(self, user_data: UserCreate, ip_address: str = "Unknown"):
         if self.user_repo.get_by_username(user_data.username):
             raise HTTPException(status_code=400, detail="Username này đã tồn tại.")
         if self.user_repo.get_by_email(user_data.email):
             raise HTTPException(status_code=400, detail="Email này đã được sử dụng.")
 
         hashed_pwd = get_password_hash(user_data.password)
-        new_user = self.user_repo.create_user(user_data, hashed_pwd) # Repo đã tạo Profile rồi
-    
-        self._send_welcome_notification(new_user) # Gửi thông báo
+        new_user = self.user_repo.create_user(user_data, hashed_pwd)
+        self._send_welcome_notification(new_user)
+
+        # --- GHI LOG ---
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=new_user.id,
+                action="REGISTER",
+                resource_type="users",
+                resource_id=str(new_user.id),
+                ip_address=ip_address,
+                new_values={"username": new_user.username, "email": new_user.email}
+            ))
+        except Exception: pass
+        # ----------------
+
         return new_user
 
     def authenticate_user(self, username_or_email: str, password: str):
@@ -130,7 +150,7 @@ class UserService:
         return self.user_repo.get_all_users()
     
     # 2. GOOGLE LOGIN
-    def google_login(self, token: str):
+    def google_login(self, token: str, ip_address: str = "Unknown"):
         try:
             google_response = requests.get(
                 'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -150,6 +170,17 @@ class UserService:
              raise HTTPException(status_code=400, detail=f"Lỗi xác thực Google: {str(e)}")
 
         user = self.user_repo.get_by_email(email)
+        try:
+            action_type = "LOGIN_GOOGLE_NEW" if is_new_user else "LOGIN_GOOGLE"
+            self.audit_repo.create_log(AuditLog(
+                user_id=user.id,
+                action=action_type,
+                resource_type="auth",
+                resource_id=str(user.id),
+                ip_address=ip_address
+            ))
+        except Exception: pass
+
         is_new_user = False
 
         if not user:
@@ -178,6 +209,7 @@ class UserService:
             self._send_welcome_notification(user) # Gửi thông báo
 
         access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -324,10 +356,22 @@ class UserService:
         self.db.commit()
         return {"message": "Đặt lại mật khẩu thành công."}
 
-    def update_privacy_settings(self, user_id: UUID, consent: bool):
+    def update_privacy_settings(self, user_id: UUID, consent: bool, ip_address: str = "Unknown"):
         result = self.user_repo.update_patient_consent(user_id, consent)
         if not result:
             raise HTTPException(status_code=404, detail="Hồ sơ bệnh nhân chưa được kích hoạt")
+        
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=user_id,
+                action="UPDATE_CONSENT",
+                resource_type="privacy",
+                resource_id=str(user_id),
+                ip_address=ip_address,
+                new_values={"consent_for_training": consent}
+            ))
+        except: pass
+
         return {"message": "Cập nhật quyền riêng tư thành công", "consent": consent}
     
     def get_current_user_info(self, user_id: UUID) -> UserResponse:

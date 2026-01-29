@@ -71,6 +71,7 @@ interface ServicePackage {
 interface AuditLogEntry {
     id: string;
     actor: string;
+    role: string;
     action: string;
     resource: string;
     ip: string;
@@ -149,6 +150,7 @@ const DashboardAdmin: React.FC = () => {
     const [feedbackList, setFeedbackList] = useState<any[]>([]); 
     const [suspendedClinics, setSuspendedClinics] = useState<ClinicRequest[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+    const [auditFilter, setAuditFilter] = useState<'ALL' | 'ADMIN' | 'USER' | 'DOCTOR' | 'CLINIC'>('ALL');
     const [packageList, setPackageList] = useState<ServicePackage[]>([]);
     const [showPackageModal, setShowPackageModal] = useState(false);
     
@@ -717,6 +719,23 @@ const DashboardAdmin: React.FC = () => {
                                     <h3 style={styles.cardTitle}>
                                         {activeTab === 'feedback' ? 'Dữ liệu RLHF' : activeTab === 'audit' ? 'Nhật ký Hoạt động' : 'Danh sách Gói Dịch vụ'}
                                     </h3>
+
+                                    {activeTab === 'audit' && (
+                                        <div style={{display: 'flex', gap: 10}}>
+                                            <select 
+                                                style={{...styles.select, width: '150px'}} 
+                                                value={auditFilter} 
+                                                onChange={(e) => setAuditFilter(e.target.value as any)}
+                                            >
+                                                <option value="ALL">Tất cả vai trò</option>
+                                                <option value="admin">Chỉ Admin</option>
+                                                <option value="user">Người dùng</option>
+                                                <option value="doctor">Bác sĩ</option>
+                                                <option value="clinic">Phòng khám</option>
+                                            </select>
+                                        </div>
+                                    )}
+
                                     {activeTab === 'billing' && (
                                         <button onClick={() => setShowPackageModal(true)} className="btn-hover" style={styles.btnPrimary}>
                                             <FaPlus style={{marginRight:5}}/> Tạo gói mới
@@ -728,7 +747,7 @@ const DashboardAdmin: React.FC = () => {
                                         <thead>
                                             {activeTab === 'feedback' && <tr><th>BÁC SĨ</th><th>AI RESULT</th><th>CHẨN ĐOÁN</th><th>ĐÁNH GIÁ</th></tr>}
                                             {activeTab === 'billing' && <tr><th>TÊN GÓI</th><th>GIÁ</th><th>QUYỀN LỢI</th><th>ĐỐI TƯỢNG</th><th>MÔ TẢ</th></tr>}
-                                            {activeTab === 'audit' && <tr><th>THỜI GIAN</th><th>NGƯỜI THỰC HIỆN</th><th>HÀNH ĐỘNG</th><th>ĐỐI TƯỢNG</th><th>CHI TIẾT</th><th>IP</th></tr>}
+                                            {activeTab === 'audit' && <tr><th>THỜI GIAN</th><th>NGƯỜI DÙNG</th><th>VAI TRÒ</th><th>HÀNH ĐỘNG</th><th>CHI TIẾT</th><th>IP</th></tr>}
                                         </thead>
                                         <tbody>
                                             {activeTab === 'billing' && packageList.map((pkg, i) => (
@@ -741,13 +760,28 @@ const DashboardAdmin: React.FC = () => {
                                                 </tr>
                                             ))}
                                             {/* (Logic cho feedback/audit tương tự - giữ code logic cũ, thêm className="hover-row") */}
-                                            {activeTab === 'audit' && auditLogs.map((log, i) => (
+                                            {activeTab === 'audit' && auditLogs
+                                                .filter(log => auditFilter === 'ALL' || (log.role && log.role.toLowerCase() === auditFilter.toLowerCase()))
+                                                .map((log, i) => (
                                                 <tr key={log.id} className="hover-row animate-fade-in" style={{animationDelay: `${i*0.05}s`}}>
                                                     <td style={styles.td}>{new Date(log.time).toLocaleString('vi-VN')}</td>
                                                     <td style={styles.td}><b>{log.actor}</b></td>
-                                                    <td style={styles.td}><span style={styles.roleBadge}>{log.action}</span></td>
-                                                    <td style={styles.td}>{log.resource}</td>
-                                                    <td style={{...styles.td, fontSize:'11px', fontFamily:'monospace'}}>{JSON.stringify(log.changes).substring(0,50)}...</td>
+                                                    
+                                                    {/* Cột VAI TRÒ Mới */}
+                                                    <td style={styles.td}>
+                                                        <span style={{
+                                                            ...styles.roleBadge,
+                                                            background: log.role === 'admin' ? '#fee2e2' : log.role === 'doctor' ? '#e0f2fe' : '#f1f5f9',
+                                                            color: log.role === 'admin' ? '#b91c1c' : log.role === 'doctor' ? '#0369a1' : '#64748b'
+                                                        }}>
+                                                            {log.role ? log.role.toUpperCase() : 'SYSTEM'}
+                                                        </span>
+                                                    </td>
+
+                                                    <td style={styles.td}><span style={{fontWeight:'600', color:'#334155'}}>{log.action}</span></td>
+                                                    <td style={{...styles.td, fontSize:'11px', fontFamily:'monospace', maxWidth:'200px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={JSON.stringify(log.changes)}>
+                                                        {log.resource} {log.changes ? `- ${JSON.stringify(log.changes)}` : ''}
+                                                    </td>
                                                     <td style={styles.td}>{log.ip}</td>
                                                 </tr>
                                             ))}

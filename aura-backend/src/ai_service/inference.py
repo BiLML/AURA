@@ -88,6 +88,9 @@ def run_aura_inference(image_bytes):
         
         # Input chuẩn cho các model 256 (EX, SE, HE, MA, OD)
         input_seg = preprocess_image(original_rgb, target_size=SEG_INPUT_SIZE, use_graham=False)
+        if input_seg.ndim == 3:
+            input_seg = np.expand_dims(input_seg, axis=0)
+
         input_cls = preprocess_image(original_rgb, target_size=CLS_INPUT_SIZE, use_graham=True)
 
         # 1. CLASSIFIER
@@ -217,7 +220,7 @@ def run_aura_inference(image_bytes):
         # Trộn màu
         disease_mask = np.sum(overlay_full, axis=2) > 0   
         final_overlay = original_img.copy()
-        final_overlay[disease_mask] = cv2.addWeighted(original_img[disease_mask], 0.6, overlay_full[disease_mask], 0.4, 0)
+        final_overlay[disease_mask] = cv2.addWeighted(original_img[disease_mask], 0.3, overlay_full[disease_mask], 0.7, 0)
 
         # Report
         risk_score = (findings['MA']*1) + (findings['HE']*3) + (findings['EX']*2) + (findings['SE']*3)

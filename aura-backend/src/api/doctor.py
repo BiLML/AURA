@@ -17,6 +17,7 @@ from typing import Optional
 
 from infrastructure.repositories.doctor_repo import DoctorRepository
 from infrastructure.repositories.medical_repo import MedicalRepository
+from infrastructure.repositories.audit_repo import AuditRepository
 
 from api.medical_records import get_medical_service
 
@@ -26,7 +27,13 @@ router = APIRouter()
 def get_doctor_service(db: Session = Depends(get_db)) -> DoctorService:
     doc_repo = DoctorRepository(db)
     med_repo = MedicalRepository(db)
-    return DoctorService(doctor_repo=doc_repo, medical_repo=med_repo, db=db)
+    audit_repo = AuditRepository(db)
+    return DoctorService(
+        doctor_repo=doc_repo, 
+        medical_repo=med_repo, 
+        audit_repo=audit_repo,
+        db=db
+        )
 
 
 @router.get("/my-patients", response_model=MyPatientsResponse)

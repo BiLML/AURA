@@ -8,11 +8,13 @@ from core.database import get_db
 from core.security import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from services.user_service import UserService
 from schemas.user_schema import UserCreate, UserResponse, GoogleLoginSchema, FacebookLoginSchema, ForgotPasswordSchema, ResetPasswordSchema
-from infrastructure.repositories.user_repo import UserRepository
+
 from models.enums import UserStatus
 
 from infrastructure.repositories.notification_repo import NotificationRepository
 from infrastructure.repositories.user_notification_repo import UserNotificationRepository
+from infrastructure.repositories.user_repo import UserRepository
+from infrastructure.repositories.audit_repo import AuditRepository
 
 router = APIRouter()
 
@@ -21,11 +23,13 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     user_repo = UserRepository(db)
     noti_template_repo = NotificationRepository(db) # <--- Mới
     user_noti_repo = UserNotificationRepository(db) # <--- Mới
-    
+    audit_repo = AuditRepository(db)
+
     return UserService(
         user_repo=user_repo, 
         noti_template_repo=noti_template_repo, # <--- Truyền vào
-        user_noti_repo=user_noti_repo,         # <--- Truyền vào
+        user_noti_repo=user_noti_repo,
+        audit_repo=audit_repo,         # <--- Truyền vào
         db=db
     )
 

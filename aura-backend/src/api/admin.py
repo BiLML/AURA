@@ -43,13 +43,24 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     repo = UserRepository(db)
     noti_repo = NotificationRepository(db)
     user_noti_repo = UserNotificationRepository(db)
+    audit_repo = AuditRepository(db)
 
-    return UserService(user_repo=repo, noti_template_repo=noti_repo, user_noti_repo=user_noti_repo, db=db)
+    return UserService(
+        user_repo=repo, 
+        noti_template_repo=noti_repo, 
+        user_noti_repo=user_noti_repo, 
+        audit_repo=audit_repo,
+        db=db)
 
 def get_doctor_service(db: Session = Depends(get_db)) -> DoctorService:
     doc_repo = DoctorRepository(db)
     med_repo = MedicalRepository(db)
-    return DoctorService(doctor_repo=doc_repo, medical_repo=med_repo, db=db)
+    audit_repo = AuditRepository(db)
+    return DoctorService(
+        doctor_repo=doc_repo, 
+        medical_repo=med_repo, 
+        audit_repo=audit_repo,
+        db=db)
 
 
 # Lưu ý: Ở đây chỉ để "/" vì bên main.py sẽ gắn prefix "/api/v1/admin"

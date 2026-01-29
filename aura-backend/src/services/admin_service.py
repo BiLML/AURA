@@ -236,6 +236,7 @@ class AdminService:
             {
                 "id": str(log.id),
                 "actor": log.user.username if log.user else "Unknown",
+                "role": log.user.role if log.user else "SYSTEM",
                 "action": log.action,
                 "resource": f"{log.resource_type}/{log.resource_id}",
                 "ip": log.ip_address,

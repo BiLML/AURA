@@ -1,7 +1,6 @@
 from sqlalchemy import Column, String, Text, DateTime
 from sqlalchemy.sql import func
-from core.database import Base
-
+from .base import Base
 class NotificationTemplate(Base):
     __tablename__ = "notification_templates"
 

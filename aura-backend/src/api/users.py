@@ -1,15 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from core.database import get_db
 from core.security import get_current_user
+
 from services.user_service import UserService
 from schemas.user_schema import UserResponse, UserProfileUpdate, UserUpdateCredentials, UserPrivacyUpdate
+
 from models.users import User
 from models.enums import UserRole
+
 from infrastructure.repositories.user_repo import UserRepository
 from infrastructure.repositories.notification_repo import NotificationRepository
 from infrastructure.repositories.user_notification_repo import UserNotificationRepository
-
+from infrastructure.repositories.audit_repo import AuditRepository
 
 router = APIRouter()
 
@@ -18,12 +22,14 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
     user_repo = UserRepository(db)
     noti_template_repo = NotificationRepository(db)
     user_noti_repo = UserNotificationRepository(db)
+    audit_repo = AuditRepository(db)
     
     # Truyền đủ tham số vào Service
     return UserService(
         user_repo=user_repo, 
         noti_template_repo=noti_template_repo,
         user_noti_repo=user_noti_repo,
+        audit_repo=audit_repo,
         db=db
     )
 

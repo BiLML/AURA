@@ -20,7 +20,8 @@ const AnalysisResult: React.FC = () => {
     
     const [data, setData] = useState<MedicalRecord | null>(null);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated'); 
+    const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated');
+    const [annotatedImageError, setAnnotatedImageError] = useState(false); 
 
     // --- (Giữ nguyên logic normalizeData, getSeverityInfo, fetchData) ---
     const normalizeData = (rawData: any): MedicalRecord => {
@@ -85,12 +86,14 @@ const AnalysisResult: React.FC = () => {
     }, [id, location.state]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { setAnnotatedImageError(false); }, [viewMode, data?.id]);
 
     if (loading) return <div style={styles.loadingScreen}>Đang tải...</div>;
     if (!data) return <div style={{padding: 40, textAlign: 'center'}}>Không tìm thấy dữ liệu.</div>;
 
     const severity = getSeverityInfo(data.ai_result);
-    const imageUrl = (viewMode === 'annotated' && data.annotated_image_url) ? data.annotated_image_url : data.image_url;
+    const effectiveAnnotatedUrl = viewMode === 'annotated' && data.annotated_image_url && !annotatedImageError;
+    const imageUrl = effectiveAnnotatedUrl ? data.annotated_image_url! : data.image_url;
     const formattedDate = new Date(data.upload_date).toLocaleString('vi-VN');
 
     // --- 1. XUẤT CSV (Excel) ---
@@ -178,7 +181,20 @@ const AnalysisResult: React.FC = () => {
                     {/* CỘT TRÁI: ẢNH */}
                     <div style={styles.leftColumn}>
                         <div style={styles.imageContainer}>
-                            <img src={imageUrl} alt="Scan" style={styles.image} onError={(e) => {e.currentTarget.src = 'https://via.placeholder.com/400'}}/>
+                            <img
+                                src={imageUrl}
+                                alt="Scan"
+                                style={styles.image}
+                                onLoad={() => viewMode === 'annotated' && setAnnotatedImageError(false)}
+                                onError={(e) => {
+                                    if (viewMode === 'annotated' && data.annotated_image_url) {
+                                        setAnnotatedImageError(true);
+                                        e.currentTarget.src = data.image_url;
+                                    } else {
+                                        e.currentTarget.src = 'https://via.placeholder.com/400';
+                                    }
+                                }}
+                            />
                             {data.annotated_image_url && (
                                 <div style={styles.toggleContainer}>
                                     <button onClick={() => setViewMode('original')} style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}>Ảnh gốc</button>
@@ -194,6 +210,23 @@ const AnalysisResult: React.FC = () => {
                                     <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
                                     <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
                                 </div>
+                            </div>
+                        )}
+
+                        {viewMode === 'annotated' && !data.annotated_image_url && (
+                            <div style={{
+                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                background: 'rgba(0,0,0,0.7)', color: 'white', padding: '10px', borderRadius: '5px'
+                            }}>
+                                ⚠️ Chưa có ảnh phân tích từ AI
+                            </div>
+                        )}
+                        {viewMode === 'annotated' && data.annotated_image_url && annotatedImageError && (
+                            <div style={{
+                                marginTop: 8, padding: '10px 14px', background: '#fff3cd', border: '1px solid #ffc107',
+                                borderRadius: 8, fontSize: 14, color: '#856404'
+                            }}>
+                                ⚠️ Không tải được ảnh chẩn đoán. Đang hiển thị ảnh gốc.
                             </div>
                         )}
                     </div>

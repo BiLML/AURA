@@ -32,10 +32,16 @@ def get_medical_service(db: Session = Depends(get_db)) -> MedicalService:
     
     # Bước B: Tạo Repo thực cho Billing
     billing_repo = BillingRepository(db)
+    audit_repo = AuditRepository(db)
+    
     
     # Bước C: Tiêm cả 2 vào Service
     # Service yêu cầu Interface, ta đưa Class thực vào -> Hợp lệ (Polymorphism)
-    return MedicalService(repo=medical_repo, billing_repo=billing_repo)
+    return MedicalService(
+        repo=medical_repo, 
+        billing_repo=billing_repo,
+        audit_repo=audit_repo
+        )
 
 # 1. API UPLOAD & PHÂN TÍCH
 @router.post("/analyze", response_model=ImageResponse, status_code=201)

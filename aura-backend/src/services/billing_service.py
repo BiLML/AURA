@@ -45,15 +45,31 @@ class BillingService:
         return self.billing_repo.get_all_packages()
 
     # --- 3. USER: MUA GÓI ---
-    def subscribe_user(self, user_id: UUID, package_id: UUID):
+    def subscribe_user(self, user_id: UUID, package_id: UUID, ip_address: str = "Unknown"):
         # A. Kiểm tra gói tồn tại
         pkg = self.billing_repo.get_package_by_id(package_id)
         if not pkg:
             raise ValueError("Gói dịch vụ không tồn tại")
 
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=user_id,
+                action="SUBSCRIBE_PACKAGE",
+                resource_type="subscriptions",
+                resource_id=str(pkg.id),
+                ip_address=ip_address,
+                new_values={
+                    "package_name": pkg.name,
+                    "price": float(pkg.price),
+                    "days": pkg.duration_days
+                }
+            ))
+        except Exception: pass
+
         # B. Tạo Transaction (Lưu lịch sử dòng tiền)
         # TODO: Sau này tích hợp VNPay thì check status ở đây
         self.billing_repo.create_transaction(user_id, pkg.id, pkg.price, "SUCCESS")
+
 
         # C. Tính hạn dùng & Tạo Subscription
         return self.billing_repo.create_subscription(
@@ -100,6 +116,7 @@ class BillingService:
         """
         # 1. Tìm gói đăng ký còn hạn của user
         sub = self.billing_repo.get_active_subscription(user_id)
+
         
         # 2. Nếu không có gói hoặc hết lượt -> Trả về False
         if not sub or sub.credits_left <= 0:

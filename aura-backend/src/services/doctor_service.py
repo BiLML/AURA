@@ -4,16 +4,21 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from models.medical import DoctorValidation, AIAnalysisResult
+from models.audit_log import AuditLog
+
 from domain.models.idoctor_repository import IDoctorRepository
 from domain.models.imedical_repository import IMedicalRepository
+from domain.models.iaudit_repository import IAuditRepository
+
 from schemas.doctor_schema import PatientResponse, LatestScan
 from models.users import User
 
 class DoctorService:
-    def __init__(self, doctor_repo: IDoctorRepository, medical_repo: IMedicalRepository, db: Session):
+    def __init__(self, doctor_repo: IDoctorRepository, medical_repo: IMedicalRepository, audit_repo: IAuditRepository, db: Session):
         self.db = db
         self.repo = doctor_repo      # Gán Interface vào biến self.repo
         self.medical_repo = medical_repo # Gán Interface vào biến self.medical_repo
+        self.audit_repo = audit_repo
 
     def get_my_patients(self, doctor_id: UUID):
         users = self.repo.get_assigned_patients(doctor_id)
@@ -69,7 +74,7 @@ class DoctorService:
             
         return {"patients": results}
 
-    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, feedback: str = None, ai_detailed_report: str = None):
+    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, ip_address: str = "Unknown", feedback: str = None, ai_detailed_report: str = None):
         """
         Lưu kết quả thẩm định. Có Try/Except để bắt lỗi DB.
         """
@@ -119,6 +124,21 @@ class DoctorService:
                 self.db.add(validation)
 
             self.db.commit()
+            try:
+                self.audit_repo.create_log(AuditLog(
+                    user_id=doctor_id,
+                    action="DOCTOR_VALIDATE",
+                    resource_type="doctor_validations",
+                    resource_id=str(validation.id), # validation là biến vừa lưu xong
+                    ip_address=ip_address,
+                    new_values={
+                        "diagnosis": diagnosis,
+                        "is_correct": is_correct,
+                        "record_id": record_id
+                    }
+                ))
+            except Exception: pass
+
             self.db.refresh(validation)
             return validation
 

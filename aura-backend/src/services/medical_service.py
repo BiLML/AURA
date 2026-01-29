@@ -12,8 +12,11 @@ from datetime import datetime
 # Import Repository và Model
 from domain.models.imedical_repository import IMedicalRepository
 from domain.models.ibilling_repository import IBillingRepository
+from domain.models.iaudit_repository import IAuditRepository
 
+from models.audit_log import AuditLog
 from models.enums import EyeSide
+
 from typing import List
  
 # Cấu hình Cloudinary
@@ -28,13 +31,14 @@ cloudinary.config(
 )
 
 class MedicalService:
-    def __init__(self, repo: IMedicalRepository, billing_repo: IBillingRepository): 
+    def __init__(self, repo: IMedicalRepository, billing_repo: IBillingRepository, audit_repo: IAuditRepository): 
         self.repo = repo
-        self.billing_repo = billing_repo # Lưu lại để dùng
+        self.billing_repo = billing_repo 
+        self.audit_repo = audit_repo
         self.ai_service_url = os.getenv("AI_SERVICE_URL", "http://ai_service:8001/analyze")
         self.ai_batch_url = "http://ai_service:8001/analyze/batch"
 
-    def upload_and_analyze(self, user_id: UUID, file: UploadFile, eye_side: str): # eye_side là str cho linh hoạt
+    def upload_and_analyze(self, user_id: UUID, file: UploadFile, eye_side: str, ip_address: str = "Unknown"): # eye_side là str cho linh hoạt
         """
         Quy trình chuẩn Microservices:
         1. Upload ảnh gốc lên Cloudinary (Backend làm).
@@ -111,20 +115,17 @@ class MedicalService:
                 dr_grade = ai_data.get("diagnosis", "Unknown") 
                 detailed_report = ai_data.get("report", "")
                 
-                # AI đơn hiện tại trả về base64 trong 'image_base64', chưa chắc có 'annotated_image_url'
-                # Nếu bạn muốn lưu ảnh base64 này, cần logic upload lại Cloudinary hoặc decode
-                # Tạm thời để trống hoặc xử lý sau tùy nhu cầu
-                annotated_url = None 
+                # Chỉ lưu ảnh chẩn đoán (overlay) khi AI chạy thành công.
+                # Khi AI lỗi, inference trả về ảnh gốc → không lưu để tránh "AI Chẩn đoán" hiện đúng ảnh gốc.
+                annotated_url = None
                 b64_str = ai_data.get("image_base64")
-                if b64_str:
+                is_ai_error = (dr_grade in ("AI Error", "Critical Error"))
+                if b64_str and not is_ai_error:
                     try:
-                        # Decode Base64 -> File
                         img_data = base64.b64decode(b64_str)
                         file_obj = io.BytesIO(img_data)
-                        
-                        # Upload lên Cloudinary folder riêng
                         upload_res = cloudinary.uploader.upload(
-                            file_obj, 
+                            file_obj,
                             folder="aura_annotated_results",
                             public_id=f"annotated_{user_id}_{int(datetime.utcnow().timestamp())}"
                         )
@@ -152,10 +153,21 @@ class MedicalService:
             annotated_url=annotated_url,
             report_content=detailed_report # Cần thêm tham số này vào Repo để lưu bài văn chi tiết
         )
+
+        try:
+            self.audit_repo.create_log(AuditLog(
+                user_id=user_id,
+                action="ANALYZE_IMAGE",
+                resource_type="medical_records",
+                resource_id=str(final_result.id),
+                ip_address=ip_address,
+                new_values={
+                    "risk_level": dr_grade,
+                    "image_url": saved_image.image_url
+                }
+            ))
+        except Exception as e: print(f"Audit Error: {e}")
         
-        # Nếu Repo cũ chưa hỗ trợ lưu text dài (report_content), bạn có thể tạm nhét vào risk_level hoặc sửa Repo sau.
-
-
         analysis_response = {
                 "id": final_result.id,
                 "risk_level": dr_grade,                 # Lấy từ biến local
@@ -236,6 +248,8 @@ class MedicalService:
         def upload_annotated_worker(index, ai_res):
             b64 = ai_res.get("image_base64")
             if not b64: return index, None
+            if ai_res.get("diagnosis") in ("AI Error", "Critical Error"):
+                return index, None  # Không lưu ảnh gốc thay cho ảnh chẩn đoán
             try:
                 img_data = base64.b64decode(b64)
                 res = cloudinary.uploader.upload(io.BytesIO(img_data), folder="aura_annotated")
@@ -403,9 +417,9 @@ class MedicalService:
                     diagnosis = ai_data.get("diagnosis", "Unknown")
                     report = ai_data.get("report", "")
                     
-                    # Upload ảnh vẽ
+                    # Chỉ upload ảnh vẽ khi AI chạy thành công (không lưu ảnh gốc khi AI lỗi)
                     b64_str = ai_data.get("image_base64")
-                    if b64_str:
+                    if b64_str and diagnosis not in ("AI Error", "Critical Error"):
                         try:
                             img_data = base64.b64decode(b64_str)
                             up_res = cloudinary.uploader.upload(io.BytesIO(img_data), folder="aura_annotated")
@@ -419,6 +433,18 @@ class MedicalService:
                     annotated_url=annotated_url, 
                     report_content=report
                 )
+
+                try:
+                    self.audit_repo.create_log(AuditLog(
+                        user_id=user_id,
+                        action="BATCH_ANALYZE_COMPLETED", # Action riêng cho batch
+                        resource_type="medical_records",
+                        resource_id=str(result_id),
+                        ip_address="System Worker", # Vì chạy ngầm nên ko có IP client
+                        new_values={"risk": diagnosis}
+                    ))
+                except: pass
+
                 print(f"✅ [QUEUE] Xong ảnh {fname} -> {diagnosis}")
                 
             except Exception as e:
