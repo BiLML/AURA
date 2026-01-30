@@ -94,14 +94,16 @@ def submit_diagnosis(
         is_correct=payload.is_correct, # Truyền biến này vào service
         doctor_id=current_user.id,
         feedback=payload.feedback_for_ai,
-        ai_detailed_report=payload.ai_detailed_report
+        ai_detailed_report=payload.ai_detailed_report,
+        doctor_drawing=payload.doctor_drawing
     )
     
     return {
         "message": "Đã lưu thẩm định thành công",
         "record_id": record_id,
         "is_correct": updated_validation.is_correct,
-        "feedback_saved": bool(updated_validation.feedback_for_ai)
+        "feedback_saved": bool(updated_validation.feedback_for_ai),
+        "drawing_url": updated_validation.doctor_annotated_url
     }
 
 @router.get("/records/{record_id}/report-detail")

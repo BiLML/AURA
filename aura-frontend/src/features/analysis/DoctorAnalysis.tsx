@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-    FaArrowLeft, FaExpand, FaCompress, FaExclamationTriangle, 
-    FaSave, FaSpinner, FaStethoscope, FaCheckCircle, FaTimesCircle, FaEdit
+    FaArrowLeft, FaExpand, FaCompress, FaExclamationTriangle, FaTrash,
+    FaSave, FaSpinner, FaStethoscope, FaCheckCircle, FaTimesCircle, FaEdit,
+    FaPen, FaEraser
 } from 'react-icons/fa';
 
 // Interface dữ liệu
@@ -22,22 +23,29 @@ const DoctorAnalysis: React.FC = () => {
     const navigate = useNavigate();
     
     const containerRef = useRef<HTMLDivElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const imageContainerRef = useRef<HTMLDivElement>(null);
 
-    // State dữ liệu
+    // --- STATES DỮ LIỆU ---
     const [data, setData] = useState<MedicalRecord | null>(null);
     const [loading, setLoading] = useState(true);
+    
+    // --- STATES GIAO DIỆN ---
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated');
     const [isFullscreen, setIsFullscreen] = useState(false); 
+    
+    // --- STATES VẼ (CANVAS) ---
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
 
-    // State cho Doctor Validation
+    // --- STATES FORM VALIDATION ---
     const [isAiCorrect, setIsAiCorrect] = useState<boolean>(true);
     const [finalDiagnosis, setFinalDiagnosis] = useState('');      
     const [internalNote, setInternalNote] = useState('');          
     const [isSaving, setIsSaving] = useState(false);
-
     const [reportContent, setReportContent] = useState(''); 
 
-    // --- 1. FETCH DATA ---
+    // --- 1. HÀM XỬ LÝ DỮ LIỆU ---
     const normalizeData = (rawData: any): MedicalRecord => {
         const analysisData = rawData.analysis_result || rawData.ai_analysis_result || rawData;
         return {
@@ -54,7 +62,7 @@ const DoctorAnalysis: React.FC = () => {
     
     const DIAGNOSIS_OPTIONS = [
         { value: "Normal", label: "Normal (Bình thường)" },
-        { value: "Mild NPDR (Early Signs)", label: "Mild NPDR (Nhẹ)" },
+        { value: "Mild NPDR", label: "Mild NPDR (Nhẹ)" },
         { value: "Moderate NPDR", label: "Moderate NPDR (Trung bình)" },
         { value: "Severe NPDR", label: "Severe NPDR (Nặng)" },
         { value: "PDR", label: "PDR (Tăng sinh - Nguy hiểm)" }
@@ -99,13 +107,94 @@ const DoctorAnalysis: React.FC = () => {
             document.exitFullscreen();
         }
     };
+
+    // --- 2. LOGIC VẼ CANVAS ---
+    const initCanvas = () => {
+        const container = imageContainerRef.current;
+        const canvas = canvasRef.current;
+        if (container && canvas) {
+            const img = container.querySelector('img'); 
+            if (img) {
+                canvas.width = img.clientWidth;
+                canvas.height = img.clientHeight;
+            }
+        }
+    };
+
+    useEffect(() => {
+        window.addEventListener('resize', initCanvas);
+        // Delay 1 chút để ảnh load xong mới init canvas size
+        const timer = setTimeout(initCanvas, 500);
+        return () => {
+            window.removeEventListener('resize', initCanvas);
+            clearTimeout(timer);
+        };
+    }, [data]);
+
+    const startDrawing = (e: React.MouseEvent) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        ctx.beginPath();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        setIsDrawing(true);
+    };
+
+    const draw = (e: React.MouseEvent) => {
+        if (!isDrawing) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineWidth = brushSize; // Dùng biến cục bộ hoặc state nếu cần thay đổi size
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (tool === 'pen') {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = '#00ff00'; 
+        } else {
+            ctx.globalCompositeOperation = 'destination-out';
+        }
+
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.stroke();
+    };
+    const brushSize = tool === 'eraser' ? 15 : 3; // Định nghĩa nhanh size cọ
+
+    const stopDrawing = () => {
+        if(isDrawing) {
+            setIsDrawing(false);
+            const canvas = canvasRef.current;
+            const ctx = canvas?.getContext('2d');
+            ctx?.closePath();
+        }
+    };
+
+    const clearCanvas = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (canvas && ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    };
     
-    // --- 2. XỬ LÝ LƯU ---
+    // --- 3. XỬ LÝ LƯU ---
     const handleSubmitDiagnosis = async () => {
         if (!id) return;
         if (isAiCorrect === false && (!finalDiagnosis || finalDiagnosis === "")) {
             alert("Vui lòng chọn loại bệnh chính xác trong danh sách!");
             return; 
+        }
+
+        let drawingBase64 = null;
+        if (canvasRef.current) {
+            drawingBase64 = canvasRef.current.toDataURL('image/png');
         }
         
         setIsSaving(true);
@@ -115,7 +204,8 @@ const DoctorAnalysis: React.FC = () => {
                 doctor_diagnosis: finalDiagnosis, 
                 doctor_notes: internalNote,       
                 is_correct: isAiCorrect,
-                ai_detailed_report: reportContent 
+                ai_detailed_report: reportContent,
+                doctor_drawing: drawingBase64 
             };
             const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
@@ -140,19 +230,11 @@ const DoctorAnalysis: React.FC = () => {
     };
 
     const handleReportIssue = () => {
-        navigate(`/doctor/report/${id}`, { 
-            state: { 
-                recordId: id,
-                aiResult: data?.ai_result,
-                imageUrl: data?.image_url
-            } 
-        });
+        alert("Chức năng báo lỗi đang phát triển");
     };
 
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={40} color="#007bff"/></div>;
     if (!data) return <div style={styles.loading}>Không tìm thấy dữ liệu.</div>;
-
-    const currentImage = (viewMode === 'annotated' && data.annotated_image_url) ? data.annotated_image_url : data.image_url;
 
     return (
         <div ref={containerRef} style={styles.container} className="fade-in">
@@ -180,29 +262,77 @@ const DoctorAnalysis: React.FC = () => {
             </header>
 
             <div style={styles.mainGrid}>
-                {/* --- CỘT TRÁI (Hình ảnh & AI Info) --- */}
+                {/* --- CỘT TRÁI (Hình ảnh & Công cụ vẽ) --- */}
                 <div style={styles.leftPanel}>
-                    {/* Image Viewer */}
-                    <div style={styles.imageBox}>
-                        <img src={currentImage} alt="Retina" style={styles.image} />
+                    
+                    {/* Toolbar Vẽ & Toggle */}
+                    <div style={styles.drawingToolbar}>
+                        <div style={{display:'flex', gap:'8px'}}>
+                            <button onClick={()=>setTool('pen')} style={{...styles.drawBtn, background: tool==='pen'?'#22c55e':'#f1f5f9', color: tool==='pen'?'white':'#475569'}} title="Bút vẽ"><FaPen/></button>
+                            <button onClick={()=>setTool('eraser')} style={{...styles.drawBtn, background: tool==='eraser'?'#3b82f6':'#f1f5f9', color: tool==='eraser'?'white':'#475569'}} title="Tẩy"><FaEraser/></button>
+                            <button onClick={clearCanvas} style={{...styles.drawBtn, color:'red'}} title="Xóa hết"><FaTrash/></button>
+                        </div>
                         
-                        <div style={styles.overlayControls}>
-                            {data.annotated_image_url ? (
-                                <div style={styles.viewModeGroup}>
-                                    <button 
-                                        style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}
-                                        onClick={() => setViewMode('original')}
-                                    >Ảnh gốc</button>
-                                    <button 
-                                        style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}
-                                        onClick={() => setViewMode('annotated')}
-                                    >AI Khoanh vùng</button>
-                                </div>
-                            ) : <span style={{color:'white', fontSize:'12px', padding:'5px 10px', background:'rgba(0,0,0,0.5)', borderRadius:'12px'}}>Không có ảnh khoanh vùng</span>}
+                        <div style={styles.dividerVertical}></div>
+
+                        <div style={styles.viewModeGroup}>
+                            <button 
+                                style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}
+                                onClick={() => setViewMode('original')}
+                            >Ảnh gốc</button>
+                            <button 
+                                style={viewMode === 'annotated' ? styles.toggleActive : styles.toggleBtn}
+                                onClick={() => setViewMode('annotated')}
+                                disabled={!data?.annotated_image_url}
+                            >AI Khoanh vùng</button>
                         </div>
                     </div>
-                    
-                    <div className="slide-up-card" style={{padding: '0 5px'}}>
+
+                    {/* KHUNG ẢNH (LAYER SYSTEM) */}
+                    <div style={styles.imageBox} ref={imageContainerRef}>
+                        <div style={{position: 'relative', display: 'inline-block', lineHeight: 0}}>
+                            
+                            {/* Layer 1: Ảnh Gốc */}
+                            <img 
+                                src={data.image_url} 
+                                alt="Original"
+                                style={{display:'block', maxWidth:'100%', maxHeight:'500px', objectFit: 'contain'}}
+                                onLoad={initCanvas}
+                            />
+
+                            {/* Layer 2: Ảnh AI */}
+                            {data.annotated_image_url && (
+                                <img 
+                                    src={data.annotated_image_url}
+                                    alt="AI"
+                                    style={{
+                                        position:'absolute', top:0, left:0, width:'100%', height:'100%',
+                                        opacity: viewMode === 'annotated' ? 1 : 0, 
+                                        transition: 'opacity 0.3s',
+                                        pointerEvents: 'none'
+                                    }}
+                                />
+                            )}
+
+                            {/* Layer 3: Canvas */}
+                            <canvas
+                                ref={canvasRef}
+                                onMouseDown={startDrawing}
+                                onMouseMove={draw}
+                                onMouseUp={stopDrawing}
+                                onMouseLeave={stopDrawing}
+                                style={{
+                                    position:'absolute', top:0, left:0,
+                                    zIndex: 10,
+                                    cursor: tool==='pen' ? 'crosshair' : 'cell',
+                                    touchAction: 'none'
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Info Card */}
+                    <div className="slide-up-card" style={{marginTop: '10px'}}>
                         <div style={styles.cardInfo}>
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', borderBottom:'1px solid #f1f5f9', paddingBottom:'10px'}}>
                                 <h4 style={{margin:0, color:'#1e293b', display:'flex', alignItems:'center'}}>
@@ -217,18 +347,16 @@ const DoctorAnalysis: React.FC = () => {
                                 </span>
                             </div>
 
-                            {/* Legend */}
                             {viewMode === 'annotated' && (
                                 <div style={styles.legendGrid}>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết (HE/MA)</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết (EX/SE)</div>
                                     <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị (OD)</div>
                                 </div>
                             )}
 
-                            {/* Editable AI Report */}
-                            <div style={{marginTop:'20px'}}>
+                            <div style={{marginTop:'10px'}}>
                                 <label style={styles.label}>
                                     <FaEdit style={{marginRight:'5px', color:'#64748b'}}/> 
                                     Thông số chi tiết (AI trích xuất)
@@ -254,7 +382,7 @@ const DoctorAnalysis: React.FC = () => {
                     </div>
                     
                     <div style={styles.formScroll}>
-                        {/* Section 1: AI Verification */}
+                        {/* Section 1 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>1. Đánh giá kết quả AI</label>
                             <div style={styles.radioGroup}>
@@ -300,7 +428,7 @@ const DoctorAnalysis: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Section 2: Final Diagnosis */}
+                        {/* Section 2 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>
                                 2. Kết luận cuối cùng
@@ -327,7 +455,7 @@ const DoctorAnalysis: React.FC = () => {
                             </select>
                         </div>
 
-                        {/* Section 3: Notes */}
+                        {/* Section 3 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>3. Ghi chú</label>
                             <textarea
@@ -357,7 +485,7 @@ const DoctorAnalysis: React.FC = () => {
     );
 };
 
-// --- STYLES ---
+// --- STYLES OBJECT (ĐỊNH NGHĨA CSS) ---
 const styles: { [key: string]: React.CSSProperties } = {
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', backgroundColor: '#f4f6f9', color: '#64748b' },
     
@@ -367,7 +495,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', boxSizing: 'border-box'
     },
     
-    // TOOLBAR
+    // Toolbar Header
     toolbar: { 
         height: '60px', padding: '0 25px', background: 'white', borderBottom: '1px solid #e2e8f0', 
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, zIndex: 10
@@ -377,66 +505,83 @@ const styles: { [key: string]: React.CSSProperties } = {
     toolBtn: { background: '#f1f5f9', border: 'none', color: '#475569', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display:'flex', alignItems:'center', transition: 'all 0.2s' },
     reportBtn: { background: '#fffbeb', border: '1px solid #fcd34d', color: '#b45309', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', display:'flex', alignItems:'center', transition: 'all 0.2s' },
 
-    // GRID LAYOUT
+    // Main Layout
     mainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', overflow: 'hidden' },
 
-    // LEFT PANEL
+    // Left Panel
     leftPanel: { padding: '20px', overflowY: 'auto', backgroundColor: '#f1f5f9', display: 'flex', flexDirection: 'column', gap: '20px' },
     
+    // Drawing Toolbar (Quan trọng)
+    drawingToolbar: { 
+        background:'white', padding:'10px', borderRadius:'8px', 
+        display:'flex', alignItems:'center', gap:'10px', 
+        marginBottom: '0px', boxShadow:'0 2px 4px rgba(0,0,0,0.03)' 
+    },
+    drawBtn: { width:'36px', height:'36px', border:'none', borderRadius:'6px', cursor:'pointer', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'16px', transition:'all 0.2s' },
+    dividerVertical: { width:'1px', height:'24px', background:'#e2e8f0' },
+    
+    // Toggle Buttons
+    viewModeGroup: { background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', gap: '4px', border: '1px solid #e2e8f0' },
+    toggleBtn: { padding: '6px 12px', border: 'none', background: 'transparent', color: '#64748b', fontSize: '13px', fontWeight: '600', cursor: 'pointer', borderRadius: '6px', transition: 'all 0.2s' },
+    toggleActive: { padding: '6px 12px', border: 'none', background: 'white', color: '#0f172a', fontSize: '13px', fontWeight: '700', cursor: 'pointer', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
+
+    // Image Box
     imageBox: { 
         width: '100%', flex: 1, minHeight: '450px', backgroundColor: '#0f172a', 
         borderRadius: '12px', overflow: 'hidden', position: 'relative', 
         display: 'flex', justifyContent: 'center', alignItems: 'center', 
         boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #334155'
     },
-    image: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' },
     
-    overlayControls: { position: 'absolute', bottom: '20px', width: '100%', display: 'flex', justifyContent: 'center' },
-    viewModeGroup: { background: 'rgba(255,255,255,0.15)', padding: '5px', borderRadius: '30px', display: 'flex', gap: '0', backdropFilter: 'blur(5px)', border: '1px solid rgba(255,255,255,0.2)' },
-    toggleBtn: { background: 'transparent', border: 'none', color: '#e2e8f0', padding: '8px 16px', cursor: 'pointer', fontSize: '13px', fontWeight:'500' },
-    toggleActive: { background: '#007bff', border: 'none', color: 'white', padding: '8px 18px', borderRadius: '25px', cursor: 'pointer', fontSize: '13px', fontWeight: '700', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' },
-
+    // Card Info
     cardInfo: { background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', border: '1px solid #e2e8f0' },
     badge: { padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: '700' },
-    
-    legendGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '13px', marginTop: '10px', background: '#f8fafc', padding: '10px', borderRadius: '8px' },
-    legendItem: { display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontWeight: '500' },
-    dot: { width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block' },
-    
     codeEditor: { width: '100%', height: '180px', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', fontFamily: 'Consolas, monospace', lineHeight: '1.6', color: '#334155', resize: 'vertical', marginTop: '8px', outline:'none', boxSizing: 'border-box' },
+    label: { fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display:'flex', alignItems:'center' },
 
-    // RIGHT PANEL (FORM)
-    rightPanel: { 
-        backgroundColor: 'white', borderLeft: '1px solid #e2e8f0', 
-        display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0,0,0,0.03)',
-        zIndex: 20
-    },
+    // Right Panel (Form)
+    rightPanel: { backgroundColor: 'white', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0,0,0,0.03)', zIndex: 20 },
     formHeader: { padding: '25px', borderBottom: '1px solid #f1f5f9', background: '#fff' },
     formScroll: { flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '30px' },
-    
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionLabel: { fontWeight: '700', fontSize: '14px', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    label: { fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display:'flex', alignItems:'center' },
     
     radioGroup: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    radioCard: { 
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-        padding: '16px', borderRadius: '10px', border: '1px solid', 
-        cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.02)'
-    },
+    radioCard: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', borderRadius: '10px', border: '1px solid', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' },
     radioCircle: { width: '20px', height: '20px', borderRadius: '50%', border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 
     select: { padding: '12px', borderRadius: '8px', border: '1px solid', fontSize: '14px', width: '100%', outline: 'none', transition: 'all 0.2s' },
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: '"Segoe UI", sans-serif', width: '100%', outline: 'none', transition: 'all 0.2s', backgroundColor:'#fff', boxSizing:'border-box' },
     
     formFooter: { padding: '25px', borderTop: '1px solid #f1f5f9', background: '#fff' },
-    saveBtn: { 
-        width: '100%', padding: '14px', background: 'linear-gradient(135deg, #007bff, #0069d9)', 
-        color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', 
-        cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,123,255,0.25)', 
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-        transition: 'all 0.2s'
+    saveBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,123,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' },
+
+    legendGrid: { 
+        display: 'grid', 
+        gridTemplateColumns: '1fr 1fr', // Chia 2 cột
+        gap: '10px', 
+        fontSize: '13px', 
+        marginBottom: '15px', 
+        background: '#f8fafc', 
+        padding: '10px', 
+        borderRadius: '8px',
+        border: '1px solid #e2e8f0'
     },
+    legendItem: { 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px', 
+        color: '#475569', 
+        fontWeight: '500' 
+    },
+    dot: { 
+        width: '10px', 
+        height: '10px', 
+        borderRadius: '50%', 
+        display: 'inline-block',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' 
+    },
+
 };
 
 // --- CSS GLOBAL ---

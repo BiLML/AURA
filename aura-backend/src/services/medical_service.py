@@ -3,7 +3,9 @@ import requests
 import base64
 import io
 import time
+import cloudinary.api
 
+from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor 
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -450,3 +452,161 @@ class MedicalService:
             except Exception as e:
                 print(f"❌ [QUEUE] Lỗi xử lý ảnh {record.get('id')}: {e}")
                 # Update DB thành Lỗi
+
+
+
+
+    # 1. THÊM HÀM LẤY ẢNH TỪ CLOUDINARY
+    def get_cloud_images(self, folder_name: str = "clinic_device_input", limit: int = 20):
+        """
+        Lấy danh sách ảnh mới nhất từ folder Cloudinary
+        """
+        try:
+            # Dùng Search API để lọc theo folder và sắp xếp theo thời gian
+            # Lưu ý: Cần enable Search API trong Cloudinary Dashboard (Settings -> Search)
+            expression = f"resource_type:image AND folder:{folder_name}"
+            
+            result = cloudinary.Search().expression(expression)\
+                .sort_by("uploaded_at", "desc")\
+                .max_results(limit)\
+                .execute()
+            
+            images = []
+            for res in result.get('resources', []):
+                images.append({
+                    "public_id": res.get("public_id"),
+                    "url": res.get("secure_url"),
+                    "created_at": res.get("uploaded_at"),
+                    "filename": res.get("filename")
+                })
+            return images
+        except Exception as e:
+            print(f"❌ Cloudinary Search Error: {e}")
+            return []
+
+    # 2. HÀM XỬ LÝ PHÂN TÍCH TỪ URL (ĐÃ SỬA LỖI)
+    def process_batch_analysis_from_urls(self, user_id: UUID, image_urls: List[str], eye_side: str):
+        """
+        Thay vì nhận File upload, hàm này nhận URL ảnh đã có trên Cloud
+        """
+        start_time = time.time()
+        print(f"🚀 [BATCH URL] Xử lý {len(image_urls)} ảnh từ Cloud")
+
+        # A. Billing & Patient Check
+        subscription = self.billing_repo.get_active_subscription(user_id)
+        # (Thêm logic check billing nếu cần)
+        
+        patient = self.repo.create_patient_record(user_id) 
+
+        # B. Tải ảnh từ URL về RAM để gửi sang AI Service
+        files_data = []
+        temp_image_urls = []
+
+        # Hàm download helper
+        def download_worker(url):
+            try:
+                # Timeout ngắn để tránh treo lâu
+                r = requests.get(url, timeout=15)
+                if r.status_code == 200:
+                    filename = url.split("/")[-1]
+                    # Format: (filename, content_bytes, content_type)
+                    return (filename, r.content, "image/jpeg"), url
+            except Exception as e:
+                print(f"Download Error: {e}")
+            return None, None
+
+        # Download song song
+        print("⬇️ Đang tải ảnh từ Cloudinary về RAM...")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = executor.map(download_worker, image_urls)
+        
+        for file_data, url in results:
+            if file_data:
+                files_data.append(file_data)
+                temp_image_urls.append(url) 
+
+        # --- C. GỌI AI SERVICE ---
+        print(f"📡 Đang gửi {len(files_data)} ảnh sang AI Service...")
+        files_to_send = []
+        for fname, content, ctype in files_data:
+            files_to_send.append(('files', (fname, content, ctype)))
+
+        ai_results = []
+        try:
+            response = requests.post(self.ai_batch_url, files=files_to_send, timeout=600)
+            
+            if response.status_code != 200:
+                print(f"⚠️ AI Error: {response.text}")
+                # SỬA LỖI 1: Dùng temp_image_urls để lặp, không dùng 'files'
+                ai_results = [{"diagnosis": "AI Error", "confidence": 0, "report": str(response.text)} for _ in temp_image_urls]
+            else:
+                ai_results = response.json().get("results", [])
+        except Exception as e:
+            print(f"❌ Lỗi kết nối AI: {e}")
+            ai_results = [{"diagnosis": "Connection Error", "confidence": 0, "report": str(e)} for _ in temp_image_urls]
+
+        # --- D. UPLOAD ẢNH KẾT QUẢ (ANNOTATED) ---
+        # SỬA LỖI 2: Thêm bước này để có URL ảnh đã vẽ
+        print("⚡ Đang upload ảnh kết quả (Annotated)...")
+        annotated_urls = [None] * len(ai_results)
+
+        def upload_annotated_worker(index, ai_res):
+            b64 = ai_res.get("image_base64")
+            # Nếu không có ảnh hoặc AI báo lỗi thì bỏ qua
+            if not b64 or ai_res.get("diagnosis") in ("AI Error", "Critical Error", "Connection Error"):
+                return index, None
+            try:
+                img_data = base64.b64decode(b64)
+                res = cloudinary.uploader.upload(io.BytesIO(img_data), folder="aura_annotated")
+                return index, res.get("secure_url")
+            except Exception as e:
+                print(f"Lỗi upload annotated {index}: {e}")
+                return index, None
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(upload_annotated_worker, i, res) for i, res in enumerate(ai_results)]
+            for future in futures:
+                idx, url = future.result()
+                annotated_urls[idx] = url
+
+        # --- E. LƯU DATABASE ---
+        saved_records = []
+        # Zip để đảm bảo index khớp nhau giữa input và output
+        for i, ai_res in enumerate(ai_results):
+            try:
+                # SỬA LỖI 3: Đảm bảo index i nằm trong range
+                current_image_url = temp_image_urls[i] if i < len(temp_image_urls) else None
+                current_annotated_url = annotated_urls[i] if i < len(annotated_urls) else None
+                
+                if not current_image_url: continue 
+                
+                # Lưu Image (Metadata - đã có URL từ Cloudinary, không cần upload lại)
+                saved_image = self.repo.save_image(
+                    patient_id=patient.id,
+                    uploader_id=user_id,
+                    image_url=current_image_url,
+                    eye_side=eye_side
+                )
+                
+                # Lưu Result
+                final_result = self.repo.save_analysis_result(
+                    image_id=saved_image.id,
+                    risk_level=ai_res.get("diagnosis", "Unknown"),
+                    vessel_data={},
+                    annotated_url=current_annotated_url,
+                    report_content=ai_res.get("report", "")
+                )
+                
+                saved_records.append({
+                    "id": str(saved_image.id),
+                    "image_url": saved_image.image_url,
+                    "annotated_image_url": current_annotated_url,
+                    "diagnosis": final_result.risk_level,
+                    "confidence": ai_res.get("confidence", 0),
+                    "report": final_result.ai_detailed_report
+                })
+            except Exception as e:
+                print(f"❌ Lỗi lưu DB record {i}: {e}")
+
+        print(f"✅ Hoàn tất Batch URL trong {time.time() - start_time:.2f}s")
+        return saved_records

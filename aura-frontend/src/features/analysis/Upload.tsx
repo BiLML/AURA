@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaCloudUploadAlt, FaTimes, FaSpinner, 
-    FaRobot, FaEye, FaChevronDown, FaChevronUp
+    FaRobot, FaEye, FaChevronDown, FaChevronUp,
+    FaServer, FaCheckCircle, FaSync
 } from 'react-icons/fa';
 
 const Upload: React.FC = () => {
@@ -31,6 +32,12 @@ const Upload: React.FC = () => {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // [THÊM] State cho tính năng Cloud Device
+    const [activeTab, setActiveTab] = useState<'local' | 'device'>('local');
+    const [cloudImages, setCloudImages] = useState<any[]>([]);
+    const [selectedCloudUrls, setSelectedCloudUrls] = useState<string[]>([]);
+    const [isFetchingCloud, setIsFetchingCloud] = useState(false);
+
     // --- 1. FETCH DATA & ROLE ---
     useEffect(() => {
         const fetchInitData = async () => {
@@ -38,7 +45,6 @@ const Upload: React.FC = () => {
             if (!token) { navigate('/login'); return; }
 
             try {
-                // Giả lập delay nhỏ để thấy hiệu ứng loading mượt mà nếu mạng quá nhanh
                 await new Promise(r => setTimeout(r, 500)); 
 
                 const userRes = await fetch('http://localhost:8000/api/v1/users/me', {
@@ -120,6 +126,7 @@ const Upload: React.FC = () => {
         setPreviewUrls(newUrls);
     };
 
+    // Handler Upload Local
     const handleUpload = async () => {
         if (selectedFiles.length === 0) return;
         setIsUploading(true);
@@ -169,6 +176,81 @@ const Upload: React.FC = () => {
     const goBack = () => {
         if(['clinic', 'doctor'].includes(role)) navigate('/clinic-dashboard');
         else navigate('/dashboard');
+    };
+
+    // [THÊM] Hàm lấy ảnh từ máy chụp (Cloudinary folder)
+    const fetchDeviceImages = async () => {
+        setIsFetchingCloud(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/medical-records/cloud-device-images', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCloudImages(data);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsFetchingCloud(false);
+        }
+    };
+
+    // [THÊM] Hàm chọn/bỏ chọn ảnh cloud
+    const toggleCloudImage = (url: string) => {
+        if (selectedCloudUrls.includes(url)) {
+            setSelectedCloudUrls(selectedCloudUrls.filter(u => u !== url));
+        } else {
+            setSelectedCloudUrls([...selectedCloudUrls, url]);
+        }
+    };
+
+    // [THÊM] Hàm gửi lệnh phân tích ảnh Cloud
+    const handleCloudAnalyze = async () => {
+        if (selectedCloudUrls.length === 0) return;
+        setIsUploading(true);
+        const token = localStorage.getItem('token');
+        
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/medical-records/analyze-cloud-urls', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    image_urls: selectedCloudUrls,
+                    eye_side: eyeSide,
+                    patient_id: selectedPatientId
+                })
+            });
+            
+            if (!res.ok) {
+                 const err = await res.json();
+                 throw new Error(err.detail || "Lỗi phân tích");
+            }
+
+            const data = await res.json();
+            
+            navigate('/analysis-result-batch', { state: { 
+                batchResults: data.map((item: any) => ({
+                    id: item.id,
+                    status: 'COMPLETED',
+                    diagnosis: item.diagnosis,
+                    confidence: item.confidence,
+                    image_base64: null, 
+                    local_preview: item.image_url, 
+                    report: item.report,
+                    annotated_url: item.annotated_image_url 
+                }))
+            }});
+
+        } catch (error) {
+            alert(`Thất bại: ${(error as Error).message}`);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const renderPreviewList = () => {
@@ -298,45 +380,129 @@ const Upload: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* UPLOAD ZONE */}
-                            <div 
-                                className={`upload-zone-hover ${isDragging ? 'dragging' : ''}`}
-                                style={{
-                                    ...styles.uploadZone,
-                                    borderColor: isDragging ? '#007bff' : '#dde2e5',
-                                    backgroundColor: isDragging ? '#f0f7ff' : '#f8fbff',
-                                    transform: isDragging ? 'scale(1.01)' : 'scale(1)'
-                                }}
-                                onClick={() => fileInputRef.current?.click()}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                            >
-                                <input 
-                                    type="file" hidden ref={fileInputRef} accept="image/*" multiple 
-                                    onChange={handleFileChange} 
-                                />
-                                <div style={styles.uploadIconCircle} className="icon-pulse">
-                                    <FaCloudUploadAlt size={35} color="#007bff" />
-                                </div>
-                                <h4 style={{margin:'15px 0 8px', color:'#333', fontWeight: 600}}>Nhấn hoặc Kéo thả ảnh vào đây</h4>
-                                <p style={{color:'#888', fontSize:'13px', margin:0}}>Hỗ trợ JPG, PNG. Tối đa 100 ảnh/lần.</p>
+                            {/* [FIX] THANH TAB CHUYỂN ĐỔI */}
+                             <div style={{display:'flex', gap:'15px', marginBottom:'20px', borderBottom:'1px solid #eee', paddingBottom:'15px'}}>
+                                 <button 
+                                    onClick={() => setActiveTab('local')}
+                                    className={activeTab === 'local' ? 'btn-primary-hover' : 'btn-secondary-hover'}
+                                    style={activeTab === 'local' ? styles.tabActive : styles.tabInactive}
+                                 >
+                                    <FaCloudUploadAlt style={{marginRight:8}}/> Tải từ máy tính
+                                 </button>
+                                 <button 
+                                    onClick={() => { setActiveTab('device'); fetchDeviceImages(); }}
+                                    className={activeTab === 'device' ? 'btn-primary-hover' : 'btn-secondary-hover'}
+                                    style={activeTab === 'device' ? styles.tabActive : styles.tabInactive}
+                                 >
+                                    <FaServer style={{marginRight:8}}/> Máy chụp đáy mắt
+                                 </button>
                             </div>
 
-                            {/* PREVIEW GRID */}
-                            {selectedFiles.length > 0 && renderPreviewList()}
+                            {/* [FIX] RENDER NỘI DUNG THEO TAB */}
+                            {activeTab === 'local' ? (
+                                <>
+                                    {/* UPLOAD ZONE (LOCAL) */}
+                                    <div 
+                                        className={`upload-zone-hover ${isDragging ? 'dragging' : ''}`}
+                                        style={{
+                                            ...styles.uploadZone,
+                                            borderColor: isDragging ? '#007bff' : '#dde2e5',
+                                            backgroundColor: isDragging ? '#f0f7ff' : '#f8fbff',
+                                            transform: isDragging ? 'scale(1.01)' : 'scale(1)'
+                                        }}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                    >
+                                        <input 
+                                            type="file" hidden ref={fileInputRef} accept="image/*" multiple 
+                                            onChange={handleFileChange} 
+                                        />
+                                        <div style={styles.uploadIconCircle} className="icon-pulse">
+                                            <FaCloudUploadAlt size={35} color="#007bff" />
+                                        </div>
+                                        <h4 style={{margin:'15px 0 8px', color:'#333', fontWeight: 600}}>Nhấn hoặc Kéo thả ảnh vào đây</h4>
+                                        <p style={{color:'#888', fontSize:'13px', margin:0}}>Hỗ trợ JPG, PNG. Tối đa 100 ảnh/lần.</p>
+                                    </div>
+                                    
+                                    {/* PREVIEW GRID (LOCAL) */}
+                                    {selectedFiles.length > 0 && renderPreviewList()}
+                                </>
+                            ) : (
+                                // [FIX] GIAO DIỆN TAB MÁY CHỤP (DEVICE)
+                                <div className="fade-in">
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:15}}>
+                                        <span style={{fontSize:14, color:'#666'}}>
+                                            Ảnh mới nhất từ máy chụp (Folder: <b>clinic_device_input</b>)
+                                        </span>
+                                        <button onClick={fetchDeviceImages} style={{border:'none', background:'none', color:'#007bff', cursor:'pointer', display:'flex', alignItems:'center', gap:5}}>
+                                            <FaSync className={isFetchingCloud ? "spin" : ""} /> Làm mới
+                                        </button>
+                                    </div>
 
-                            {/* ACTIONS */}
+                                    {isFetchingCloud ? (
+                                        <div style={{padding:40, textAlign:'center', color:'#888'}}>
+                                            <FaSpinner className="spin" size={24}/> <p>Đang kết nối thiết bị...</p>
+                                        </div>
+                                    ) : (
+                                        <div style={{...styles.previewGrid, maxHeight:'400px', overflowY:'auto', padding:5}}>
+                                            {cloudImages.length === 0 && <p style={{gridColumn:'1/-1', textAlign:'center', color:'#999'}}>Chưa có ảnh nào từ máy chụp.</p>}
+                                            
+                                            {cloudImages.map((img, idx) => {
+                                                const isSelected = selectedCloudUrls.includes(img.url);
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        onClick={() => toggleCloudImage(img.url)}
+                                                        className="preview-card-hover"
+                                                        style={{
+                                                            ...styles.previewItem, 
+                                                            cursor: 'pointer',
+                                                            border: isSelected ? '3px solid #007bff' : '1px solid #eee',
+                                                            position: 'relative'
+                                                        }}
+                                                    >
+                                                        <img src={img.url} style={styles.previewImage} alt="Cloud Device" />
+                                                        {isSelected && (
+                                                            <div style={{position:'absolute', top:5, right:5, color:'#007bff', background:'white', borderRadius:'50%', boxShadow:'0 0 5px rgba(0,0,0,0.2)'}}>
+                                                                <FaCheckCircle size={22}/>
+                                                            </div>
+                                                        )}
+                                                        <div style={{position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,0.6)', color:'white', fontSize:'10px', padding:'4px', textAlign:'center'}}>
+                                                            {new Date(img.created_at).toLocaleString('vi-VN')}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* [FIX] ACTIONS (Footer) - Thay đổi nút bấm theo Tab */}
                             <div style={styles.actionFooter}>
                                 <button onClick={goBack} className="btn-secondary-hover" style={styles.secondaryBtnLarge}>Hủy bỏ</button>
-                                <button 
-                                    className={selectedFiles.length === 0 || isUploading ? '' : 'btn-primary-hover pulse-on-active'}
-                                    onClick={handleUpload} 
-                                    disabled={selectedFiles.length === 0 || isUploading}
-                                    style={selectedFiles.length === 0 || isUploading ? styles.disabledBtn : styles.primaryBtnLarge}
-                                >
-                                    {isUploading ? <><FaSpinner className="spin" style={{marginRight:8}}/> Đang xử lý AI...</> : <><FaRobot style={{marginRight:8}}/> Phân tích ngay</>}
-                                </button>
+                                
+                                {activeTab === 'local' ? (
+                                    <button 
+                                        className={selectedFiles.length === 0 || isUploading ? '' : 'btn-primary-hover pulse-on-active'}
+                                        onClick={handleUpload} 
+                                        disabled={selectedFiles.length === 0 || isUploading}
+                                        style={selectedFiles.length === 0 || isUploading ? styles.disabledBtn : styles.primaryBtnLarge}
+                                    >
+                                        {isUploading ? <><FaSpinner className="spin" style={{marginRight:8}}/> Đang xử lý AI...</> : <><FaRobot style={{marginRight:8}}/> Phân tích ngay</>}
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={handleCloudAnalyze}
+                                        className={selectedCloudUrls.length === 0 || isUploading ? '' : 'btn-primary-hover pulse-on-active'}
+                                        disabled={selectedCloudUrls.length === 0 || isUploading}
+                                        style={selectedCloudUrls.length === 0 || isUploading ? styles.disabledBtn : styles.primaryBtnLarge}
+                                    >
+                                        {isUploading ? <><FaSpinner className="spin" style={{marginRight:8}}/> Đang xử lý...</> : `Phân tích ${selectedCloudUrls.length} ảnh đã chọn`}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -356,7 +522,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     logoText: { fontWeight: '800', fontSize: '18px', color: '#1e293b', letterSpacing: '0.5px' },
     clinicName: { fontSize:'13px', color:'#666', marginLeft:'40px', fontWeight: 500 },
     nav: { flex: 1, padding: '20px 0', overflowY: 'auto' },
-    // Thêm transition
     menuItem: { padding: '12px 25px', cursor: 'pointer', fontSize: '14px', color: '#64748b', display:'flex', alignItems:'center', transition: 'all 0.2s ease', borderRadius: '0 20px 20px 0', margin: '2px 0', borderLeft: '3px solid transparent' },
     menuItemActive: { padding: '12px 25px', cursor: 'default', fontSize: '14px', fontWeight: '600', backgroundColor: '#eff6ff', color: '#007bff', borderLeft: '3px solid #007bff', display:'flex', alignItems:'center', borderRadius: '0 20px 20px 0', margin: '2px 0', boxShadow: '2px 2px 5px rgba(0,123,255,0.05)' },
     menuIcon: { marginRight: '12px', fontSize: '16px' },
@@ -370,14 +535,12 @@ const styles: { [key: string]: React.CSSProperties } = {
     avatarCircle: { width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #007bff, #0056b3)', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '14px', fontWeight:'bold', boxShadow: '0 2px 5px rgba(0,123,255,0.3)' },
     userNameText: { fontSize:'14px', fontWeight:'600', color: '#333' },
     contentBody: { padding: '30px', flex: 1, overflowY: 'auto', display:'flex', justifyContent:'center' },
-    // Soften card
     card: { backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border:'1px solid #f0f0f0', overflow:'hidden', width: '100%', maxWidth: '800px', height: 'fit-content', transition: 'transform 0.3s ease' },
     cardHeader: { padding:'25px 35px', borderBottom:'1px solid #f0f0f0', backgroundColor:'#fff' },
     sectionTitle: { fontSize: '17px', fontWeight: '700', color: '#1e293b', margin: 0 },
     formLabel: { display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#334155' },
     selectInput: { width: '100%', padding: '12px 15px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', transition: 'all 0.2s', color: '#333' },
     radioLabel: { display:'flex', alignItems:'center', cursor:'pointer', padding: '8px 12px', borderRadius: '6px', border: '1px solid transparent', transition: 'all 0.2s', backgroundColor: '#f8fafc' },
-    // Upload zone soft style
     uploadZone: { border: '2px dashed #cbd5e1', borderRadius: '16px', padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fbff', cursor: 'pointer', transition: 'all 0.3s ease' },
     uploadIconCircle: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px', boxShadow: '0 4px 15px rgba(0,123,255,0.1)' },
     previewGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '15px' },
@@ -387,8 +550,36 @@ const styles: { [key: string]: React.CSSProperties } = {
     actionFooter: { marginTop: '30px', borderTop: '1px solid #f1f5f9', paddingTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '15px' },
     secondaryBtnLarge: { padding: '12px 28px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize:'14px', fontWeight:'600', transition: 'all 0.2s' },
     primaryBtnLarge: { padding: '12px 35px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize:'14px', fontWeight:'600', display:'flex', alignItems:'center', boxShadow: '0 4px 12px rgba(0,123,255,0.2)', transition: 'all 0.2s' },
-    disabledBtn: { padding: '12px 35px', background: '#e2e8f0', color: '#94a3b8', border: 'none', borderRadius: '10px', cursor: 'not-allowed', fontSize:'14px', fontWeight:'600', display:'flex', alignItems:'center' },
+    disabledBtn: { padding: '12px 35px', background: '#e2e8f0', color: '#94a3b8', border: 'none', borderRadius: '10px', cursor: 'not-allowed', fontSize:'14px', fontWeight:'600', display:'flex', alignItems:'center' }
 };
+
+// [FIX] CHUYỂN LOGIC MERGE STYLE RA NGOÀI OBJECT
+const extraStyles = {
+    tabActive: { 
+        padding: '10px 20px', 
+        borderRadius: '8px', 
+        border: 'none', 
+        background: '#e0f2fe', 
+        color: '#0284c7', 
+        fontWeight: 'bold', 
+        cursor: 'default', 
+        display:'flex', 
+        alignItems:'center' 
+    },
+    tabInactive: { 
+        padding: '10px 20px', 
+        borderRadius: '8px', 
+        border: 'none', 
+        background: 'transparent', 
+        color: '#64748b', 
+        fontWeight: '500', 
+        cursor: 'pointer', 
+        display:'flex', 
+        alignItems:'center' 
+    }
+};
+
+Object.assign(styles, extraStyles);
 
 // --- CSS GLOBAL & ANIMATIONS ---
 const cssGlobal = `

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Any
+from typing import List, Optional, Union
 from uuid import UUID
 from datetime import date
 from models.enums import EyeSide
@@ -54,10 +54,10 @@ class IMedicalRepository(ABC):
     def get_upload_trends_last_7_days(self) -> list: pass
 
     @abstractmethod
-    def update_image_url(self, image_id: Any, new_url: str) -> bool:
+    def update_image_url(self, image_id: Union[UUID, int, str], new_url: str) -> bool: 
         pass
 
     @abstractmethod
-    def update_analysis_result(self, result_id: Any, risk_level: str, annotated_url: str, report_content: str) -> bool:
+    def update_analysis_result(self, result_id: Union[UUID, int, str], risk_level: str, annotated_url: str, report_content: str) -> bool:
         pass
 

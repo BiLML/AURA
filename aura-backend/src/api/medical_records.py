@@ -5,9 +5,11 @@ from typing import List
 
 from core.database import get_db
 from core.security import get_current_user
+
 from models.users import User
 from models.enums import UserRole
-from schemas.medical_schema import ImageResponse
+
+from schemas.medical_schema import ImageResponse, CloudAnalysisRequest, CloudImageItem
 
 # 1. IMPORT SERVICE VÀ REPO THỰC
 from services.medical_service import MedicalService
@@ -179,6 +181,49 @@ def get_clinic_history_records(
             "ai_result": analysis.risk_level if analysis else "Đang phân tích...",
             "ai_analysis_status": "COMPLETED" if analysis else "PENDING"
         })
+    
+    return results
+
+# API 1: Lấy danh sách ảnh từ folder máy chụp (trả về danh sách theo schema CloudImageItem)
+@router.get("/cloud-device-images", response_model=List[CloudImageItem])
+def get_images_from_device(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    service: MedicalService = Depends(get_medical_service)
+):
+    """
+    Lấy danh sách ảnh mới nhất từ folder 'clinic_device_input' trên Cloudinary
+    """
+    # Service trả về list dict, Pydantic sẽ tự validate thành List[CloudImageItem]
+    return service.get_cloud_images(limit=limit)
+
+# API 2: Phân tích các ảnh đã chọn (Input dùng schema CloudAnalysisRequest)
+@router.post("/analyze-cloud-urls")
+def analyze_from_cloud_urls(
+    body: CloudAnalysisRequest, # [SỬ DỤNG SCHEMA Ở ĐÂY]
+    current_user: User = Depends(get_current_user),
+    service: MedicalService = Depends(get_medical_service),
+    billing_service: BillingService = Depends(get_billing_service)
+):
+    """
+    Nhận danh sách URL ảnh (đã có trên Cloud), tải về RAM và gửi sang AI xử lý
+    """
+    # 1. Check Billing (Trừ tiền trước)
+    total_cost = len(body.image_urls)
+    current_credits = billing_service.check_credits(current_user.id)
+    
+    if current_credits < total_cost:
+        raise HTTPException(status_code=402, detail="Không đủ credit để phân tích.")
+
+    for _ in range(total_cost):
+        billing_service.deduct_credit(current_user.id)
+
+    # 2. Gọi Service xử lý (Logic đã có sẵn trong Service bạn gửi)
+    results = service.process_batch_analysis_from_urls(
+        user_id=current_user.id,
+        image_urls=body.image_urls,
+        eye_side=body.eye_side
+    )
     
     return results
 

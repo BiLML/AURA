@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import datetime
 from models.enums import ImageType, EyeSide
@@ -36,3 +36,16 @@ class PatientResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# 1. Input: Dữ liệu gửi lên để yêu cầu phân tích ảnh từ URL
+class CloudAnalysisRequest(BaseModel):
+    image_urls: List[str]
+    eye_side: str = "left"
+    patient_id: Optional[str] = None
+
+# 2. Output: Cấu trúc thông tin ảnh lấy từ Cloudinary về
+class CloudImageItem(BaseModel):
+    public_id: str
+    url: str
+    created_at: str
+    filename: str

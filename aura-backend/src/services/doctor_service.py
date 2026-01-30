@@ -13,6 +13,11 @@ from domain.models.iaudit_repository import IAuditRepository
 from schemas.doctor_schema import PatientResponse, LatestScan
 from models.users import User
 
+import base64
+import io
+import cloudinary.uploader
+from datetime import datetime
+
 class DoctorService:
     def __init__(self, doctor_repo: IDoctorRepository, medical_repo: IMedicalRepository, audit_repo: IAuditRepository, db: Session):
         self.db = db
@@ -74,7 +79,7 @@ class DoctorService:
             
         return {"patients": results}
 
-    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, ip_address: str = "Unknown", feedback: str = None, ai_detailed_report: str = None):
+    def update_diagnosis(self, record_id: str, diagnosis: str, notes: str, is_correct: bool, doctor_id: UUID, ip_address: str = "Unknown", feedback: str = None, ai_detailed_report: str = None, doctor_drawing: str = None):
         """
         Lưu kết quả thẩm định. Có Try/Except để bắt lỗi DB.
         """
@@ -95,6 +100,27 @@ class DoctorService:
 
         if ai_detailed_report is not None:
             analysis.ai_detailed_report = ai_detailed_report
+
+        # 2. XỬ LÝ UPLOAD ẢNH VẼ (MỚI)
+        final_drawing_url = None
+        if doctor_drawing and len(doctor_drawing) > 100:
+            try:
+                # Cắt header base64 nếu có (data:image/png;base64,...)
+                if "base64," in doctor_drawing:
+                    doctor_drawing = doctor_drawing.split("base64,")[1]
+                
+                image_data = base64.b64decode(doctor_drawing)
+                
+                # Upload lên Cloudinary vào folder riêng
+                upload_res = cloudinary.uploader.upload(
+                    io.BytesIO(image_data),
+                    folder="aura_doctor_annotations",
+                    public_id=f"doc_paint_{record_id}_{int(datetime.utcnow().timestamp())}"
+                )
+                final_drawing_url = upload_res.get("secure_url")
+            except Exception as e:
+                print(f"⚠️ Lỗi upload hình vẽ: {e}") 
+                # Không raise lỗi để vẫn lưu được text chẩn đoán
 
         try:
             # 3. Tìm Validation cũ (Upsert)
@@ -119,7 +145,8 @@ class DoctorService:
                     is_correct=is_correct,
                     doctor_confirm=diagnosis, 
                     doctor_notes=notes,
-                    feedback_for_ai=feedback
+                    feedback_for_ai=feedback,
+                    doctor_annotated_url=final_drawing_url # <--- Map vào cột mới
                 )
                 self.db.add(validation)
 
