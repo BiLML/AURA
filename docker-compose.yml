@@ -13,6 +13,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M # Giới hạn RAM cho DB
 
   ai_service:
     build: 
@@ -26,20 +30,18 @@ services:
       - ./aura-backend/.env 
     volumes:
       - ./aura-backend:/app
+    # Tạm thời bỏ phần GPU nếu VPS không hỗ trợ hoặc chưa cài Toolkit
     deploy:
       resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+        limits:
+          memory: 1G # Giới hạn RAM cho AI
 
   backend_core:
     build: 
       context: ./aura-backend
       dockerfile: Dockerfile  
     container_name: aura_backend_api
-    command: uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn server.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     depends_on:
@@ -48,23 +50,30 @@ services:
     env_file:
       - ./aura-backend/.env
     environment:
-      # Ghi đè biến môi trường để đảm bảo kết nối đúng trong Docker
       - DATABASE_URL=postgresql://aura_user:aura_password@postgres_db:5432/aura_db
       - AI_SERVICE_URL=http://ai_service:8001/analyze 
       - PYTHONPATH=/app/src
     volumes:
       - ./aura-backend:/app
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   frontend:
     build: ./aura-frontend
     container_name: aura_frontend
     ports:
-      - "5173:5173"
+      - "80:5173" # Đổi cổng ra ngoài thành 80 để truy cập trực tiếp qua IP
     depends_on:
       - backend_core
     volumes:
       - ./aura-frontend:/app
       - /app/node_modules
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 volumes:
   postgres_data:
