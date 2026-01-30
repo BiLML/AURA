@@ -11,6 +11,9 @@ app = FastAPI(title="Aura AI Backend")
 origins = [
     "http://localhost:5173",    # Frontend của bạn
     "http://127.0.0.1:5173",    # Dự phòng
+    "http://103.200.23.81",      # <-- QUAN TRỌNG: IP VPS của bạn
+    "http://103.200.23.81:80",   # <-- Cổng web mặc định
+    "*"
 ]
 
 # Cấu hình CORS
