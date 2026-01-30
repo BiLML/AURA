@@ -29,15 +29,17 @@ sess_options.intra_op_num_threads = 2
 sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-providers = [
-    ('CUDAExecutionProvider', {
-        'device_id': 0,
-        'arena_extend_strategy': 'kNextPowerOfTwo',
-        'cudnn_conv_algo_search': 'EXHAUSTIVE',
-        'do_copy_in_default_stream': True,
-    }),
-    'CPUExecutionProvider',
-]
+#providers = [
+#    ('CUDAExecutionProvider', {
+#        'device_id': 0,
+#        'arena_extend_strategy': 'kNextPowerOfTwo',
+#        'cudnn_conv_algo_search': 'EXHAUSTIVE',
+#        'do_copy_in_default_stream': True,
+#    }),
+#    'CPUExecutionProvider',
+#]
+
+providers = ['CPUExecutionProvider']
 
 print(f"📂 Đang tìm model trong thư mục: {ONNX_DIR}")
 for name, filename in MODEL_FILES.items():
