@@ -73,7 +73,7 @@ const DoctorAnalysis: React.FC = () => {
         if (!id || !token) return;
 
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/medical-records/${id}`, {
+            const res = await fetch(`http://103.200.23.81:8000/api/v1/medical-records/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 

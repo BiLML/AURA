@@ -45,7 +45,7 @@ const ProfilePage: React.FC = () => {
             if (!token) { navigate('/login'); return; }
 
             try {
-                const res = await fetch('http://localhost:8000/api/v1/users/me', {
+                const res = await fetch('http://103.200.23.81:8000/api/v1/users/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -94,7 +94,7 @@ const ProfilePage: React.FC = () => {
         setIsSaving(true);
         setErrors({});
         try {
-            const API_URL = 'http://localhost:8000/api/v1/users/me';
+            const API_URL = 'http://103.200.23.81:8000/api/v1/users/me';
 
             const payload = { ...profileData };
             if (!payload.date_of_birth) {

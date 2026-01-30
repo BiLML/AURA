@@ -28,7 +28,7 @@ const Register = () => {
     }
 
     try {
-      const API_URL = 'http://localhost:8000/api/v1/auth/register'; 
+      const API_URL = 'http://103.200.23.81:8000/api/v1/auth/register'; 
       
       const response = await fetch(API_URL, {
         method: 'POST',

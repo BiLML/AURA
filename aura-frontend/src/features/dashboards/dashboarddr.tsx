@@ -104,7 +104,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://localhost:8000/api/v1/doctor/reports/me', {
+            const res = await fetch('http://103.200.23.81:8000/api/v1/doctor/reports/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -132,7 +132,7 @@ const DashboardDr: React.FC = () => {
         }
 
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${recordId}/diagnose`, { 
+            const res = await fetch(`http://103.200.23.81:8000/api/v1/doctor/records/${recordId}/diagnose`, { 
                 method: 'PUT', 
                 headers: { 
                     'Content-Type': 'application/json',
@@ -151,7 +151,7 @@ const DashboardDr: React.FC = () => {
                 setShowReportModal(false);
                 setReportForm({ ...reportForm, doctorDiagnosis: '', notes: '' });
                 // Refresh data
-                const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
+                const patientsRes = await fetch('http://103.200.23.81:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (patientsRes.ok) { 
                     const data = await patientsRes.json(); 
                     setPatientsData(data.patients || []); 
@@ -168,7 +168,7 @@ const DashboardDr: React.FC = () => {
 
     const fetchChatData = useCallback(async (token: string) => {
         try {
-            const res = await fetch('http://localhost:8000/api/v1/chats', {
+            const res = await fetch('http://103.200.23.81:8000/api/v1/chats', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -208,7 +208,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/doctor/patients/${patientId}/history`, {
+            const res = await fetch(`http://103.200.23.81:8000/api/v1/doctor/patients/${patientId}/history`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -239,7 +239,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return null;
         try {
-            const res = await fetch(`http://localhost:8000/api/v1/chats/history/${partnerId}`, {
+            const res = await fetch(`http://103.200.23.81:8000/api/v1/chats/history/${partnerId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -254,7 +254,7 @@ const DashboardDr: React.FC = () => {
         const token = localStorage.getItem('token');
         if (token) {
             setChatData(prev => prev.map(c => c.id === partnerId ? { ...c, unread: false } : c));
-            await fetch(`http://localhost:8000/api/v1/chats/read/${partnerId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }});
+            await fetch(`http://103.200.23.81:8000/api/v1/chats/read/${partnerId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }});
             fetchChatData(token);
         }
     };
@@ -287,7 +287,7 @@ const DashboardDr: React.FC = () => {
         });
         try {
             const token = localStorage.getItem('token');
-            await fetch('http://localhost:8000/api/v1/chats/send', {
+            await fetch('http://103.200.23.81:8000/api/v1/chats/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ receiver_id: selectedChatId, content: textToSend })
@@ -322,7 +322,7 @@ const DashboardDr: React.FC = () => {
         if (!token) { navigate('/login'); return; }
         const initData = async () => {
             try {
-                const userRes = await fetch('http://localhost:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                const userRes = await fetch('http://103.200.23.81:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!userRes.ok) throw new Error("Token lỗi");
                 
                 const userData = await userRes.json();
@@ -339,13 +339,13 @@ const DashboardDr: React.FC = () => {
                 setFullName(userProfile.full_name || info.full_name || '');
                 setUserRole(info.role);
 
-                const patientsRes = await fetch('http://localhost:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
+                const patientsRes = await fetch('http://103.200.23.81:8000/api/v1/doctor/my-patients', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (patientsRes.ok) { 
                     const data = await patientsRes.json(); 
                     setPatientsData(data.patients || []); 
                 }
 
-                const statsRes = await fetch('http://localhost:8000/api/v1/doctor/stats', { 
+                const statsRes = await fetch('http://103.200.23.81:8000/api/v1/doctor/stats', { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
                 if (statsRes.ok) {
