@@ -196,7 +196,7 @@ const DashboardAdmin: React.FC = () => {
 
         try {
              // 1. Info Admin & Check Role
-             const meRes = await fetch('http://127.0.0.1:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+             const meRes = await fetch('http://103.200.23.81:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
 
              if (meRes.ok) {
                  const meData = await meRes.json();
@@ -212,19 +212,19 @@ const DashboardAdmin: React.FC = () => {
             
             // Using Promise.allSettled to prevent one failure from stopping everything
             await Promise.allSettled([
-                fetch('http://127.0.0.1:8000/api/v1/admin/users', { headers }).then(r => r.json()).then(d => setUserList((d.users || d || []).filter((u:User) => u.role !== 'admin'))),
-                fetch('http://127.0.0.1:8000/api/v1/clinics/admin/pending', { headers }).then(r => r.json()).then(d => setClinicRequests(d.requests || [])),
-                fetch('http://127.0.0.1:8000/api/v1/clinics/', { headers }).then(r => r.json()).then(d => {
+                fetch('http://103.200.23.81:8000/api/v1/admin/users', { headers }).then(r => r.json()).then(d => setUserList((d.users || d || []).filter((u:User) => u.role !== 'admin'))),
+                fetch('http://103.200.23.81:8000/api/v1/clinics/admin/pending', { headers }).then(r => r.json()).then(d => setClinicRequests(d.requests || [])),
+                fetch('http://103.200.23.81:8000/api/v1/clinics/', { headers }).then(r => r.json()).then(d => {
                     setActiveClinics(d.filter((c:any) => c.status === 'APPROVED'));
                     setSuspendedClinics(d.filter((c:any) => c.status === 'SUSPENDED'));
                 }),
-                fetch('http://127.0.0.1:8000/api/v1/admin/reports', { headers }).then(r => r.json()).then(d => setFeedbackList(d.reports || [])),
-                fetch('http://127.0.0.1:8000/api/v1/admin/config', { headers }).then(r => r.json()).then(d => setAiConfig(d)),
-                fetch('http://127.0.0.1:8000/api/v1/billing/packages', { headers }).then(r => r.json()).then(d => setPackageList(d)),
-                fetch('http://127.0.0.1:8000/api/v1/admin/stats/analytics', { headers }).then(r => r.json()).then(d => setAnalyticsData(d)),
-                fetch('http://127.0.0.1:8000/api/v1/admin/audit-logs', { headers }).then(r => r.json()).then(d => setAuditLogs(d)),
-                fetch('http://127.0.0.1:8000/api/v1/admin/templates', { headers }).then(r => r.json()).then(d => setTemplates(d)),
-                fetch('http://127.0.0.1:8000/api/v1/admin/stats/global', { headers }).then(r => r.json()).then(data => {
+                fetch('http://103.200.23.81:8000/api/v1/admin/reports', { headers }).then(r => r.json()).then(d => setFeedbackList(d.reports || [])),
+                fetch('http://103.200.23.81:8000/api/v1/admin/config', { headers }).then(r => r.json()).then(d => setAiConfig(d)),
+                fetch('http://103.200.23.81:8000/api/v1/billing/packages', { headers }).then(r => r.json()).then(d => setPackageList(d)),
+                fetch('http://103.200.23.81:8000/api/v1/admin/stats/analytics', { headers }).then(r => r.json()).then(d => setAnalyticsData(d)),
+                fetch('http://103.200.23.81:8000/api/v1/admin/audit-logs', { headers }).then(r => r.json()).then(d => setAuditLogs(d)),
+                fetch('http://103.200.23.81:8000/api/v1/admin/templates', { headers }).then(r => r.json()).then(d => setTemplates(d)),
+                fetch('http://103.200.23.81:8000/api/v1/admin/stats/global', { headers }).then(r => r.json()).then(data => {
                     setGlobalStats({
                         revenue: data.total_revenue,
                         totalScans: data.total_scans,
@@ -267,13 +267,13 @@ const DashboardAdmin: React.FC = () => {
         const token = localStorage.getItem('token');
         try {
             if (editForm.role !== editingUser.role) {
-                await fetch(`http://127.0.0.1:8000/api/v1/admin/users/${editingUser.id}/role`, {
+                await fetch(`http://103.200.23.81:8000/api/v1/admin/users/${editingUser.id}/role`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ role: editForm.role })
                 });
             }
             if (editForm.status !== editingUser.status) {
-                await fetch(`http://127.0.0.1:8000/api/v1/admin/users/${editingUser.id}/status`, {
+                await fetch(`http://103.200.23.81:8000/api/v1/admin/users/${editingUser.id}/status`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ status: editForm.status }) 
                 });
@@ -288,7 +288,7 @@ const DashboardAdmin: React.FC = () => {
         if (!window.confirm(`Bạn có chắc muốn ${action} tài khoản ${user.username}?`)) return;
         const token = localStorage.getItem('token');
         try {
-            await fetch(`http://127.0.0.1:8000/api/v1/admin/users/${user.id}/status`, {
+            await fetch(`http://103.200.23.81:8000/api/v1/admin/users/${user.id}/status`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ status: newStatus }) 
             });
@@ -301,7 +301,7 @@ const DashboardAdmin: React.FC = () => {
         const token = localStorage.getItem('token');
         try {
             const statusToSend = action === 'ACTIVE' ? 'APPROVED' : action;
-            await fetch(`http://127.0.0.1:8000/api/v1/clinics/admin/${clinicId}/status`, {
+            await fetch(`http://103.200.23.81:8000/api/v1/clinics/admin/${clinicId}/status`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ status: statusToSend })
             });
@@ -313,7 +313,7 @@ const DashboardAdmin: React.FC = () => {
         if(!window.confirm("Lưu các thay đổi cấu hình hệ thống?")) return;
         const token = localStorage.getItem('token');
         try {
-            await fetch('http://127.0.0.1:8000/api/v1/admin/config', {
+            await fetch('http://103.200.23.81:8000/api/v1/admin/config', {
                 method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(aiConfig)
             });
@@ -325,7 +325,7 @@ const DashboardAdmin: React.FC = () => {
         if (!newPackage.name || newPackage.price < 0) { alert("Vui lòng nhập tên gói và giá hợp lệ!"); return; }
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/v1/billing/packages', {
+            const res = await fetch('http://103.200.23.81:8000/api/v1/billing/packages', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(newPackage)
             });
@@ -341,7 +341,7 @@ const DashboardAdmin: React.FC = () => {
         if (!selectedTemplate) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/templates/${selectedTemplate.code}`, {
+            const res = await fetch(`http://103.200.23.81:8000/api/v1/admin/templates/${selectedTemplate.code}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ subject: selectedTemplate.subject, content: selectedTemplate.content })
             });
