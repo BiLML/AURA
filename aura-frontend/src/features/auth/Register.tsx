@@ -28,21 +28,18 @@ const Register = () => {
     }
 
     try {
-        const API_URL = 'http://103.200.23.81:8000/api/v1/auth/register'; 
-        
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: formData.username,
-            email: formData.email,
-            password: formData.password,
-            // SỬA TẠI ĐÂY: full_name phải nằm trong profile
-            profile: {
-              full_name: formData.full_name
-            }
-          }),
-        });
+      const API_URL = 'http://103.200.23.81:8000/api/v1/auth/register'; 
+      
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          full_name: formData.full_name,
+          password: formData.password
+        }),
+      });
 
       const data = await response.json();
 
