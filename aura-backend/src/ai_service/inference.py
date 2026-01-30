@@ -45,11 +45,29 @@ for name, filename in MODEL_FILES.items():
     if os.path.exists(path):
         try:
             loaded_sessions[name] = ort.InferenceSession(path, sess_options, providers=providers)
-            print(f"   ✅ Loaded: {name}")
+            used_provider = loaded_sessions[name].get_providers()[0]
+            print(f"   ✅ Loaded: {name} [{used_provider}]")
         except Exception as e:
             print(f"   ❌ Failed to load {name}: {e}")
     else:
         print(f"   ⚠️ FILE MISSING: {filename}")
+
+# In ra tổng kết CUDA vs CPU
+def get_runtime_info():
+    """Trả về thông tin runtime (CUDA hay CPU) để kiểm tra từ API."""
+    if not loaded_sessions:
+        return {"cuda": False, "provider": None, "message": "No model loaded"}
+    sample = next(iter(loaded_sessions.values()))
+    provider = sample.get_providers()[0]
+    return {
+        "cuda": "CUDAExecutionProvider" in provider,
+        "provider": provider,
+        "message": "CUDA (GPU)" if "CUDAExecutionProvider" in provider else "CPU",
+    }
+
+if loaded_sessions:
+    info = get_runtime_info()
+    print(f"🖥️ RUNTIME: {info['message']}")
 
 # --- HELPER ---
 def encode_image_to_base64(img_array):

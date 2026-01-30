@@ -5,7 +5,7 @@ from typing import List
 import uvicorn
 
 # Import các hàm xử lý AI
-from inference import run_aura_inference, run_batch_inference
+from inference import run_aura_inference, run_batch_inference, get_runtime_info
 from trainer import run_retraining_process
 
 app = FastAPI(title="AURA AI Microservice", version="2.0")
@@ -21,6 +21,11 @@ app.add_middleware(
 @app.get("/")
 def health_check():
     return {"status": "healthy", "service": "aura-ai-core"}
+
+@app.get("/runtime")
+def runtime_info():
+    """Kiểm tra đang chạy CUDA (GPU) hay CPU."""
+    return get_runtime_info()
 
 # --- 1. XỬ LÝ ẢNH ĐƠN (Giữ nguyên) ---
 @app.post("/analyze")
