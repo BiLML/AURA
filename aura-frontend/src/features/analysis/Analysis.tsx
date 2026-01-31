@@ -74,7 +74,7 @@ const AnalysisResult: React.FC = () => {
         }
         if (id) {
             try {
-                const res = await fetch(`http://103.200.23.81:8000/api/v1/medical-records/${id}`, {
+                const res = await fetch(`https://aurahealth.name.vn/api/v1/medical-records/${id}`, {
                     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                 });
                 if (res.ok) {

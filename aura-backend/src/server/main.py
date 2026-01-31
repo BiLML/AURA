@@ -9,11 +9,12 @@ from api import auth, users, medical_records, clinic, billing, admin, chat, doct
 app = FastAPI(title="Aura AI Backend")
 
 origins = [
-    "http://localhost:5173",    # Frontend của bạn
-    "http://127.0.0.1:5173",    # Dự phòng
-    "http://103.200.23.81",      # <-- QUAN TRỌNG: IP VPS của bạn
-    "http://103.200.23.81:80",   # <-- Cổng web mặc định
-    "*"
+    "http://localhost:5173",       # Localhost
+    "http://127.0.0.1:5173",       # Localhost IP
+    "https://aurahealth.name.vn",      # <--- QUAN TRỌNG: Domain chính (HTTPS)
+    "https://www.aurahealth.name.vn",  # <--- Domain có www (HTTPS)
+    "http://103.200.23.81",        # IP gốc (Dự phòng)
+    "*"                            # Cho phép tất cả (Chỉ dùng khi test, nên hạn chế khi chạy thật)
 ]
 
 # Cấu hình CORS
