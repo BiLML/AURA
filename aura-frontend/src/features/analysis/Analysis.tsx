@@ -74,7 +74,7 @@ const AnalysisResult: React.FC = () => {
         }
         if (id) {
             try {
-                const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/medical-records/${id}`, {
+                const res = await fetch(`http://103.200.23.81:8000/api/v1/medical-records/${id}`, {
                     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                 });
                 if (res.ok) {

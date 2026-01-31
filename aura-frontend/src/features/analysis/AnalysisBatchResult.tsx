@@ -25,7 +25,7 @@ const AnalysisBatchResult: React.FC = () => {
             }
 
             try {
-                const userRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me`, {
+                const userRes = await fetch('http://103.200.23.81:8000/api/v1/users/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -86,7 +86,7 @@ const AnalysisBatchResult: React.FC = () => {
                 const token = localStorage.getItem('token');
                 
                 // CẬP NHẬT: Limit = 200 để lấy đủ danh sách nếu upload nhiều
-                const apiEndpoint = `${import.meta.env.VITE_API_URL}api/v1/medical-records/?limit=200&t=${Date.now()}`;
+                const apiEndpoint = `http://103.200.23.81:8000/api/v1/medical-records/?limit=200&t=${Date.now()}`;
 
                 try {
                     const res = await fetch(apiEndpoint, {
