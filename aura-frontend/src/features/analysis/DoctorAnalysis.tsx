@@ -207,7 +207,7 @@ const DoctorAnalysis: React.FC = () => {
                 ai_detailed_report: reportContent,
                 doctor_drawing: drawingBase64 
             };
-            const res = await fetch(`http://localhost:8000/api/v1/doctor/records/${id}/diagnosis`, {
+            const res = await fetch(`https://aurahealth.name.vn/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
