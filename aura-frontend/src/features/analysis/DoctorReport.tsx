@@ -37,7 +37,7 @@ const DoctorReport: React.FC = () => {
             if (!id || !token) return;
 
             try {
-                const res = await fetch(`http://103.200.23.81:8000/api/v1/doctor/records/${id}/report-detail`, {
+                const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/doctor/records/${id}/report-detail`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -85,7 +85,7 @@ const DoctorReport: React.FC = () => {
                 feedback_for_ai: feedbackContent 
             };
 
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/doctor/records/${id}/diagnosis`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/doctor/records/${id}/diagnosis`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

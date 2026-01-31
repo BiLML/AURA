@@ -16,7 +16,7 @@ const ForgotPassword = () => {
         setMessage('');
 
         try {
-            const response = await fetch('http://103.200.23.81:8000/api/v1/auth/forgot-password', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/forgot-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),

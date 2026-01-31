@@ -88,7 +88,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/chats', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/chats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -118,7 +118,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const historyRes = await fetch('http://103.200.23.81:8000/api/v1/medical-records/', {
+            const historyRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/medical-records/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -159,7 +159,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return null;
         try {
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/chats/history/${partnerId}`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/chats/history/${partnerId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -179,7 +179,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (token) {
             setChatData(prev => prev.map(c => c.id === partnerId ? { ...c, unread: false } : c));
-            await fetch(`http://103.200.23.81:8000/api/v1/chats/read/${partnerId}`, {
+            await fetch(`${import.meta.env.VITE_API_URL}/api/v1/chats/read/${partnerId}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -191,7 +191,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/v1/users/me/notifications', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -231,7 +231,7 @@ const Dashboard: React.FC = () => {
         });
         try {
             const token = localStorage.getItem('token');
-            await fetch('http://103.200.23.81:8000/api/v1/chats/send', {
+            await fetch(`${import.meta.env.VITE_API_URL}/api/v1/chats/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ receiver_id: selectedChatId, content: textToSend })
@@ -270,7 +270,7 @@ const Dashboard: React.FC = () => {
             if (clinicImages.front) formData.append('logo', clinicImages.front); 
             else if (clinicImages.back) formData.append('logo', clinicImages.back);
 
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/register', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/register`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -309,7 +309,7 @@ const Dashboard: React.FC = () => {
             const token = localStorage.getItem('token');
             if (!token) { navigate('/login'); return; }
             try {
-                const userResponse = await fetch('http://103.200.23.81:8000/api/v1/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                const userResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!userResponse.ok) { handleLogout(); return; }
                 const userData = await userResponse.json();
                 const info = userData.user_info || userData;
@@ -335,7 +335,7 @@ const Dashboard: React.FC = () => {
 
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/users/me/privacy', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me/privacy`, {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json', 
@@ -367,7 +367,7 @@ const Dashboard: React.FC = () => {
         if (!token) return;
 
         try {
-            const pkgRes = await fetch('http://103.200.23.81:8000/api/v1/billing/packages', {
+            const pkgRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/packages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (pkgRes.ok) {
@@ -376,7 +376,7 @@ const Dashboard: React.FC = () => {
                 setPackages(userPackages);
             }
 
-            const subRes = await fetch('http://103.200.23.81:8000/api/v1/billing/my-usage', { 
+            const subRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/my-usage`, { 
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (subRes.ok) {
@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
                 });
             }
 
-            const txRes = await fetch('http://103.200.23.81:8000/api/v1/billing/my-transactions', {
+            const txRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/my-transactions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (txRes.ok) {
@@ -405,7 +405,7 @@ const Dashboard: React.FC = () => {
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/billing/subscribe', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/subscribe`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',

@@ -28,7 +28,7 @@ const Register = () => {
     }
 
     try {
-      const API_URL = 'https://aurahealth.name.vn/api/v1/auth/register'; 
+      const API_URL = `${import.meta.env.VITE_API_URL}/api/v1/auth/register`; 
       
       const response = await fetch(API_URL, {
         method: 'POST',

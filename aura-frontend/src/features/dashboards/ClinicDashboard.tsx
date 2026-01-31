@@ -125,7 +125,7 @@ const ClinicDashboard: React.FC = () => {
         if (!token) { navigate('/login'); return; }
 
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/dashboard-data', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/dashboard-data`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -136,7 +136,7 @@ const ClinicDashboard: React.FC = () => {
                 setDoctors(data.doctors || []);
             }
 
-            const meRes = await fetch('http://103.200.23.81:8000/api/v1/users/me', { 
+            const meRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me`, { 
                 headers: { 'Authorization': `Bearer ${token}` } 
             });
             if (meRes.ok) {
@@ -151,7 +151,7 @@ const ClinicDashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/medical-records/clinic-history-split', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/medical-records/clinic-history-split`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -177,12 +177,12 @@ const ClinicDashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const pkgRes = await fetch('http://103.200.23.81:8000/api/v1/billing/packages', { headers: { 'Authorization': `Bearer ${token}` } });
+            const pkgRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/packages`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (pkgRes.ok) {
                 const data = await pkgRes.json();
                 setPackages(data.filter((p: any) => p.target_role === 'CLINIC'));
             }
-            const subRes = await fetch('http://103.200.23.81:8000/api/v1/billing/my-usage', { headers: { 'Authorization': `Bearer ${token}` } });
+            const subRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/my-usage`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (subRes.ok) {
                 const subData = await subRes.json();
                 setMySub({
@@ -192,7 +192,7 @@ const ClinicDashboard: React.FC = () => {
                     expiry: subData.expiry || subData.expires_at || null
                 });
             }
-            const txRes = await fetch('http://103.200.23.81:8000/api/v1/billing/my-transactions', { headers: { 'Authorization': `Bearer ${token}` } });
+            const txRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/my-transactions`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (txRes.ok) setTransactions(await txRes.json());
         } catch (error) { console.error("Lỗi billing:", error); }
     }, []);
@@ -201,7 +201,7 @@ const ClinicDashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/users/me/notifications', { headers: { 'Authorization': `Bearer ${token}` } });
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me/notifications`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
                 setNotifications(data.notifications || []);
@@ -213,7 +213,7 @@ const ClinicDashboard: React.FC = () => {
         setLoadingReport(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/clinics/reports/campaign?start_date=${dateRange.start}T00:00:00&end_date=${dateRange.end}T23:59:59`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/reports/campaign?start_date=${dateRange.start}T00:00:00&end_date=${dateRange.end}T23:59:59`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) setReportData(await res.json());
@@ -247,7 +247,7 @@ const ClinicDashboard: React.FC = () => {
     const searchDoctors = async (query: string) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/clinics/doctors/available?query=${query}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/doctors/available?query=${query}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) { 
                 const data = await res.json(); 
                 const foundDoctors = data.doctors || [];
@@ -261,7 +261,7 @@ const ClinicDashboard: React.FC = () => {
     const handleAddExistingDoctor = async (doctorId: string) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/add-user', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/add-user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ user_id: doctorId })
@@ -283,7 +283,7 @@ const ClinicDashboard: React.FC = () => {
     const searchPatients = async (query: string) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/clinics/patients/available?query=${query}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/patients/available?query=${query}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) { 
                 const data = await res.json(); 
                 setAvailablePatients((data.patients || []).filter((p: any) => !patients.some(existingPatient => existingPatient.id === p.id))); 
@@ -296,7 +296,7 @@ const ClinicDashboard: React.FC = () => {
     const handleAddExistingPatient = async (patientId: string) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/add-user', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/add-user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ user_id: patientId })
@@ -319,7 +319,7 @@ const ClinicDashboard: React.FC = () => {
         if (!selectedPatient || !targetDoctorId) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/clinics/assign-patient', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/assign-patient`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ patient_id: selectedPatient.id, doctor_id: targetDoctorId })
@@ -334,7 +334,7 @@ const ClinicDashboard: React.FC = () => {
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/billing/subscribe', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/billing/subscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ package_id: pkg.id })
@@ -355,7 +355,7 @@ const ClinicDashboard: React.FC = () => {
 
     const handleDownloadCSV = async () => {
         const token = localStorage.getItem('token');
-        const url = `http://103.200.23.81:8000/api/v1/clinics/reports/export/research?start_date=${dateRange.start}T00:00:00&end_date=${dateRange.end}T23:59:59`;
+        const url = `${import.meta.env.VITE_API_URL}/api/v1/clinics/reports/export/research?start_date=${dateRange.start}T00:00:00&end_date=${dateRange.end}T23:59:59`;
         try {
             const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
@@ -376,7 +376,7 @@ const ClinicDashboard: React.FC = () => {
         setPrivacyConsent(newValue);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/users/me/privacy', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me/privacy`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ consent_for_training: newValue })

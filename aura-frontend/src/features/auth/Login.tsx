@@ -35,7 +35,7 @@ const Login = () => {
     const loginWithGoogle = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             try {
-                const response = await fetch('http://103.200.23.81:8000/api/v1/auth/google-login', {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/google-login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: tokenResponse.access_token }),
@@ -53,7 +53,7 @@ const Login = () => {
     // --- FACEBOOK ---
     const handleFacebookResponse = async (response: any) => {
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/auth/facebook-login', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/facebook-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -78,7 +78,7 @@ const Login = () => {
             formData.append('username', userName);
             formData.append('password', password);
 
-            const response = await fetch('http://103.200.23.81:8000/api/v1/auth/login', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formData.toString(),

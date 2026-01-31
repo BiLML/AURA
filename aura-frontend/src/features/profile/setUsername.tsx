@@ -39,7 +39,7 @@ const SetUsername = () => {
                 return;
             }
 
-            const res = await fetch('http://103.200.23.81:8000/api/v1/users/set-username', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/set-username`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

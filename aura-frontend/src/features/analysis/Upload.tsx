@@ -47,7 +47,7 @@ const Upload: React.FC = () => {
             try {
                 await new Promise(r => setTimeout(r, 500)); 
 
-                const userRes = await fetch('http://103.200.23.81:8000/api/v1/users/me', {
+                const userRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/me`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -61,7 +61,7 @@ const Upload: React.FC = () => {
                     setUserName(info.full_name || info.userName || info.username || 'User');
 
                     if (['clinic', 'doctor'].includes(currentRole)) {
-                        const clinicRes = await fetch('http://103.200.23.81:8000/api/v1/clinics/dashboard-data', {
+                        const clinicRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/dashboard-data`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
                         if (clinicRes.ok) {
@@ -131,7 +131,7 @@ const Upload: React.FC = () => {
         if (selectedFiles.length === 0) return;
         setIsUploading(true);
         
-        const BACKEND_API = 'http://103.200.23.81:8000/api/v1/medical-records/batch-analyze';
+        const BACKEND_API = `${import.meta.env.VITE_API_URL}/api/v1/medical-records/batch-analyze`;
         const token = localStorage.getItem('token');
 
         try {
@@ -183,7 +183,7 @@ const Upload: React.FC = () => {
         setIsFetchingCloud(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/medical-records/cloud-device-images', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/medical-records/cloud-device-images`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -213,7 +213,7 @@ const Upload: React.FC = () => {
         const token = localStorage.getItem('token');
         
         try {
-            const res = await fetch('http://103.200.23.81:8000/api/v1/medical-records/analyze-cloud-urls', {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/medical-records/analyze-cloud-urls`, {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Bearer ${token}`,

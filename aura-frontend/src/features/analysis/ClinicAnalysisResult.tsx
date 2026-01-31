@@ -40,7 +40,7 @@ const ClinicAnalysisResult: React.FC = () => {
         if (!id || !token) return;
 
         try {
-            const res = await fetch(`http://103.200.23.81:8000/api/v1/clinics/medical-records/${id}/detail`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/clinics/medical-records/${id}/detail`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
