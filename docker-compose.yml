@@ -29,6 +29,7 @@ services:
     env_file:
       - ./aura-backend/.env 
     volumes:
+      - ./aura-backend/src/ai_service/ai_onnx:/app/ai_onnx
       - ./aura-backend:/app
     # Tạm thời bỏ phần GPU nếu VPS không hỗ trợ hoặc chưa cài Toolkit
     deploy:
@@ -51,7 +52,7 @@ services:
       - ./aura-backend/.env
     environment:
       - DATABASE_URL=postgresql://aura_user:aura_password@postgres_db:5432/aura_db
-      - AI_SERVICE_URL=http://ai_service:8001/analyze 
+      - AI_SERVICE_URL=http://aura_ai_core:8001/analyze 
       - PYTHONPATH=/app/src
     volumes:
       - ./aura-backend:/app
@@ -64,7 +65,7 @@ services:
     build: ./aura-frontend
     container_name: aura_frontend
     ports:
-      - "80:5173" # Đổi cổng ra ngoài thành 80 để truy cập trực tiếp qua IP
+      - "5173:5173" # Đổi cổng ra ngoài thành 80 để truy cập trực tiếp qua IP
     depends_on:
       - backend_core
     volumes:
