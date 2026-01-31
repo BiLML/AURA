@@ -64,7 +64,7 @@ services:
     build: ./aura-frontend
     container_name: aura_frontend
     ports:
-      - "80:5173" # Đổi cổng ra ngoài thành 80 để truy cập trực tiếp qua IP
+      - "5173:5173" # Đổi cổng ra ngoài thành 80 để truy cập trực tiếp qua IP
     depends_on:
       - backend_core
     volumes:
