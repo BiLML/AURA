@@ -5,16 +5,19 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // 1. Cho phép Docker map port ra ngoài (quan trọng nhất)
+    // 1. Cho phép Docker map port ra ngoài
     host: true, 
     
-    // 2. Cố định port 5173 để khớp với docker-compose.yml
+    // 2. Cố định port 5173
     port: 5173, 
     
-    // 3. Nếu port 5173 bận thì báo lỗi luôn chứ không tự đổi sang port khác
+    // 3. Không tự đổi port
     strictPort: true,
+
+    // 👇 THÊM DÒNG NÀY ĐỂ SỬA LỖI BLOCKED REQUEST 👇
+    allowedHosts: ['aurahealth.name.vn'],
     
-    // 4. Cơ chế này giúp Hot Reload hoạt động mượt mà trên Docker (Windows/Linux)
+    // 4. Hot Reload trên Docker
     watch: {
       usePolling: true,
     },
