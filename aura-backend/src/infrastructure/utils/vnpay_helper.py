@@ -9,15 +9,14 @@ class VNPay:
     def get_payment_url(self, vnp_Url, secret_key):
         """
         Tạo URL thanh toán gửi sang VNPay.
-        Hàm này sẽ sắp xếp các tham số theo thứ tự bảng chữ cái, 
-        nối chuỗi và mã hóa HMAC-SHA512 bằng secret_key.
+        SỬA LỖI: Dùng trực tiếp queryString để hash vì nó đã chứa dữ liệu được mã hóa chuẩn.
         """
         inputData = sorted(self.requestData.items())
         queryString = ""
-        hasData = ""
         seq = 0
         for key, val in inputData:
             if seq == 1:
+                # Mã hóa value tham số (ví dụ: dấu cách thành +, : thành %3A)
                 encoded_val = urllib.parse.quote_plus(str(val))
                 queryString = queryString + "&" + key + "=" + encoded_val
             else:
@@ -25,18 +24,15 @@ class VNPay:
                 encoded_val = urllib.parse.quote_plus(str(val))
                 queryString = key + "=" + encoded_val
 
-        hashValue = self.__hmacsha512(secret_key, hasData)
+        # [QUAN TRỌNG] Hash chính cái chuỗi queryString vừa tạo
+        hashValue = self.__hmacsha512(secret_key, queryString)
+        
         return vnp_Url + "?" + queryString + "&vnp_SecureHash=" + hashValue
 
     def validate_response(self, secret_key):
-        """
-        Kiểm tra tính toàn vẹn của dữ liệu trả về từ VNPay.
-        Hàm này lấy tất cả tham số vnp_ trả về, tái tạo chuỗi mã hóa 
-        và so sánh với vnp_SecureHash xem có khớp không.
-        """
         vnp_SecureHash = self.responseData.get('vnp_SecureHash')
         
-        # Loại bỏ các tham số hash để chuẩn bị tính toán lại
+        # Loại bỏ các tham số hash để tính toán lại
         if 'vnp_SecureHash' in self.responseData:
             self.responseData.pop('vnp_SecureHash')
             
@@ -48,7 +44,6 @@ class VNPay:
         seq = 0
         
         for key, val in inputData:
-            # Chỉ lấy các tham số bắt đầu bằng vnp_
             if str(key).startswith('vnp_'):
                 if seq == 1:
                     hasData = hasData + "&" + str(key) + "=" + urllib.parse.quote_plus(str(val))
@@ -57,8 +52,6 @@ class VNPay:
                     hasData = str(key) + "=" + urllib.parse.quote_plus(str(val))
 
         hashValue = self.__hmacsha512(secret_key, hasData)
-        
-        # So sánh chữ ký tính được với chữ ký VNPay gửi về
         return vnp_SecureHash == hashValue
 
     def __hmacsha512(self, key, data):
