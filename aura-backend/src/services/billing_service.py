@@ -59,7 +59,7 @@ class BillingService:
         payment_url = self.payment_gateway.create_payment_link(
             order_id=str(tx.id),
             amount=pkg.price,
-            order_info=f"Thanh toan goi {pkg.name}",
+            order_info=f"ThanhToanAura_{pkg.limit}",
             ip_addr=ip_address
         )
         

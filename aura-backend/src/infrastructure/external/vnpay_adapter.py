@@ -12,7 +12,8 @@ class VNPayAdapter(IPaymentGateway):
     def __init__(self):
         # [FIX] Lấy cấu hình từ biến môi trường (Docker/Env)
         self.tmn_code = os.getenv("VNP_TMN_CODE")
-        self.secret_key = os.getenv("VNP_HASH_SECRET")
+        raw_secret = os.getenv("VNP_HASH_SECRET", "")
+        self.secret_key = raw_secret.strip()
         self.vnp_url = os.getenv("VNP_URL")
         self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         
