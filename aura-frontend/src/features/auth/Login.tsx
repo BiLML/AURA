@@ -158,7 +158,7 @@ const Login = () => {
 
                     {/* Nút Facebook đã được làm sạch style để đồng bộ */}
                     <FacebookLogin
-                        appId="1874060756652806"
+                        appId="1383927066801418"
                         onSuccess={handleFacebookResponse}
                         onFail={(error) => console.log('Login Failed!', error)}
                         className="social-button facebook-btn-custom"
