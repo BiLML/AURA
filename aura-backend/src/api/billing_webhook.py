@@ -1,5 +1,6 @@
 import re
 import os
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 
@@ -75,13 +76,19 @@ async def sepay_webhook_handler(
     # 5. Gọi Service kích hoạt gói
     # Hàm này sẽ tìm transaction theo ID, check số tiền, và cộng lượt
     try:
+        # FIX: Chuẩn hóa UUID string về dạng có dấu gạch ngang (xxxxxxxx-xxxx...)
+        # Nếu chuỗi đầu vào thiếu dấu gạch ngang, uuid.UUID() sẽ tự nhận diện
+        # và str() sẽ trả về format chuẩn.
+        formatted_order_id = str(uuid.UUID(order_id)) 
+
         result = service.confirm_sepay_transaction(
-            order_id_str=order_id, # Truyền chuỗi (có thể thiếu dash) vào
+            order_id_str=formatted_order_id, 
             amount=amount_in
         )
         print(f"✅ Kết quả xử lý: {result}")
+    except ValueError:
+        print("❌ Lỗi: Transaction ID không đúng định dạng UUID")
+        return {"success": False, "message": "Invalid UUID format"}
     except Exception as e:
         print(f"❌ Lỗi xử lý Service: {e}")
         return {"success": False, "message": str(e)}
-
-    return {"success": True}
