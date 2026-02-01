@@ -164,22 +164,33 @@ class BillingService:
             })
         return results
     
-    def confirm_sepay_transaction(self, order_id: str, amount: int):
+    def confirm_sepay_transaction(self, order_id_str: str, amount: int):
         """
-        Hàm dành riêng cho SePay Webhook.
-        Bỏ qua bước validate_callback phức tạp của VNPay vì Webhook đã check API Key rồi.
+        Xử lý Webhook SePay:
+        1. Chuẩn hóa UUID (thêm dash nếu thiếu)
+        2. Tìm transaction
+        3. Kích hoạt gói
         """
         try:
-            tx = self.billing_repo.get_transaction_by_id(UUID(order_id))
-        except:
-            return {"success": False, "message": "Invalid UUID"}
+            # Tự động convert chuỗi (kể cả thiếu dash) thành UUID chuẩn
+            # Ví dụ: "c69bfd319..." -> UUID("c69bfd31-9...")
+            real_uuid = UUID(order_id_str)
+        except ValueError:
+            return {"success": False, "message": "Invalid UUID format"}
 
-        if not tx: 
+        # Tìm giao dịch trong DB
+        tx = self.billing_repo.get_transaction_by_id(real_uuid)
+        if not tx:
             return {"success": False, "message": "Transaction not found"}
         
-        # Nếu đã thành công rồi thì thôi
-        if tx.status == "SUCCESS": 
+        # Nếu đã thành công rồi thì bỏ qua
+        if tx.status == "SUCCESS":
             return {"success": True, "message": "Already processed"}
+
+        # Kiểm tra số tiền (Cho phép sai số nhỏ hoặc >= giá gói)
+        # Lưu ý: amount từ webhook là int, tx.amount là Decimal
+        if float(amount) < float(tx.amount):
+             return {"success": False, "message": "Insufficient amount"}
 
         # Kích hoạt gói
         self.billing_repo.update_transaction_status(tx.id, "SUCCESS")

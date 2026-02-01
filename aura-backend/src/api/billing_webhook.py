@@ -25,7 +25,7 @@ def extract_order_id(content: str) -> str:
         return None
     
     # Regex tìm chuỗi UUID chuẩn
-    uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    uuid_pattern = r'[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}'
     match = re.search(uuid_pattern, content.lower())
     
     if match:
@@ -74,11 +74,14 @@ async def sepay_webhook_handler(
 
     # 5. Gọi Service kích hoạt gói
     # Hàm này sẽ tìm transaction theo ID, check số tiền, và cộng lượt
-    result = service.confirm_sepay_transaction(
-        order_id=order_id,
-        amount=amount_in
-    )
-    
-    print(f"✅ Kết quả kích hoạt: {result}")
+    try:
+        result = service.confirm_sepay_transaction(
+            order_id_str=order_id, # Truyền chuỗi (có thể thiếu dash) vào
+            amount=amount_in
+        )
+        print(f"✅ Kết quả xử lý: {result}")
+    except Exception as e:
+        print(f"❌ Lỗi xử lý Service: {e}")
+        return {"success": False, "message": str(e)}
 
     return {"success": True}
