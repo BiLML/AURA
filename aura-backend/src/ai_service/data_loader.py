@@ -1,5 +1,6 @@
 # aura-backend/ai_service/data_loader.py
 import os
+print(">>>> TÔI LÀ CODE MỚI - DATABASE_URL HIỆN TẠI LÀ:", os.getenv("DATABASE_URL")) # <--- THÊM DÒNG NÀY
 import psycopg2
 import cv2
 import numpy as np
