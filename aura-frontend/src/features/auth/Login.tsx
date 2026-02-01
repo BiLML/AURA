@@ -174,6 +174,16 @@ const Login = () => {
                         <i className="fab fa-facebook-f"></i> Login with Facebook
                     </FacebookLogin>
 
+                    <div className="policy-note" style={{ marginTop: '20px', fontSize: '0.8em', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
+                        Bằng cách đăng nhập, bạn đồng ý với 
+                        <span 
+                            onClick={() => navigate('/privacy')} 
+                            style={{ cursor: 'pointer', textDecoration: 'underline', marginLeft: '5px' }}
+                        >
+                            Chính sách và Điều khoản
+                        </span> của chúng tôi.
+                    </div>
+
                     <div className="register-section" style={{marginTop: '20px'}}>
                         <p style={{display: 'inline', color: 'rgba(255,255,255,0.8)'}}>Don't have an account?</p>
                         <span

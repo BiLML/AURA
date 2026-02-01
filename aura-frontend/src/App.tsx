@@ -7,6 +7,7 @@ import Login from './features/auth/Login';
 import Register from './features/auth/Register';
 import ForgotPassword from './features/auth/ForgotPassword';
 import ResetPassword from './features/auth/ResetPassword';
+import PrivacyAndTerms from './features/auth/privacy';
 
 // Dashboards
 import Dashboard from './features/dashboards/dashboard';
@@ -72,6 +73,7 @@ const App: React.FC = () => {
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/privacy" element={<PrivacyAndTerms />} />
 
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/admin" element={<DashboardAdmin />} />
