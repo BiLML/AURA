@@ -67,7 +67,7 @@ class BillingService:
         payment_url = gateway.create_payment_link(
             order_id=str(tx.id),
             amount=pkg.price,
-            order_info=f"ThanhToanAura_{pkg.limit}", # Lưu ý: Không dấu, không cách
+            order_info=f"ThanhToanAura_{pkg.analysis_limit}",
             ip_addr=ip_address
         )
         
