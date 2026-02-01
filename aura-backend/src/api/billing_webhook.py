@@ -11,7 +11,7 @@ from core.database import get_db
 # 2. Import Dependency (Lấy từ file medical_records hoặc billing nơi bạn đã viết hàm này)
 # Lưu ý: Nếu bạn chưa tách hàm get_billing_service ra file riêng (dependencies.py),
 # bạn có thể import nó từ api.v1.medical_records hoặc copy lại hàm đó vào đây.
-from api.medical_records import get_billing_service 
+from api.billing import get_billing_service
 
 router = APIRouter()
 
