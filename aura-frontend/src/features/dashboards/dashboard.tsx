@@ -191,7 +191,7 @@ const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/v1/users/me/notifications', {
+            const res = await fetch('http://aurahealth.name.vn/api/v1/users/me/notifications', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
