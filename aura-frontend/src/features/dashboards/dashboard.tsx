@@ -838,11 +838,11 @@ if (activeTab === 'messages') {
                                             </td>
                                             <td style={styles.td}>
                                                 <span style={{
-                                                    background: tx.status === 'SUCCESS' ? '#dcfce7' : '#fee2e2',
-                                                    color: tx.status === 'SUCCESS' ? '#166534' : '#991b1b',
+                                                    background: tx.status === 'SUCCESS' ? '#dcfce7' : (tx.status === 'PENDING' ? '#fff7ed' : '#fee2e2'),
+                                                    color: tx.status === 'SUCCESS' ? '#166534' : (tx.status === 'PENDING' ? '#c2410c' : '#991b1b'),
                                                     padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold'
                                                 }}>
-                                                    {tx.status === 'SUCCESS' ? 'Thành công' : 'Thất bại'}
+                                                    {tx.status === 'SUCCESS' ? 'Thành công' : (tx.status === 'PENDING' ? 'Đang xử lý' : 'Thất bại')}
                                                 </span>
                                             </td>
                                         </tr>

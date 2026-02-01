@@ -14,7 +14,7 @@ class SePayAdapter(IPaymentGateway):
         
         # [QUAN TRỌNG] Nội dung chuyển khoản phải chứa order_id (hoặc code riêng) để nhận diện
         # Ví dụ: Aura123 (Aura là prefix, 123 là transaction id)
-        transfer_content = f"Aura{order_id}" 
+        transfer_content = f"SEVQR Aura{order_id}"
         
         base_url = "https://qr.sepay.vn/img"
         params = {
