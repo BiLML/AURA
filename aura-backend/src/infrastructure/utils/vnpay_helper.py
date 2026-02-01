@@ -18,12 +18,12 @@ class VNPay:
         seq = 0
         for key, val in inputData:
             if seq == 1:
-                queryString = queryString + "&" + key + "=" + urllib.parse.quote_plus(str(val))
-                hasData = hasData + "&" + str(key) + "=" + str(val)
+                encoded_val = urllib.parse.quote_plus(str(val))
+                queryString = queryString + "&" + key + "=" + encoded_val
             else:
                 seq = 1
-                queryString = key + "=" + urllib.parse.quote_plus(str(val))
-                hasData = str(key) + "=" + str(val)
+                encoded_val = urllib.parse.quote_plus(str(val))
+                queryString = key + "=" + encoded_val
 
         hashValue = self.__hmacsha512(secret_key, hasData)
         return vnp_Url + "?" + queryString + "&vnp_SecureHash=" + hashValue
@@ -51,10 +51,10 @@ class VNPay:
             # Chỉ lấy các tham số bắt đầu bằng vnp_
             if str(key).startswith('vnp_'):
                 if seq == 1:
-                    hasData = hasData + "&" + str(key) + "=" + str(val)
+                    hasData = hasData + "&" + str(key) + "=" + urllib.parse.quote_plus(str(val))
                 else:
                     seq = 1
-                    hasData = str(key) + "=" + str(val)
+                    hasData = str(key) + "=" + urllib.parse.quote_plus(str(val))
 
         hashValue = self.__hmacsha512(secret_key, hasData)
         
