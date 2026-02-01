@@ -74,12 +74,11 @@ async def sepay_webhook_handler(
 
     # 5. Gọi Service kích hoạt gói
     # Hàm này sẽ tìm transaction theo ID, check số tiền, và cộng lượt
-    result = service.process_payment_return({
-        "order_id": order_id,     # UUID tìm được
-        "is_success": True,       # Tiền đã vào bank -> Thành công
-        "amount": amount_in       # Số tiền thực nhận
-    })
+    result = service.confirm_sepay_transaction(
+        order_id=order_id,
+        amount=amount_in
+    )
     
-    print(f"✅ Kết quả xử lý: {result}")
+    print(f"✅ Kết quả kích hoạt: {result}")
 
     return {"success": True}

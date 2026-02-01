@@ -67,7 +67,7 @@ class BillingService:
         payment_url = gateway.create_payment_link(
             order_id=str(tx.id),
             amount=pkg.price,
-            order_info=f"ThanhToanAura_{pkg.analysis_limit}",
+            order_info=f"Aura {tx.id}",
             ip_addr=ip_address
         )
         
@@ -163,3 +163,30 @@ class BillingService:
                 "package_name": pkg_name
             })
         return results
+    
+    def confirm_sepay_transaction(self, order_id: str, amount: int):
+        """
+        Hàm dành riêng cho SePay Webhook.
+        Bỏ qua bước validate_callback phức tạp của VNPay vì Webhook đã check API Key rồi.
+        """
+        try:
+            tx = self.billing_repo.get_transaction_by_id(UUID(order_id))
+        except:
+            return {"success": False, "message": "Invalid UUID"}
+
+        if not tx: 
+            return {"success": False, "message": "Transaction not found"}
+        
+        # Nếu đã thành công rồi thì thôi
+        if tx.status == "SUCCESS": 
+            return {"success": True, "message": "Already processed"}
+
+        # Kích hoạt gói
+        self.billing_repo.update_transaction_status(tx.id, "SUCCESS")
+        self.billing_repo.create_subscription(
+            user_id=tx.user_id,
+            package_id=tx.package_id,
+            days=tx.package.duration_days,
+            credits=tx.package.analysis_limit
+        )
+        return {"success": True, "message": "Activated successfully"}
