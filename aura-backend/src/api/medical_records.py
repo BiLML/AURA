@@ -20,6 +20,7 @@ from infrastructure.repositories.billing_repo import BillingRepository
 from infrastructure.repositories.audit_repo import AuditRepository
 
 from infrastructure.external.vnpay_adapter import VNPayAdapter
+from infrastructure.external.sepay_adapter import SePayAdapter
 
 router = APIRouter()
 
@@ -28,8 +29,17 @@ router = APIRouter()
 def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
     billing_repo = BillingRepository(db)
     audit_repo = AuditRepository(db)
-    payment_gateway = VNPayAdapter()
-    return BillingService(billing_repo=billing_repo, audit_repo=audit_repo, payment_gateway=payment_gateway, db=db)
+    gateways = {
+        "VNPAY": VNPayAdapter(),
+        "SEPAY": SePayAdapter()
+    }
+    
+    return BillingService(
+        billing_repo=billing_repo, 
+        audit_repo=audit_repo, 
+        gateways=gateways, 
+        db=db
+    )
 
 def get_medical_service(db: Session = Depends(get_db)) -> MedicalService:
     # Bước A: Tạo Repo thực cho Medical

@@ -53,7 +53,7 @@ async def sepay_webhook_handler(
         print("❌ LỖI: Chưa cấu hình SEPAY_API_KEY trong file .env")
         return {"success": False, "message": "Server Config Error"}
     
-    if not authorization or authorization != f"Bearer {MY_SEPAY_API_KEY}":
+    if not authorization or authorization != f"Apikey {MY_SEPAY_API_KEY}":
         # SePay yêu cầu trả về 200 kể cả lỗi để không retry liên tục, nhưng print log ra để debug
         print(f"❌ Fake Webhook Request: {authorization}")
         return {"success": False, "message": "Unauthorized"}

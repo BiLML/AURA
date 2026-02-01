@@ -16,6 +16,7 @@ from models.enums import UserRole
 from infrastructure.repositories.billing_repo import BillingRepository
 from infrastructure.repositories.audit_repo import AuditRepository
 from infrastructure.external.vnpay_adapter import VNPayAdapter
+from infrastructure.external.sepay_adapter import SePayAdapter 
 
 router = APIRouter()
 
@@ -23,14 +24,17 @@ router = APIRouter()
 def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
     billing_repo = BillingRepository(db)
     audit_repo = AuditRepository(db)
-    payment_gateway = VNPayAdapter() # Sử dụng VNPay
+    gateways = {
+            "VNPAY": VNPayAdapter(),
+            "SEPAY": SePayAdapter()
+    }
+    
     return BillingService(
         billing_repo=billing_repo, 
         audit_repo=audit_repo, 
-        payment_gateway=payment_gateway, 
+        gateways=gateways, # Truyền dict gateways vào
         db=db
     )
-
 # --- 1. ADMIN: QUẢN LÝ GÓI ---
 @router.post("/packages", response_model=PackageResponse)
 def create_package(
@@ -60,22 +64,28 @@ def list_packages(service: BillingService = Depends(get_billing_service)):
 # --- 2. USER: THANH TOÁN & GIAO DỊCH ---
 
 # [QUAN TRỌNG] API này tạo URL thanh toán (Thay thế cho subscribe trực tiếp)
-@router.post("/vnpay/create_url")
+@router.post("/payment/create-url") # Bạn có thể đổi tên thành /create-payment-url cho chuẩn
 def create_payment_url(
-    req: SubscribeRequest,
+    req: SubscribeRequest, # Cần đảm bảo Schema này có field payment_method
     request: Request,
     current_user: User = Depends(get_current_user),
     service: BillingService = Depends(get_billing_service)
 ):
     try:
+        # Lấy method từ request, mặc định là SEPAY nếu không gửi
+        # Lưu ý: Cần thêm field 'payment_method' vào SubscribeRequest trong schemas/billing_schema.py
+        # Nếu lười sửa schema, dùng getattr để tránh lỗi tạm thời:
+        method = getattr(req, "payment_method", "SEPAY") 
+        
         return service.create_payment_url(
             user_id=current_user.id,
             package_id=req.package_id,
-            ip_address=request.client.host
+            ip_address=request.client.host,
+            payment_method=method # Truyền xuống service
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+    
 # Callback từ VNPay (User không gọi trực tiếp API này)
 @router.get("/vnpay/return")
 def vnpay_return(

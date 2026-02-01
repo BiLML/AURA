@@ -39,6 +39,7 @@ class SubscriptionResponse(BaseModel):
 # --- 3. INPUT ---
 class SubscribeRequest(BaseModel):
     package_id: UUID
+    payment_method: Optional[str] = "SEPAY"
 
 class TransactionResponse(BaseModel):
     id: UUID

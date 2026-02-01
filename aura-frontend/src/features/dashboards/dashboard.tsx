@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaPaperPlane, FaTrash, FaImage, FaFileAlt, FaLock,
-    FaHome, FaComments, FaHospital, FaCreditCard, 
+    FaHome, FaComments, FaHospital, FaCreditCard, FaTimes,
     FaBell, FaSignOutAlt, FaUserCircle, FaCamera, FaCheck, FaCheckDouble, FaHistory,
     FaCog, FaToggleOn, FaToggleOff, FaUserShield 
 } from 'react-icons/fa';
@@ -82,6 +82,8 @@ const Dashboard: React.FC = () => {
     const [isBuying, setIsBuying] = useState(false);
     const [transactions, setTransactions] = useState<Transaction[]>([]); 
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);    
+    const [paymentMethod, setPaymentMethod] = useState<'SEPAY' | 'VNPAY'>('SEPAY');
+    const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
     const fetchChatData = useCallback(async () => {
@@ -405,27 +407,34 @@ const Dashboard: React.FC = () => {
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            // Gọi API tạo URL thanh toán thay vì subscribe trực tiếp
-            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/vnpay/create_url', {
+            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/payment/create-url', { 
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}` 
                 },
-                body: JSON.stringify({ package_id: pkg.id })
+                body: JSON.stringify({ 
+                    package_id: pkg.id,
+                    payment_method: paymentMethod 
+                })
             });
 
             const data = await res.json();
             
             if (res.ok && data.payment_url) {
-                // Chuyển hướng người dùng sang trang thanh toán của VNPay
-                window.location.href = data.payment_url;
+                if (paymentMethod === 'VNPAY') {
+                    // VNPay: Chuyển hướng
+                    window.location.href = data.payment_url;
+                } else {
+                    // SePay: Lưu URL để hiện Popup
+                    setQrCodeUrl(data.payment_url);
+                }
             } else {
-                alert("❌ Lỗi tạo giao dịch: " + (data.detail || "Không xác định"));
-                setIsBuying(false);
+                alert("❌ Lỗi: " + (data.detail || "Không tạo được giao dịch"));
             }
         } catch (e) {
             alert("Lỗi kết nối server");
+        } finally {
             setIsBuying(false);
         }
     };
@@ -711,6 +720,50 @@ if (activeTab === 'messages') {
                             <p style={{margin:0, opacity:0.85, fontSize:'14px', fontWeight:500}}>Số lượt còn lại</p>
                             <h1 style={{margin:0, fontSize:'52px', fontWeight:'800', textShadow: '0 2px 4px rgba(0,0,0,0.2)'}}>{mySub.credits}</h1>
                         </div>
+                    </div>
+                </div>
+
+                {/* --- CHỌN PHƯƠNG THỨC THANH TOÁN --- */}
+                <div style={{background:'white', padding:'20px', borderRadius:'16px', boxShadow:'0 4px 10px rgba(0,0,0,0.03)', border:'1px solid #e1e4e8'}}>
+                    <h3 style={{marginTop:0, marginBottom:'15px', color:'#334155', fontSize:'16px'}}>Chọn hình thức thanh toán:</h3>
+                    <div style={{display:'flex', gap:'15px'}}>
+                        <button 
+                            onClick={() => setPaymentMethod('SEPAY')}
+                            style={{
+                                flex: 1, padding:'15px', borderRadius:'12px', cursor:'pointer',
+                                border: paymentMethod === 'SEPAY' ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                                background: paymentMethod === 'SEPAY' ? '#f0fdf4' : 'white',
+                                color: paymentMethod === 'SEPAY' ? '#166534' : '#64748b',
+                                fontWeight: paymentMethod === 'SEPAY' ? 'bold' : 'normal',
+                                display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <FaCreditCard size={20} color={paymentMethod === 'SEPAY' ? "#16a34a" : "#94a3b8"}/> 
+                            <div>
+                                <div style={{fontSize:'15px'}}>Quét QR (SePay)</div>
+                                <div style={{fontSize:'12px', opacity:0.8, fontWeight:'normal'}}>Kích hoạt tự động</div>
+                            </div>
+                        </button>
+                        
+                        <button 
+                            onClick={() => setPaymentMethod('VNPAY')}
+                            style={{
+                                flex: 1, padding:'15px', borderRadius:'12px', cursor:'pointer',
+                                border: paymentMethod === 'VNPAY' ? '2px solid #007bff' : '1px solid #e2e8f0',
+                                background: paymentMethod === 'VNPAY' ? '#eff6ff' : 'white',
+                                color: paymentMethod === 'VNPAY' ? '#1d4ed8' : '#64748b',
+                                fontWeight: paymentMethod === 'VNPAY' ? 'bold' : 'normal',
+                                display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <FaCreditCard size={20} color={paymentMethod === 'VNPAY' ? "#007bff" : "#94a3b8"}/> 
+                            <div>
+                                <div style={{fontSize:'15px'}}>Thẻ ATM / VNPay</div>
+                                <div style={{fontSize:'12px', opacity:0.8, fontWeight:'normal'}}>Cổng thanh toán</div>
+                            </div>
+                        </button>
                     </div>
                 </div>
 
@@ -1011,7 +1064,42 @@ if (activeTab === 'messages') {
                 </header>
                 <div style={styles.contentBody}>{renderContent()}</div>
             </main>
+            
+            {qrCodeUrl && (
+                <div style={{
+                    position:'fixed', top:0, left:0, width:'100%', height:'100%', 
+                    background:'rgba(0,0,0,0.5)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 2000, backdropFilter: 'blur(4px)'
+                }}>
+                    <div className="pop-in" style={{background:'white', padding:'30px', borderRadius:'20px', width:'400px', textAlign:'center', position:'relative', boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+                        <button onClick={() => setQrCodeUrl(null)} style={{position:'absolute', top:'15px', right:'15px', border:'none', background:'none', fontSize:'20px', cursor:'pointer', color:'#94a3b8'}}><FaTimes/></button>
+                        
+                        <h3 style={{margin:'0 0 20px 0', color:'#1e293b'}}>Quét mã thanh toán</h3>
+                        
+                        <div style={{padding:'15px', border:'2px dashed #007bff', borderRadius:'12px', background:'#f0f9ff', marginBottom:'20px'}}>
+                            <img src={qrCodeUrl} alt="QR Code" style={{width:'100%', borderRadius:'8px'}} />
+                        </div>
+                        
+                        <p style={{fontSize:'14px', color:'#64748b', marginBottom:'25px'}}>
+                            Sử dụng App Ngân hàng để quét mã.<br/>
+                            Hệ thống sẽ tự động kích hoạt sau vài giây.
+                        </p>
+                        
+                        <button 
+                            onClick={() => { setQrCodeUrl(null); fetchBillingData(); }} 
+                            className="btn-primary-hover"
+                            style={{...styles.primaryBtn, width:'100%', justifyContent:'center'}}
+                        >
+                            <FaCheck style={{marginRight:8}}/> Tôi đã thanh toán xong
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
+
+
+
+
+        
     );
 };
 

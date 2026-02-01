@@ -5,6 +5,7 @@ import os
 
 # Import các router
 from api import auth, users, medical_records, clinic, billing, admin, chat, doctor
+from api import billing_webhook # Import file vừa tạo
 
 app = FastAPI(title="Aura AI Backend")
 
@@ -48,6 +49,7 @@ app.include_router(chat.router, prefix="/api/v1/chats", tags=["Chat"]) # Gom chu
 # 4. Admin (Sửa lại chỉ để 1 dòng này)
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin Management"]) 
 
+app.include_router(billing_webhook.router, prefix="/api/v1/billing", tags=["Billing"])
 @app.get("/")
 def root():
     return {"message": "Welcome to Aura AI Backend API"}
