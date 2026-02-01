@@ -4,9 +4,8 @@ import App from './App.tsx'
 // 1. Import thư viện Google OAuth
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
-// 2. Dán mã Client ID bạn vừa lấy được từ Google Cloud vào đây
-// Ví dụ: "123456789-abcdef.apps.googleusercontent.com"
-const CLIENT_ID = "413884508202-hmq7so5tjhnu9hib3vr9pruhqo1utlo3.apps.googleusercontent.com"; 
+// 2. PHẢI dùng CÙNG Client ID với backend (.env GOOGLE_CLIENT_ID)
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "786264685176-gov7th6qah7cmfo1tv1aokctv31lam5h.apps.googleusercontent.com"; 
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
