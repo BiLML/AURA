@@ -83,7 +83,7 @@ const ClinicDashboard: React.FC = () => {
     const [mySub, setMySub] = useState<UserSubscription>({ active: false, credits: 0, plan_name: 'Free', expiry: null });
     const [isBuying, setIsBuying] = useState(false);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     // --- STATE AI ANALYSIS & UPLOAD ---
     const [aiSubTab, setAiSubTab] = useState<'clinic' | 'patient'>('clinic');
     const [clinicHistory, setClinicHistory] = useState<any[]>([]);
@@ -330,28 +330,71 @@ const ClinicDashboard: React.FC = () => {
     };
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
+        if (!window.confirm(`Xác nhận thanh toán VNPay cho gói "${pkg.name}"?`)) return;
+        
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/subscribe', {
+            // Gọi API tạo URL
+            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/vnpay/create_url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ package_id: pkg.id })
             });
+
             const data = await res.json();
-            if (res.ok) {
-                alert(`✅ Đăng ký thành công! Bạn có thêm ${data.credits_left || pkg.analysis_limit} lượt.`);
-                fetchBillingData(); 
+            if (res.ok && data.payment_url) {
+                // Redirect sang VNPay
+                window.location.href = data.payment_url;
             } else {
-                alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
+                alert("❌ Lỗi: " + (data.detail || "Không thể tạo liên kết thanh toán"));
+                setIsBuying(false);
             }
         } catch (e) {
-        alert("Lỗi kết nối server");
-        } finally {
+            alert("Lỗi kết nối server");
             setIsBuying(false);
         }
     };
+
+     // 2. Thêm useEffect xử lý khi quay về từ VNPay
+    useEffect(() => {
+        const checkPaymentReturn = async () => {
+            const searchParams = new URLSearchParams(window.location.search);
+            const vnpResponseCode = searchParams.get('vnp_ResponseCode');
+
+            // Nếu phát hiện mã phản hồi từ VNPay
+            if (vnpResponseCode && !isProcessingPayment) {
+                setIsProcessingPayment(true);
+                const token = localStorage.getItem('token');
+                
+                try {
+                    // Gọi Backend để verify và cộng tiền
+                    const res = await fetch(`https://aurahealth.name.vn/api/v1/billing/vnpay/return${window.location.search}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+
+                    if (data.status === 'SUCCESS') {
+                        alert("✅ Thanh toán thành công! Gói dịch vụ đã được kích hoạt.");
+                        // Xóa params trên URL để sạch đẹp
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        // Reload lại dữ liệu ví
+                        fetchBillingData();
+                        setActiveMenu('billing'); // Chuyển tab về billing
+                    } else {
+                        alert("❌ Thanh toán thất bại: " + data.message);
+                    }
+                } catch (e) {
+                    console.error("Lỗi xác thực thanh toán:", e);
+                    alert("Lỗi kết nối khi xác thực thanh toán.");
+                } finally {
+                    setIsProcessingPayment(false);
+                }
+            }
+        };
+
+        checkPaymentReturn();
+    }, [window.location.search]); // Chạy khi URL thay đổi
 
     const handleDownloadCSV = async () => {
         const token = localStorage.getItem('token');

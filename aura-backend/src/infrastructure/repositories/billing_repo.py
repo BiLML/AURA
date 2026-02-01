@@ -39,7 +39,8 @@ class BillingRepository(IBillingRepository):
             joinedload(Subscription.package) # Eager load để lấy tên gói hiển thị Dashboard
         ).filter(
             Subscription.user_id == user_id,
-            Subscription.expired_at >= date.today()
+            Subscription.expired_at >= date.today(),
+            Subscription.credits_left > 0
         ).first()
 
     def create_subscription(self, user_id: UUID, package_id: UUID, days: int, credits: int) -> Subscription:
@@ -137,3 +138,17 @@ class BillingRepository(IBillingRepository):
 
         # Format lại dữ liệu trả về
         return [{"date": r.date, "value": float(r.total)} for r in results]
+    
+    def get_transaction_by_id(self, tx_id: str) -> Optional[PaymentTransaction]:
+        try:
+            # Nếu tx_id là string, cast nó. Nếu là UUID object rồi thì thôi.
+            if isinstance(tx_id, str):
+                tx_id = UUID(tx_id)
+            return self.db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
+        except Exception:
+            return None
+
+    # [BỔ SUNG] Cập nhật trạng thái giao dịch
+    def update_transaction_status(self, tx_id: str, status: str):
+        self.db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).update({"status": status})
+        self.db.commit()

@@ -81,7 +81,7 @@ const Dashboard: React.FC = () => {
     
     const [isBuying, setIsBuying] = useState(false);
     const [transactions, setTransactions] = useState<Transaction[]>([]); 
-    
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);    
 
     // --- 1. HÀM TẢI DANH SÁCH CHAT ---
     const fetchChatData = useCallback(async () => {
@@ -400,12 +400,13 @@ const Dashboard: React.FC = () => {
     }, []);
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        if (!window.confirm(`Xác nhận đăng ký gói "${pkg.name}" với giá ${pkg.price.toLocaleString('vi-VN')} đ?`)) return;
+        if (!window.confirm(`Bạn muốn thanh toán online qua VNPay cho gói "${pkg.name}" (${pkg.price.toLocaleString('vi-VN')} đ)?`)) return;
         
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/subscribe', {
+            // Gọi API tạo URL thanh toán thay vì subscribe trực tiếp
+            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/vnpay/create_url', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -415,15 +416,16 @@ const Dashboard: React.FC = () => {
             });
 
             const data = await res.json();
-            if (res.ok) {
-                alert(`✅ Đăng ký thành công! Bạn có thêm ${data.credits_left || pkg.analysis_limit} lượt.`);
-                fetchBillingData(); 
+            
+            if (res.ok && data.payment_url) {
+                // Chuyển hướng người dùng sang trang thanh toán của VNPay
+                window.location.href = data.payment_url;
             } else {
-                alert("❌ Lỗi: " + (data.detail || "Không thể mua gói"));
+                alert("❌ Lỗi tạo giao dịch: " + (data.detail || "Không xác định"));
+                setIsBuying(false);
             }
         } catch (e) {
             alert("Lỗi kết nối server");
-        } finally {
             setIsBuying(false);
         }
     };
@@ -465,6 +467,44 @@ const Dashboard: React.FC = () => {
         else if (activeTab === 'home') { fetchMedicalRecords(); fetchBillingData(); }
         else if (activeTab === 'messages') fetchChatData();
     }, [activeTab]);
+
+    useEffect(() => {
+        const checkPaymentReturn = async () => {
+            // Lấy các tham số từ URL
+            const searchParams = new URLSearchParams(window.location.search);
+            const vnpResponseCode = searchParams.get('vnp_ResponseCode');
+            // Nếu có mã phản hồi từ VNPay và chưa xử lý
+            if (vnpResponseCode && !isProcessingPayment) {
+                setIsProcessingPayment(true); // Khóa lại để không gọi 2 lần
+                const token = localStorage.getItem('token');
+                
+                try {
+                    // Gọi Backend để verify checksum và kích hoạt gói
+                    const res = await fetch(`https://aurahealth.name.vn/api/v1/billing/vnpay/return${window.location.search}`, {
+                         headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+
+                    if (data.status === 'SUCCESS') {
+                        alert("✅ " + data.message);
+                        // Xóa params trên URL để nhìn cho đẹp và tránh F5 bị gọi lại
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        // Tải lại thông tin ví
+                        fetchBillingData();
+                        setActiveTab('payments'); 
+                    } else {
+                        alert("❌ Thanh toán thất bại: " + data.message);
+                    }
+                } catch (e) {
+                    console.error("Lỗi xác thực thanh toán:", e);
+                } finally {
+                    setIsProcessingPayment(false);
+                }
+            }
+        };
+
+        checkPaymentReturn();
+    }, [window.location.search]); // Chạy lại khi URL thay đổi
 
     // --- RENDER CONTENT ---
     const renderContent = () => {

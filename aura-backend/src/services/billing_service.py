@@ -5,14 +5,16 @@ from typing import List, Optional
 # Import Interface & Models
 from domain.models.ibilling_repository import IBillingRepository
 from domain.models.iaudit_repository import IAuditRepository
+from domain.models.ipayment_gateway import IPaymentGateway
 
 from models.billing import ServicePackage
 from models.audit_log import AuditLog 
 
 class BillingService:
-    def __init__(self, billing_repo: IBillingRepository, audit_repo: IAuditRepository, db=None): 
+    def __init__(self, billing_repo: IBillingRepository, audit_repo: IAuditRepository, payment_gateway: IPaymentGateway, db=None): 
         self.billing_repo = billing_repo
         self.audit_repo = audit_repo
+        self.payment_gateway = payment_gateway
         self.db = db # Giữ lại nếu cần commit transaction phức tạp, nhưng nên hạn chế dùng
 
     # --- 1. ADMIN: TẠO GÓI (Thêm mới) ---
@@ -45,39 +47,56 @@ class BillingService:
         return self.billing_repo.get_all_packages()
 
     # --- 3. USER: MUA GÓI ---
-    def subscribe_user(self, user_id: UUID, package_id: UUID, ip_address: str = "Unknown"):
-        # A. Kiểm tra gói tồn tại
+    def create_payment_url(self, user_id: UUID, package_id: UUID, ip_address: str):
+        # A. Lấy thông tin gói
         pkg = self.billing_repo.get_package_by_id(package_id)
-        if not pkg:
-            raise ValueError("Gói dịch vụ không tồn tại")
+        if not pkg: raise ValueError("Gói dịch vụ không tồn tại")
 
-        try:
-            self.audit_repo.create_log(AuditLog(
-                user_id=user_id,
-                action="SUBSCRIBE_PACKAGE",
-                resource_type="subscriptions",
-                resource_id=str(pkg.id),
-                ip_address=ip_address,
-                new_values={
-                    "package_name": pkg.name,
-                    "price": float(pkg.price),
-                    "days": pkg.duration_days
-                }
-            ))
-        except Exception: pass
+        # B. Tạo Transaction trạng thái PENDING
+        tx = self.billing_repo.create_transaction(user_id, pkg.id, pkg.price, "PENDING")
 
-        # B. Tạo Transaction (Lưu lịch sử dòng tiền)
-        # TODO: Sau này tích hợp VNPay thì check status ở đây
-        self.billing_repo.create_transaction(user_id, pkg.id, pkg.price, "SUCCESS")
-
-
-        # C. Tính hạn dùng & Tạo Subscription
-        return self.billing_repo.create_subscription(
-            user_id=user_id,
-            package_id=pkg.id,
-            days=pkg.duration_days,
-            credits=pkg.analysis_limit
+        # C. Gọi qua Interface để lấy link (VNPay/Momo/...)
+        payment_url = self.payment_gateway.create_payment_link(
+            order_id=str(tx.id),
+            amount=pkg.price,
+            order_info=f"Thanh toan goi {pkg.name}",
+            ip_addr=ip_address
         )
+        
+        return {"payment_url": payment_url}
+    
+    # 2. XỬ LÝ KHI USER THANH TOÁN XONG (Callback)
+    def process_payment_return(self, params: dict):
+        # A. Validate dữ liệu trả về qua Interface
+        result = self.payment_gateway.validate_callback(params)
+        
+        tx_id = result.get("order_id")
+        # Tìm giao dịch trong DB
+        tx = self.billing_repo.get_transaction_by_id(tx_id)
+        if not tx: return {"status": "FAILED", "message": "Giao dịch không tồn tại"}
+        
+        # Nếu đã thành công trước đó thì bỏ qua (tránh cộng dồn 2 lần)
+        if tx.status == "SUCCESS": 
+            return {"status": "SUCCESS", "message": "Giao dịch đã hoàn tất"}
+
+        if result["is_success"]:
+            # --- THANH TOÁN THÀNH CÔNG ---
+            # 1. Cập nhật trạng thái Transaction
+            self.billing_repo.update_transaction_status(tx.id, "SUCCESS")
+            
+            # 2. Kích hoạt Subscription (Cộng ngày, cộng lượt)
+            self.billing_repo.create_subscription(
+                user_id=tx.user_id,
+                package_id=tx.package_id,
+                days=tx.package.duration_days,
+                credits=tx.package.analysis_limit
+            )
+            
+            return {"status": "SUCCESS", "message": "Thanh toán thành công"}
+        else:
+            # --- THANH TOÁN THẤT BẠI ---
+            self.billing_repo.update_transaction_status(tx.id, "FAILED")
+            return {"status": "FAILED", "message": result["message"]}
 
     # --- 4. CHECK CREDITS ---
     # (Khớp với hàm bạn gọi ở API: service.check_credits())
