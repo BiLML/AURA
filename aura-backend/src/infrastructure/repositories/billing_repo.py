@@ -96,6 +96,7 @@ class BillingRepository(IBillingRepository):
         )
         self.db.add(tx)
         self.db.commit()
+        self.db.refresh(tx)
         return tx
     
     def get_total_revenue(self) -> float:
@@ -140,13 +141,13 @@ class BillingRepository(IBillingRepository):
         return [{"date": r.date, "value": float(r.total)} for r in results]
     
     def get_transaction_by_id(self, tx_id: str) -> Optional[PaymentTransaction]:
-        try:
-            # Nếu tx_id là string, cast nó. Nếu là UUID object rồi thì thôi.
-            if isinstance(tx_id, str):
+        if isinstance(tx_id, str):
+            try:
                 tx_id = UUID(tx_id)
-            return self.db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
-        except Exception:
-            return None
+            except ValueError:
+                return None # Chỉ return None nếu sai định dạng UUID
+
+        return self.db.query(PaymentTransaction).filter(PaymentTransaction.id == tx_id).first()
 
     # [BỔ SUNG] Cập nhật trạng thái giao dịch
     def update_transaction_status(self, tx_id: str, status: str):
