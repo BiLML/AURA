@@ -88,8 +88,11 @@ const Upload: React.FC = () => {
     };
 
     const processFiles = (filesArray: File[]) => {
-        if (filesArray.length + selectedFiles.length > 200) {
-            alert("Hệ thống giới hạn tối đa 100 ảnh mỗi lần để đảm bảo hiệu suất.");
+        const isProfessional = ['clinic'].includes(role);
+        const limit = isProfessional ? 200 : 5;
+        
+        if (filesArray.length + selectedFiles.length > limit) {
+            alert(`Hệ thống giới hạn tối đa ${limit} ảnh mỗi lần để đảm bảo hiệu suất.`);
             return;
         }
         
@@ -389,6 +392,7 @@ const Upload: React.FC = () => {
                                  >
                                     <FaCloudUploadAlt style={{marginRight:8}}/> Tải từ máy tính
                                  </button>
+                                 {['clinic', 'doctor'].includes(role) && (
                                  <button 
                                     onClick={() => { setActiveTab('device'); fetchDeviceImages(); }}
                                     className={activeTab === 'device' ? 'btn-primary-hover' : 'btn-secondary-hover'}
@@ -396,6 +400,7 @@ const Upload: React.FC = () => {
                                  >
                                     <FaServer style={{marginRight:8}}/> Máy chụp đáy mắt
                                  </button>
+                                 )}
                             </div>
 
                             {/* [FIX] RENDER NỘI DUNG THEO TAB */}
@@ -423,7 +428,7 @@ const Upload: React.FC = () => {
                                             <FaCloudUploadAlt size={35} color="#007bff" />
                                         </div>
                                         <h4 style={{margin:'15px 0 8px', color:'#333', fontWeight: 600}}>Nhấn hoặc Kéo thả ảnh vào đây</h4>
-                                        <p style={{color:'#888', fontSize:'13px', margin:0}}>Hỗ trợ JPG, PNG. Tối đa 100 ảnh/lần.</p>
+                                        <p style={{color:'#888', fontSize:'13px', margin:0}}>Hỗ trợ JPG, PNG. Tối đa {['clinic', 'doctor'].includes(role) ? 200 : 5} ảnh/lần.</p>
                                     </div>
                                     
                                     {/* PREVIEW GRID (LOCAL) */}
