@@ -3,7 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
 from fastapi import HTTPException
 
-from models.medical import DoctorValidation, AIAnalysisResult
+from models.medical import DoctorValidation, AIAnalysisResult, RetinalImage
 from models.audit_log import AuditLog
 
 from domain.models.idoctor_repository import IDoctorRepository
@@ -11,7 +11,7 @@ from domain.models.imedical_repository import IMedicalRepository
 from domain.models.iaudit_repository import IAuditRepository
 
 from schemas.doctor_schema import PatientResponse, LatestScan
-from models.users import User
+from models.users import User, UserRole
 
 import base64
 import io
@@ -317,57 +317,71 @@ class DoctorService:
         return results
     
     def get_dashboard_stats(self, doctor_id: UUID):
+        # 1. Lấy các chỉ số cơ bản (Số bệnh nhân, số lần duyệt...) từ Repo
         raw_stats = self.repo.get_doctor_statistics(doctor_id)
         
-        # Tính tỷ lệ đồng thuận
+        # 2. Tính tỷ lệ đồng thuận (Giữ nguyên logic cũ)
         total_reviews = raw_stats["total_reviews"]
         agreed = raw_stats["agreed_reviews"]
         accuracy_rate = 0
         if total_reviews > 0:
             accuracy_rate = round((agreed / total_reviews) * 100, 1)
 
-        # Map phân bố rủi ro
-        risk_map = raw_stats["risk_distribution"]
+        # 3. [LÀM MỚI] Tính phân bố rủi ro (Ưu tiên kết quả Bác sĩ)
+        # Thay vì lấy 'risk_distribution' sai từ Repo, ta tự tính lại ở đây
         
-        # Gom nhóm cơ bản (Khởi tạo)
         distribution = {
-            "safe": 0,
-            "mild": 0,
-            "moderate": 0,
-            "severe": 0,
-            "pdr": 0
+            "safe": 0, "mild": 0, "moderate": 0, "severe": 0, "pdr": 0
         }
-        
-        for risk, count in risk_map.items():
-            if not risk: continue
-            
-            # Chuẩn hóa về chữ hoa để so sánh chính xác
-            r_norm = risk.upper().strip()
-            
-            # 1. Nhóm PDR: Phải có chữ PDR nhưng KHÔNG ĐƯỢC chứa chữ NPDR
-            # (Vì Moderate NPDR hay Severe NPDR đều có chữ PDR bên trong nên bị bắt nhầm)
-            if "PDR" in r_norm and "NPDR" not in r_norm:
-                distribution["pdr"] += count
 
-            # 2. Nhóm Nặng (SEVERE NPDR)
+        # Query lấy tất cả ảnh của bệnh nhân thuộc bác sĩ này
+        # (Lưu ý: Dùng self.db trực tiếp để linh hoạt)
+        patient_ids_query = self.db.query(User.id).filter(
+            User.assigned_doctor_id == doctor_id,
+            User.role == UserRole.USER
+        )
+
+        images = (
+            self.db.query(RetinalImage)
+            .join(AIAnalysisResult, RetinalImage.id == AIAnalysisResult.image_id)
+            # Join thêm bảng xác nhận để lấy kết quả bác sĩ
+            .outerjoin(DoctorValidation, AIAnalysisResult.id == DoctorValidation.analysis_id)
+            .filter(RetinalImage.uploader_id.in_(patient_ids_query))
+            .options(
+                joinedload(RetinalImage.analysis_result).joinedload(AIAnalysisResult.doctor_validation)
+            )
+            .all()
+        )
+
+        for img in images:
+            ai_res = img.analysis_result
+            if not ai_res: continue
+
+            # --- LOGIC QUAN TRỌNG: AI vs BÁC SĨ ---
+            final_risk = ai_res.risk_level # Mặc định tin AI
+            
+            # Nhưng nếu Bác sĩ đã chốt (validate), tin Bác sĩ tuyệt đối
+            if ai_res.doctor_validation and ai_res.doctor_validation.doctor_confirm:
+                final_risk = ai_res.doctor_validation.doctor_confirm
+            
+            # Phân loại vào nhóm biểu đồ
+            if not final_risk: continue
+            r_norm = final_risk.upper().strip()
+
+            if "PDR" in r_norm and "NPDR" not in r_norm:
+                distribution["pdr"] += 1
             elif "SEVERE" in r_norm or "NẶNG" in r_norm:
-                distribution["severe"] += count
-                
-            # 3. Nhóm Trung bình (MODERATE NPDR)
+                distribution["severe"] += 1
             elif "MODERATE" in r_norm or "TRUNG BÌNH" in r_norm:
-                distribution["moderate"] += count
-                
-            # 4. Nhóm Nhẹ (MILD NPDR)
+                distribution["moderate"] += 1
             elif "MILD" in r_norm or "NHẸ" in r_norm or "EARLY" in r_norm:
-                distribution["mild"] += count
-                
-            # 5. Nhóm Bình thường (NORMAL)
+                distribution["mild"] += 1
             elif "NORMAL" in r_norm or "BÌNH THƯỜNG" in r_norm or "NO DR" in r_norm:
-                distribution["safe"] += count
+                distribution["safe"] += 1
 
         return {
             "patient_count": raw_stats["total_patients"],
             "reviewed_count": total_reviews,
             "ai_agreement_rate": accuracy_rate,
-            "chart_data": distribution
+            "chart_data": distribution # Dữ liệu chuẩn xác đã qua xử lý
         }
