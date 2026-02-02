@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func, case, or_ , and_
+from sqlalchemy import desc, func, case, or_ , and_ , not_
 from uuid import UUID
 from typing import List, Optional, Dict, Any
 
@@ -93,10 +93,9 @@ class DoctorRepository(IDoctorRepository):
     
     def get_critical_unreviewed_records(self, doctor_id: UUID):
         """
-        Lấy các HỒ SƠ nguy hiểm (Severe hoặc PDR) chưa được bác sĩ xác nhận.
-        Sửa lỗi: Loại bỏ Moderate/Mild NPDR (do dính chữ PDR).
+        Lấy hồ sơ nguy hiểm.
+        Chiến thuật mới: Lấy Severe/PDR nhưng LOẠI TRỪ Moderate/Mild.
         """
-        # Lấy danh sách ID bệnh nhân của bác sĩ này
         patient_ids_query = self.db.query(User.id).filter(
             User.assigned_doctor_id == doctor_id
         )
@@ -107,20 +106,29 @@ class DoctorRepository(IDoctorRepository):
             .join(User, RetinalImage.uploader_id == User.id)
             .outerjoin(DoctorValidation, AIAnalysisResult.id == DoctorValidation.analysis_id)
             .filter(
-                RetinalImage.uploader_id.in_(patient_ids_query), # 1. Của bệnh nhân mình quản lý
-                DoctorValidation.id == None,                      # 2. Chưa xác nhận
+                RetinalImage.uploader_id.in_(patient_ids_query),
+                DoctorValidation.id == None,
                 
-                # 3. [QUAN TRỌNG] Bộ lọc Rủi ro chuẩn xác
-                or_(
-                    AIAnalysisResult.risk_level.ilike("%Severe%"),       # Bắt 'Severe NPDR'
-                    AIAnalysisResult.risk_level.ilike("%Nặng%"),         # Bắt tiếng Việt 'Nặng'
-                    AIAnalysisResult.risk_level.ilike("%Nguy hiểm%"),    # Bắt tiếng Việt 'Nguy hiểm'
+                # --- LOGIC MỚI: CHUẨN XÁC HƠN ---
+                and_(
+                    # 1. Điều kiện CẦN: Phải chứa từ khóa Nguy hiểm
+                    or_(
+                        AIAnalysisResult.risk_level.ilike("%Severe%"),       # Severe NPDR
+                        AIAnalysisResult.risk_level.ilike("%PDR%"),          # PDR
+                        AIAnalysisResult.risk_level.ilike("%Nặng%"),
+                        AIAnalysisResult.risk_level.ilike("%Nguy hiểm%")
+                    ),
                     
-                    # Logic bắt PDR chuẩn: Có 'PDR' nhưng KHÔNG ĐƯỢC có 'NPDR'
-                    and_(
-                        AIAnalysisResult.risk_level.ilike("%PDR%"),      
-                        ~AIAnalysisResult.risk_level.ilike("%NPDR%")     # Dấu ~ nghĩa là NOT
-                    )
+                    # 2. Điều kiện ĐỦ: TUYỆT ĐỐI KHÔNG chứa từ khóa Nhẹ/Trung bình
+                    # (Điều này giúp loại bỏ Moderate NPDR dù nó có chứa chữ PDR)
+                    not_(or_(
+                        AIAnalysisResult.risk_level.ilike("%Moderate%"),
+                        AIAnalysisResult.risk_level.ilike("%Trung bình%"),
+                        AIAnalysisResult.risk_level.ilike("%Mild%"),
+                        AIAnalysisResult.risk_level.ilike("%Nhẹ%"),
+                        AIAnalysisResult.risk_level.ilike("%Normal%"),
+                        AIAnalysisResult.risk_level.ilike("%An toàn%")
+                    ))
                 )
             )
             .options(
