@@ -370,7 +370,7 @@ const DashboardDr: React.FC = () => {
             const res = (p.latest_scan.ai_result || "").toLowerCase();
             const status = (p.latest_scan.ai_analysis_status || "").toUpperCase();
             
-            const isHighRisk = res.includes('nặng') || res.includes('severe') || res.includes('moderate') || res.includes('pdr');
+            const isHighRisk = res.includes('nặng') || res.includes('Servere NPDR') || res.includes('PDR') || res.includes('severe');
             const isCompleted = status === 'COMPLETED';
             
             return isCompleted && isHighRisk;
