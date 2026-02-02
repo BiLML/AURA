@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func, case, or_
+from sqlalchemy import desc, func, case, or_ , and_
 from uuid import UUID
 from typing import List, Optional, Dict, Any
 
@@ -93,13 +93,9 @@ class DoctorRepository(IDoctorRepository):
     
     def get_critical_unreviewed_records(self, doctor_id: UUID):
         """
-        Lấy tất cả các HỒ SƠ (không phải bệnh nhân) có mức độ nguy hiểm cao
-        mà bác sĩ chưa xác nhận.
+        Lấy các HỒ SƠ nguy hiểm (Severe hoặc PDR) chưa được bác sĩ xác nhận.
+        Sửa lỗi: Loại bỏ Moderate/Mild NPDR (do dính chữ PDR).
         """
-        # Các mức độ nguy hiểm cần báo động
-        critical_risks = ['Severe', 'PDR', 'Nặng', 'Nguy hiểm']
-        risk_conditions = [AIAnalysisResult.risk_level.ilike(f"%{r}%") for r in critical_risks]
-
         # Lấy danh sách ID bệnh nhân của bác sĩ này
         patient_ids_query = self.db.query(User.id).filter(
             User.assigned_doctor_id == doctor_id
@@ -108,13 +104,24 @@ class DoctorRepository(IDoctorRepository):
         return (
             self.db.query(RetinalImage)
             .join(AIAnalysisResult, RetinalImage.id == AIAnalysisResult.image_id)
-            .join(User, RetinalImage.uploader_id == User.id) # Join để lấy tên bệnh nhân
-            # Left Join với bảng xác nhận của bác sĩ
+            .join(User, RetinalImage.uploader_id == User.id)
             .outerjoin(DoctorValidation, AIAnalysisResult.id == DoctorValidation.analysis_id)
             .filter(
-                RetinalImage.uploader_id.in_(patient_ids_query), # Chỉ lấy của bệnh nhân mình phụ trách
-                or_(*risk_conditions),                            # AI bảo là Nặng
-                DoctorValidation.id == None                       # CHƯA CÓ xác nhận của bác sĩ
+                RetinalImage.uploader_id.in_(patient_ids_query), # 1. Của bệnh nhân mình quản lý
+                DoctorValidation.id == None,                      # 2. Chưa xác nhận
+                
+                # 3. [QUAN TRỌNG] Bộ lọc Rủi ro chuẩn xác
+                or_(
+                    AIAnalysisResult.risk_level.ilike("%Severe%"),       # Bắt 'Severe NPDR'
+                    AIAnalysisResult.risk_level.ilike("%Nặng%"),         # Bắt tiếng Việt 'Nặng'
+                    AIAnalysisResult.risk_level.ilike("%Nguy hiểm%"),    # Bắt tiếng Việt 'Nguy hiểm'
+                    
+                    # Logic bắt PDR chuẩn: Có 'PDR' nhưng KHÔNG ĐƯỢC có 'NPDR'
+                    and_(
+                        AIAnalysisResult.risk_level.ilike("%PDR%"),      
+                        ~AIAnalysisResult.risk_level.ilike("%NPDR%")     # Dấu ~ nghĩa là NOT
+                    )
+                )
             )
             .options(
                 joinedload(RetinalImage.analysis_result),
