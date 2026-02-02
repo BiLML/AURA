@@ -10,7 +10,9 @@ import {
 } from 'react-icons/fa';
 
 import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell 
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+    Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
+    Legend 
 } from 'recharts';
 
 // --- INTERFACES ---
@@ -512,10 +514,30 @@ const ClinicDashboard: React.FC = () => {
                     <div style={styles.headerRight}>
                         {/* Notifications */}
                         <div style={{position:'relative'}} ref={notificationRef}>
-                             <button className="btn-icon-hover" style={styles.iconBtn} onClick={()=>setShowNotifications(!showNotifications)}>
+                            <button 
+                                className="btn-icon-hover" 
+                                style={styles.iconBtn} 
+                                onClick={() => {
+                                    // [MỚI] Logic xử lý khi nhấn vào chuông
+                                    if (!showNotifications) {
+                                        // 1. Nếu hành động là MỞ -> Đánh dấu tất cả là "đã đọc" trong State ngay lập tức
+                                        // Việc này làm chấm đỏ biến mất ngay lập tức
+                                        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                                        
+                                        // 2. (Tùy chọn) Gọi API ngầm để báo Server biết là đã đọc hết (nếu có API mark-all-read)
+                                        // const token = localStorage.getItem('token');
+                                        // fetch('https://aurahealth.name.vn/api/v1/users/me/notifications/mark-all-read', { 
+                                        //    method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } 
+                                        // });
+                                    }
+                                    // 3. Toggle hiển thị dropdown
+                                    setShowNotifications(!showNotifications);
+                                }}
+                            >
                                 <FaBell color="#64748b" size={20}/>
+                                {/* Logic hiển thị chấm đỏ: Chỉ hiện khi có tin chưa đọc */}
                                 {notifications.some((n:any) => !n.is_read) && <span style={styles.bellBadge}></span>}
-                             </button>
+                            </button>
                              {showNotifications && (
                                 <div style={styles.notificationDropdown} className="pop-in">
                                     <div style={styles.dropdownHeader}>Thông báo</div>
@@ -858,19 +880,34 @@ const ClinicDashboard: React.FC = () => {
                                                 <p style={{margin:0, color:'#991b1b', fontSize:'14px', fontWeight:'600'}}>Ca nguy cơ cao</p>
                                             </div>
                                         </div>
-                                        <div style={{height:'350px', marginBottom:'30px'}}>
-                                            <h4 style={{textAlign:'center', marginBottom:'20px', color:'#334155'}}>Phân bố Kết quả Sàng lọc</h4>
+                                        <div style={{height:'400px', marginBottom:'30px'}}>
+                                            <h4 style={{textAlign:'center', marginBottom:'20px', color:'#334155'}}>
+                                                So sánh: AI Sàng lọc vs Bác sĩ Xác nhận
+                                            </h4>
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={reportData.chart_data}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                                    <XAxis dataKey="name" tick={{fontSize: 12}} />
-                                                    <YAxis />
-                                                    <RechartsTooltip cursor={{fill: '#f1f5f9'}} />
-                                                    <Bar dataKey="value" name="Số lượng" radius={[4, 4, 0, 0]}>
+                                                <BarChart 
+                                                    // Dùng trực tiếp dữ liệu từ API (đã có field doctor_value từ Service)
+                                                    data={reportData.chart_data} 
+                                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                    <XAxis dataKey="name" tick={{fontSize: 12}} stroke="#64748b" />
+                                                    <YAxis stroke="#64748b" />
+                                                    <RechartsTooltip 
+                                                        cursor={{fill: '#f8fafc'}}
+                                                        contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}
+                                                    />
+                                                    <Legend wrapperStyle={{paddingTop: '20px'}}/>
+                                                    
+                                                    {/* CỘT 1: AI SÀNG LỌC (Màu Xanh Dương / Đỏ) */}
+                                                    <Bar dataKey="value" name="AI Sàng lọc" radius={[4, 4, 0, 0]}>
                                                         {reportData.chart_data.map((entry:any, index:number) => (
-                                                            <Cell key={`cell-${index}`} fill={entry.name.includes('SEVERE') || entry.name.includes('PDR') ? '#ef4444' : '#3b82f6'} />
+                                                            <Cell key={`cell-ai-${index}`} fill={entry.name.includes('SEVERE') || entry.name.includes('PDR') ? '#ef4444' : '#3b82f6'} />
                                                         ))}
                                                     </Bar>
+
+                                                    {/* CỘT 2: BÁC SĨ XÁC NHẬN (Màu Xanh Lá - Uy tín) */}
+                                                    <Bar dataKey="doctor_value" name="Bác sĩ Xác nhận" fill="#10b981" radius={[4, 4, 0, 0]} />
                                                 </BarChart>
                                             </ResponsiveContainer>
                                         </div>

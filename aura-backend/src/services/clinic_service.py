@@ -389,38 +389,61 @@ class ClinicService:
     def generate_campaign_report(self, clinic_id: str, start_date: datetime, end_date: datetime):
         clinic_uuid = UUID(clinic_id)
         
-        raw_stats = self.clinic_repo.get_screening_stats_by_date(clinic_uuid, start_date, end_date)
+        # 1. Lấy toàn bộ dữ liệu chi tiết trong khoảng thời gian (Dùng hàm có sẵn get_research_data)
+        # Hàm này đã join sẵn bảng DoctorValidation nên ta có thể đếm được kết quả bác sĩ
+        records = self.clinic_repo.get_research_data(clinic_uuid, start_date, end_date)
         
         total_scans = 0
-        distribution = []
-        
-        risk_map = {}
-        for risk, count in raw_stats:
-            if not risk: risk = "Unknown"
-            risk_map[risk] = count
-            total_scans += count
+        ai_counts = {}
+        doc_counts = {}
+        high_risk_list = []
+
+        # 2. Vòng lặp quét qua từng ca khám để thống kê
+        for img in records:
+            total_scans += 1
             
-        distribution = [
-            {"name": k, "value": v} for k, v in risk_map.items()
-        ]
+            # --- Thống kê kết quả AI ---
+            ai_res = img.analysis_result
+            if ai_res:
+                # Đếm số lượng theo từng loại bệnh (cho Cột AI)
+                risk = ai_res.risk_level or "Unknown"
+                ai_counts[risk] = ai_counts.get(risk, 0) + 1
+                
+                # --- Lọc danh sách nguy cơ cao (Severe / PDR) ---
+                if risk in ["Severe NPDR", "PDR"]:
+                    p_name = "Unknown"
+                    p_phone = ""
+                    # Lấy tên bệnh nhân an toàn (tránh lỗi None)
+                    if img.patient and img.patient.user:
+                        profile = img.patient.user.profile
+                        p_name = profile.full_name if (profile and profile.full_name) else img.patient.user.username
+                        p_phone = profile.phone if (profile and profile.phone) else ""
 
-        high_risk_cases = self.clinic_repo.get_high_risk_patients_in_range(clinic_uuid, start_date, end_date)
+                    high_risk_list.append({
+                        "patient_name": p_name,
+                        "phone": p_phone,
+                        "date": img.created_at,
+                        "risk_level": risk,
+                        "image_url": img.image_url
+                    })
+
+                # --- Thống kê kết quả Bác sĩ (Doctor Validation) ---
+                # Nếu bác sĩ đã vào xác nhận, ta đếm thêm cho Cột Bác sĩ
+                if hasattr(ai_res, "doctor_validation") and ai_res.doctor_validation:
+                    doc_confirm = ai_res.doctor_validation.doctor_confirm
+                    if doc_confirm:
+                        doc_counts[doc_confirm] = doc_counts.get(doc_confirm, 0) + 1
+
+        # 3. Tổng hợp dữ liệu cho Biểu đồ (Merge 2 nguồn)
+        # Lấy danh sách tất cả các nhãn bệnh xuất hiện
+        all_labels = set(ai_counts.keys()) | set(doc_counts.keys())
         
-        detailed_list = []
-        for img in high_risk_cases:
-            p_name = "Unknown"
-            p_phone = ""
-            if img.patient and img.patient.user:
-                profile = img.patient.user.profile
-                p_name = profile.full_name if profile else img.patient.user.username
-                p_phone = profile.phone if profile else ""
-
-            detailed_list.append({
-                "patient_name": p_name,
-                "phone": p_phone,
-                "date": img.created_at,
-                "risk_level": img.analysis_result.risk_level,
-                "image_url": img.image_url
+        distribution = []
+        for label in all_labels:
+            distribution.append({
+                "name": label,
+                "value": ai_counts.get(label, 0),       # Số liệu cột AI
+                "doctor_value": doc_counts.get(label, 0) # Số liệu cột Bác sĩ (Mới thêm)
             })
 
         return {
@@ -430,10 +453,10 @@ class ClinicService:
             },
             "summary": {
                 "total_scans": total_scans,
-                "high_risk_count": len(detailed_list)
+                "high_risk_count": len(high_risk_list)
             },
             "chart_data": distribution,
-            "high_risk_patients": detailed_list
+            "high_risk_patients": high_risk_list
         }
     
     def export_research_csv(self, clinic_id: str, start_date: datetime, end_date: datetime):
