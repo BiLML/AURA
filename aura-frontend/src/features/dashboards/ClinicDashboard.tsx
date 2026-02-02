@@ -458,8 +458,8 @@ const ClinicDashboard: React.FC = () => {
     };
 
     const warningPatients = patients.filter(p => {
-        const res = (p.latest_scan?.ai_result || "").toLowerCase();
-        return res.includes('nặng') || res.includes('severe') || res.includes('pdr');
+        const res = (p.latest_scan?.ai_result || "");
+        return res === "Severe NPDR" || res === "PDR";
     });
 
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={40} color="#007bff"/></div>;
@@ -492,7 +492,9 @@ const ClinicDashboard: React.FC = () => {
                         >
                             <item.icon style={styles.menuIcon} /> 
                             {item.label}
-                            {item.badge && item.badge > 0 && <span style={styles.badgeWarn}>{item.badge}</span>}
+                            {item.badge !== undefined && item.badge > 0 && (
+                                <span style={styles.badgeWarn}>{item.badge}</span>
+                            )}
                         </div>
                     ))}
                 </nav>
