@@ -596,7 +596,10 @@ const DashboardDr: React.FC = () => {
                                 
                                 <div style={styles.card} className="slide-up-card">
                                     <div style={styles.cardHeader}>
-                                        <h3 style={styles.pageTitle}><FaExclamationTriangle style={{marginRight:10, color:'#ef4444'}}/> Hồ sơ cần chú ý ({totalPending})</h3>
+                                        <h3 style={styles.pageTitle}>
+                                            <FaExclamationTriangle style={{marginRight:10, color:'#ef4444'}}/> 
+                                            Hồ sơ cần chú ý ({alerts.length})
+                                        </h3>
                                     </div>
                                     <table style={styles.table} className="table-hover">
                                         <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Thao tác</th></tr></thead>
