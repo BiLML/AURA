@@ -92,8 +92,6 @@ const AnalysisResult: React.FC = () => {
     if (!data) return <div style={{padding: 40, textAlign: 'center'}}>Không tìm thấy dữ liệu.</div>;
 
     const severity = getSeverityInfo(data.ai_result);
-    const effectiveAnnotatedUrl = viewMode === 'annotated' && data.annotated_image_url && !annotatedImageError;
-    const imageUrl = effectiveAnnotatedUrl ? data.annotated_image_url! : data.image_url;
     const formattedDate = new Date(data.upload_date).toLocaleString('vi-VN');
 
     // --- 1. XUẤT CSV (Excel) ---
@@ -231,10 +229,14 @@ const AnalysisResult: React.FC = () => {
                             )}
                         </div>
 
-                        {/* (Giữ nguyên phần Legend chú thích màu sắc bên dưới...) */}
-                        {viewMode === 'annotated' && !annotatedImageError && (
+                        {viewMode === 'annotated' && (
                             <div style={styles.legendBox}>
-                                {/* ... code legend cũ ... */}
+                                <div style={styles.legendGrid}>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
+                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
+                                </div>
                             </div>
                         )}
                         
