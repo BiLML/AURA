@@ -230,7 +230,7 @@ const DoctorAnalysis: React.FC = () => {
     };
 
     const handleReportIssue = () => {
-        alert("Chức năng báo lỗi đang phát triển");
+        navigate(`/doctor/report/${id}`);
     };
 
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={40} color="#007bff"/></div>;
