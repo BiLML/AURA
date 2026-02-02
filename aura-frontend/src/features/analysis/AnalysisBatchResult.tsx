@@ -123,6 +123,10 @@ const AnalysisBatchResult: React.FC = () => {
                                             patient_name: serverItem.patient_name || localItem.patient_name, 
                                             diagnosis: risk,
                                             annotated_image_url: analysis?.annotated_image_url || serverItem.annotated_image_url,
+                                            
+                                            // [THÊM DÒNG NÀY] Cập nhật luôn link ảnh gốc từ Server nếu có
+                                            image_url: serverItem.image_url || serverItem.original_image_url || localItem.image_url,
+                                            
                                             report: analysis?.ai_detailed_report || serverItem.ai_detailed_report || "Đã có kết quả.",
                                             status: "COMPLETED", 
                                             confidence: 99.9
@@ -151,6 +155,11 @@ const AnalysisBatchResult: React.FC = () => {
              navigate(`/clinic/analysis/${item.id}`);
         } 
         else {
+             // Logic xác định ảnh gốc: Ưu tiên URL -> Local Preview -> Base64
+             const finalImageUrl = item.image_url || 
+                                   item.local_preview || 
+                                   (item.image_base64 ? `data:image/jpeg;base64,${item.image_base64}` : "");
+
              navigate(`/analysis-result/${item.id}`, { 
                 state: { 
                     result: {
@@ -158,7 +167,10 @@ const AnalysisBatchResult: React.FC = () => {
                         ai_result: item.diagnosis,
                         ai_detailed_report: item.report,
                         annotated_image_url: item.annotated_image_url,
-                        image_url: item.image_url || item.local_preview,
+                        
+                        // [SỬA] Dùng biến đã tính toán kỹ ở trên
+                        image_url: finalImageUrl,
+                        
                         upload_date: new Date().toISOString(),
                         ai_analysis_status: "COMPLETED"
                     }
