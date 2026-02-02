@@ -756,7 +756,7 @@ const ClinicDashboard: React.FC = () => {
                                                 <div key={pkg.id} style={styles.pricingCard} className="hover-lift">
                                                     <div style={styles.pricingHeader}>
                                                         <h4 style={{margin:0, fontSize:'18px', color:'#334155', fontWeight:'700'}}>{pkg.name}</h4>
-                                                        <div style={styles.priceTag}>{pkg.price === 0 ? 'Liên hệ' : `${pkg.price.toLocaleString('vi-VN')} đ`}</div>
+                                                        <div style={styles.priceTag}>{pkg.price.toLocaleString('vi-VN')} đ</div>
                                                     </div>
                                                     <div style={styles.pricingBody}>
                                                         <p style={{fontSize:'13px', color:'#64748b', minHeight:'40px'}}>{pkg.description}</p>
