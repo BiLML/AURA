@@ -385,3 +385,22 @@ class DoctorService:
             "ai_agreement_rate": accuracy_rate,
             "chart_data": distribution # Dữ liệu chuẩn xác đã qua xử lý
         }
+    
+    def get_attention_needed_list(self, doctor_id: UUID):
+        records = self.repo.get_critical_unreviewed_records(doctor_id)
+        
+        results = []
+        for img in records:
+            p_name = img.uploader.username
+            if img.uploader.profile and img.uploader.profile.full_name:
+                p_name = img.uploader.profile.full_name
+            
+            results.append({
+                "record_id": str(img.id),
+                "patient_name": p_name,
+                "patient_id": str(img.uploader_id),
+                "date": img.created_at,
+                "ai_result": img.analysis_result.risk_level
+            })
+            
+        return results

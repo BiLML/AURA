@@ -89,6 +89,7 @@ const DashboardDr: React.FC = () => {
 
     const [myReports, setMyReports] = useState<MyReport[]>([]);
     const [loadingReports, setLoadingReports] = useState(false);
+    const [alerts, setAlerts] = useState<any[]>([]);
 
     const [stats, setStats] = useState({
         patient_count: 0,
@@ -295,6 +296,14 @@ const DashboardDr: React.FC = () => {
         } catch (err) { alert("Lỗi gửi tin!"); }
     };
 
+    const fetchAlerts = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('https://aurahealth.name.vn/api/v1/doctor/alerts/critical', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) setAlerts(await res.json());
+};
+
     // --- EFFECTS ---
     useEffect(() => {
         if (activeTab === 'reports') {
@@ -357,6 +366,7 @@ const DashboardDr: React.FC = () => {
             } catch (error) { console.error(error); } finally { setIsLoading(false); }
         };
         initData();
+        fetchAlerts();
     }, []); 
 
     const handleLogout = () => { localStorage.clear(); navigate('/login', { replace: true }); };
@@ -591,16 +601,16 @@ const DashboardDr: React.FC = () => {
                                     <table style={styles.table} className="table-hover">
                                         <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Thao tác</th></tr></thead>
                                         <tbody>
-                                            {pendingRecords.length === 0 ? (
+                                            {alerts.length === 0 ? (
                                                 <tr><td colSpan={4} style={styles.emptyCell}>Hiện tại không có hồ sơ nguy hiểm cần xử lý.</td></tr>
                                             ) : (
-                                                pendingRecords.map((item, index) => (
+                                                alerts.map((item, index) => (
                                                     <tr key={index} style={styles.tr}>
-                                                        <td style={styles.td}><b>{item.patientName}</b></td>
-                                                        <td style={styles.td}>{item.date}</td>
-                                                        <td style={styles.td}><span style={{color:'#ef4444', fontWeight:'700', background:'#fef2f2', padding:'4px 10px', borderRadius:'6px'}}>{item.aiResult}</span></td>
+                                                        <td style={styles.td}><b>{item.patient_name}</b></td>
+                                                        <td style={styles.td}>{new Date(item.date).toLocaleDateString('vi-VN')}</td>
+                                                        <td style={styles.td}><span style={{color:'#ef4444', fontWeight:'700', background:'#fef2f2', padding:'4px 10px', borderRadius:'6px'}}>{item.ai_result}</span></td>
                                                         <td style={styles.td}>
-                                                            <button onClick={() => navigate(`/doctor/analysis/${item.id}`)} className="btn-primary-hover" style={{...styles.primaryBtnSm, background: 'linear-gradient(135deg, #ef4444, #dc2626)'}}>
+                                                            <button onClick={() => navigate(`/doctor/analysis/${item.record_id}`)} className="btn-primary-hover" style={{...styles.primaryBtnSm, background: 'linear-gradient(135deg, #ef4444, #dc2626)'}}>
                                                                 <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
                                                             </button>
                                                         </td>

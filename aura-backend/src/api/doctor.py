@@ -135,3 +135,12 @@ def get_doctor_dashboard_stats(
     if current_user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=403, detail="Quyền hạn không đủ")
     return service.get_dashboard_stats(current_user.id)
+
+@router.get("/alerts/critical")
+def get_critical_alerts(
+    current_user: User = Depends(get_current_active_user),
+    service: DoctorService = Depends(get_doctor_service)
+):
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(status_code=403, detail="Quyền hạn không đủ")
+    return service.get_attention_needed_list(current_user.id)

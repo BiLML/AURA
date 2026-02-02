@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func, case
+from sqlalchemy import desc, func, case, or_
 from uuid import UUID
 from typing import List, Optional, Dict, Any
 
@@ -90,3 +90,36 @@ class DoctorRepository(IDoctorRepository):
             "agreed_reviews": agreed_reviews,
             "risk_distribution": risk_map
         }
+    
+    def get_critical_unreviewed_records(self, doctor_id: UUID):
+        """
+        Lấy tất cả các HỒ SƠ (không phải bệnh nhân) có mức độ nguy hiểm cao
+        mà bác sĩ chưa xác nhận.
+        """
+        # Các mức độ nguy hiểm cần báo động
+        critical_risks = ['Severe', 'PDR', 'Nặng', 'Nguy hiểm']
+        risk_conditions = [AIAnalysisResult.risk_level.ilike(f"%{r}%") for r in critical_risks]
+
+        # Lấy danh sách ID bệnh nhân của bác sĩ này
+        patient_ids_query = self.db.query(User.id).filter(
+            User.assigned_doctor_id == doctor_id
+        )
+
+        return (
+            self.db.query(RetinalImage)
+            .join(AIAnalysisResult, RetinalImage.id == AIAnalysisResult.image_id)
+            .join(User, RetinalImage.uploader_id == User.id) # Join để lấy tên bệnh nhân
+            # Left Join với bảng xác nhận của bác sĩ
+            .outerjoin(DoctorValidation, AIAnalysisResult.id == DoctorValidation.analysis_id)
+            .filter(
+                RetinalImage.uploader_id.in_(patient_ids_query), # Chỉ lấy của bệnh nhân mình phụ trách
+                or_(*risk_conditions),                            # AI bảo là Nặng
+                DoctorValidation.id == None                       # CHƯA CÓ xác nhận của bác sĩ
+            )
+            .options(
+                joinedload(RetinalImage.analysis_result),
+                joinedload(RetinalImage.uploader).joinedload(User.profile)
+            )
+            .order_by(desc(RetinalImage.created_at))
+            .all()
+        )

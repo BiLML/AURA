@@ -25,3 +25,6 @@ class IDoctorRepository(ABC):
     def get_doctor_statistics(self, doctor_id: UUID) -> Dict[str, Any]:
         """Lấy các chỉ số thống kê hiệu suất của bác sĩ"""
         pass
+    @abstractmethod
+    def get_critical_unreviewed_records(self, doctor_id: UUID):
+        pass
