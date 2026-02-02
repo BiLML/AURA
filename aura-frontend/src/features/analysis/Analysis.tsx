@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { FaArrowLeft, FaFilePdf, FaFileCsv } from 'react-icons/fa';
-// ... (Giữ nguyên các interface và logic fetch data cũ) ...
+// @ts-ignore (Bỏ qua lỗi type nếu chưa cài @types/html2pdf.js)
+import html2pdf from 'html2pdf.js';
+
 interface MedicalRecord {
     id: number;
     ai_result: string;
@@ -18,12 +20,15 @@ const AnalysisResult: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     
+    // REF CHO TEMPLATE IN PDF
+    const reportTemplateRef = useRef<HTMLDivElement>(null);
+
     const [data, setData] = useState<MedicalRecord | null>(null);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated');
     const [annotatedImageError, setAnnotatedImageError] = useState(false); 
 
-    // --- (Giữ nguyên logic normalizeData, getSeverityInfo, fetchData) ---
+    // --- Logic Data Normalization (Giữ nguyên) ---
     const normalizeData = (rawData: any): MedicalRecord => {
         if (rawData.image && rawData.analysis) {
             return {
@@ -94,133 +99,76 @@ const AnalysisResult: React.FC = () => {
     const severity = getSeverityInfo(data.ai_result);
     const formattedDate = new Date(data.upload_date).toLocaleString('vi-VN');
 
-    // --- 1. XUẤT CSV (Excel) ---
+    // --- XỬ LÝ XUẤT CSV ---
     const handleExportCSV = () => {
-        if (!data) return;
-        
-        // Định nghĩa Header
-        const headers = ["Mã Hồ Sơ", "Ngày Khám", "Bệnh Nhân", "Kết Quả AI", "Bác Sĩ Chẩn Đoán", "Ghi Chú", "Link Ảnh"];
-        
-        // Định nghĩa Dòng dữ liệu (Xử lý các ký tự đặc biệt)
-        const row = [
-            data.id,
-            new Date(data.upload_date).toLocaleDateString('vi-VN'),
-            "Bệnh nhân AURA", // Hoặc lấy tên thật nếu có trong data
-            data.ai_result,
-            data.doctor_note ? "Đã xác thực" : "Chưa xác thực",
-            `"${(data.doctor_note || '').replace(/"/g, '""')}"`, // Escape dấu ngoặc kép
-            data.annotated_image_url || data.image_url
-        ];
-
-        // Tạo nội dung file (Thêm \uFEFF để Excel nhận diện tiếng Việt UTF-8)
+        const headers = ["Mã Hồ Sơ", "Ngày Khám", "Kết Quả AI", "Ghi Chú BS"];
+        const row = [data.id, formattedDate, data.ai_result, `"${(data.doctor_note || '').replace(/"/g, '""')}"`];
         const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), row.join(",")].join("\n");
-        
-        // Tải xuống
         const link = document.createElement("a");
         link.href = encodeURI(csvContent);
-        link.download = `AURA_Report_${data.id}.csv`;
+        link.download = `Report_${data.id}.csv`;
         link.click();
     };
 
-    // --- 2. XUẤT PDF (In ấn) ---
-    const handlePrintPDF = () => {
-        window.print();
+    // --- XỬ LÝ TẠO PDF CHUẨN (Mới) ---
+    const handleDownloadPDF = () => {
+        const element = reportTemplateRef.current;
+        if (!element) return;
+
+        const opt = {
+            margin:       10, // lề 10mm
+            filename:     `AURA_Medical_Report_${data.id}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: true }, // scale 2 để nét, useCORS để tải ảnh từ server khác
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Hiệu ứng loading nút bấm (optional)
+        const btn = document.getElementById('btn-download-pdf');
+        if(btn) btn.innerText = 'Đang tạo PDF...';
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            if(btn) btn.innerText = 'Tải Báo Cáo PDF';
+        });
     };
+
     return (
-        // --- KEY CHANGE: fullScreenOverlay ---
-        // Dùng position fixed để đè lên toàn bộ background cũ
         <div style={styles.fullScreenOverlay}>
-            <style>{`
-                @media print {
-                    /* Ẩn các nút bấm, thanh điều hướng khi in */
-                    .no-print { display: none !important; }
-                    
-                    /* Căn chỉnh trang giấy A4 */
-                    @page { margin: 2cm; size: A4; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
-                    
-                    /* Bung rộng nội dung */
-                    div[style*="innerContainer"] { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-                    div[style*="fullScreenOverlay"] { position: static; height: auto; overflow: visible; }
-                    
-                    /* Tùy chỉnh layout khi in (để ảnh và chữ nằm dọc cho dễ đọc nếu cần) */
-                    div[style*="contentGrid"] { display: block !important; }
-                    div[style*="leftColumn"] { margin-bottom: 20px; page-break-inside: avoid; }
-                    div[style*="rightColumn"] { page-break-inside: avoid; }
-                }
-            `}</style>            
-            {/* innerContainer để giới hạn nội dung ở giữa cho đẹp, không bị bè ra quá rộng */}
             <div style={styles.innerContainer}>
-                <button onClick={() => navigate('/dashboard')} style={styles.modernBackBtn} onMouseOver={(e) => e.currentTarget.style.borderColor = '#94a3b8'} onMouseOut={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}><div style={styles.iconCircle}><FaArrowLeft size={14} /></div><span>Quay lại</span></button>
+                {/* --- HEADER UI --- */}
+                <button onClick={() => navigate('/dashboard')} style={styles.modernBackBtn}><div style={styles.iconCircle}><FaArrowLeft size={14} /></div><span>Quay lại</span></button>
                 
                 <div style={styles.header}>
                     <div>
                         <h2 style={{margin: 0, color: '#333'}}>Kết quả phân tích AURA</h2>
                         <p style={{margin: '5px 0 0 0', color: '#666'}}>Mã hồ sơ: #{data.id}</p>
                     </div>
-
                     <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                        
-                        {/* Nút CSV */}
-                        <button onClick={handleExportCSV} className="no-print" style={{...styles.exportBtn, backgroundColor: '#107c41'}}>
+                        <button onClick={handleExportCSV} style={{...styles.exportBtn, backgroundColor: '#107c41'}}>
                             <FaFileCsv style={{marginRight: 6}}/> Xuất CSV
                         </button>
-
-                        {/* Nút PDF */}
-                        <button onClick={handlePrintPDF} className="no-print" style={{...styles.exportBtn, backgroundColor: '#dc3545'}}>
-                            <FaFilePdf style={{marginRight: 6}}/> Lưu PDF
+                        <button id="btn-download-pdf" onClick={handleDownloadPDF} style={{...styles.exportBtn, backgroundColor: '#dc3545'}}>
+                            <FaFilePdf style={{marginRight: 6}}/> Tải Báo Cáo PDF
                         </button>
-
-                        <span style={styles.dateBadge}>{formattedDate}</span>
                     </div>
                 </div>
 
+                {/* --- MÀN HÌNH UI (Interactive) --- */}
                 <div style={styles.contentGrid}>
-                    {/* CỘT TRÁI: ẢNH */}
                     <div style={styles.leftColumn}>
                         <div style={styles.imageContainer}>
-                            {/* LỚP 1: ẢNH GỐC (Luôn nằm dưới đáy) */}
-                            <img
-                                src={data.image_url}
-                                alt="Original Scan"
-                                style={{
-                                    display: 'block',
-                                    width: '100%', 
-                                    height: '100%', 
-                                    objectFit: 'contain'
-                                }}
-                            />
-
-                            {/* LỚP 2: ẢNH AI (Nằm đè lên trên, chỉ thay đổi Opacity) */}
+                            <img src={data.image_url} alt="Original" style={{display: 'block', width: '100%', height: '100%', objectFit: 'contain'}} />
                             {data.annotated_image_url && (
                                 <img
-                                    src={data.annotated_image_url}
-                                    alt="AI Analysis"
-                                    onLoad={() => setAnnotatedImageError(false)}
-                                    onError={() => setAnnotatedImageError(true)}
+                                    src={data.annotated_image_url} alt="AI Analysis"
+                                    onLoad={() => setAnnotatedImageError(false)} onError={() => setAnnotatedImageError(true)}
                                     style={{
-                                        position: 'absolute', 
-                                        top: 0, 
-                                        left: 0, 
-                                        width: '100%', 
-                                        height: '100%', 
-                                        objectFit: 'contain',
-                                        
-                                        // ✨ MAGIC HAPPENS HERE ✨
-                                        // Nếu mode là annotated VÀ ảnh không lỗi -> Hiện (Opacity 1)
-                                        // Ngược lại -> Ẩn (Opacity 0) để lộ ảnh gốc bên dưới
+                                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain',
                                         opacity: (viewMode === 'annotated' && !annotatedImageError) ? 1 : 0,
-                                        
-                                        // Hiệu ứng chuyển đổi mượt mà
-                                        transition: 'opacity 0.4s ease-in-out',
-                                        
-                                        // Để chuột xuyên qua bấm được ảnh dưới (nếu cần)
-                                        pointerEvents: 'none' 
+                                        transition: 'opacity 0.4s ease-in-out', pointerEvents: 'none' 
                                     }}
                                 />
                             )}
-
-                            {/* Nút Toggle chuyển đổi */}
                             {data.annotated_image_url && (
                                 <div style={styles.toggleContainer}>
                                     <button onClick={() => setViewMode('original')} style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}>Ảnh gốc</button>
@@ -228,119 +176,170 @@ const AnalysisResult: React.FC = () => {
                                 </div>
                             )}
                         </div>
-
-                        {viewMode === 'annotated' && (
-                            <div style={styles.legendBox}>
-                                <div style={styles.legendGrid}>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* Thông báo lỗi nếu ảnh AI hỏng */}
-                        {viewMode === 'annotated' && annotatedImageError && (
-                            <div style={{
-                                marginTop: 8, padding: '10px', background: '#fff3cd', 
-                                borderRadius: 8, fontSize: 13, color: '#856404', border:'1px solid #ffeeba'
-                            }}>
-                                ⚠️ Ảnh phân tích chưa sẵn sàng. Đang hiển thị ảnh gốc.
-                            </div>
-                        )}
                     </div>
 
-                    {/* CỘT PHẢI: KẾT QUẢ */}
                     <div style={styles.rightColumn}>
                         <div style={styles.resultBox}>
-                            <label style={styles.label}>Tình trạng võng mạc:</label>
+                            <label style={styles.label}>Tình trạng:</label>
                             <h1 style={{color: severity.color, margin: '5px 0 15px 0', fontSize: '28px'}}>{data.ai_result}</h1>
-                            <div style={{backgroundColor: severity.bg, padding: '15px', borderRadius: '8px', borderLeft: `4px solid ${severity.color}`}}>
-                                <p style={{margin: 0, fontWeight: '500'}}>{severity.advice}</p>
-                            </div>
+                            <div style={{backgroundColor: severity.bg, padding: '15px', borderRadius: '8px', borderLeft: `4px solid ${severity.color}`}}>{severity.advice}</div>
                         </div>
-
                         {data.doctor_note && (
                             <div style={styles.doctorNoteBox}>
-                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
-                                    <span style={{fontSize: '20px'}}>👨‍⚕️</span>
-                                    <h4 style={{margin: 0, fontSize: '16px', color: '#0d47a1', textTransform: 'uppercase'}}>Lời khuyên của Bác sĩ</h4>
-                                </div>
+                                <h4>👨‍⚕️ Lời khuyên Bác sĩ</h4>
                                 <p style={styles.doctorNoteText}>{data.doctor_note}</p>
                             </div>
                         )}
-
-                        <div style={styles.analysisDetails}>
-                            <h4 style={{color: '#0056b3', borderBottom: '1px solid #eee', paddingBottom: '8px', marginTop: 0}}>
-                                📊 Chi tiết báo cáo y khoa:
-                            </h4>
-                            <div style={styles.reportContent}>
-                                {data.ai_detailed_report}
-                            </div>
+                         <div style={styles.analysisDetails}>
+                            <h4>📊 Chi tiết:</h4>
+                            <div style={styles.reportContent}>{data.ai_detailed_report}</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* ========================================================= */}
+            {/* === HIDDEN REPORT TEMPLATE (Chỉ dùng để xuất PDF) === */}
+            {/* ========================================================= */}
+            <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
+                <div ref={reportTemplateRef} style={pdfStyles.container}>
+                    {/* Header Report */}
+                    <div style={pdfStyles.header}>
+                        <div style={{flex: 1}}>
+                            <h1 style={pdfStyles.brandTitle}>AURA HEALTH</h1>
+                            <p style={pdfStyles.brandSubtitle}>HỆ THỐNG CHẨN ĐOÁN VÕNG MẠC TỰ ĐỘNG</p>
+                            <p style={pdfStyles.metaInfo}>Website: aurahealth.name.vn | Hotline: 1900-xxxx</p>
+                        </div>
+                        <div style={{textAlign: 'right'}}>
+                            <div style={pdfStyles.reportBadge}>BÁO CÁO Y KHOA</div>
+                            <p style={pdfStyles.metaInfo}>Ngày tạo: {new Date().toLocaleDateString('vi-VN')}</p>
+                        </div>
+                    </div>
+                    <div style={pdfStyles.divider}></div>
+
+                    {/* Patient Info */}
+                    <div style={pdfStyles.section}>
+                        <table style={pdfStyles.table}>
+                            <tbody>
+                                <tr>
+                                    <td style={pdfStyles.tdLabel}>Mã hồ sơ:</td>
+                                    <td style={pdfStyles.tdValue}>#{data.id}</td>
+                                    <td style={pdfStyles.tdLabel}>Ngày tải lên:</td>
+                                    <td style={pdfStyles.tdValue}>{new Date(data.upload_date).toLocaleString('vi-VN')}</td>
+                                </tr>
+                                <tr>
+                                    <td style={pdfStyles.tdLabel}>Chẩn đoán AI:</td>
+                                    <td style={{...pdfStyles.tdValue, color: severity.color, fontWeight: 'bold'}}>{data.ai_result}</td>
+                                    <td style={pdfStyles.tdLabel}>Trạng thái:</td>
+                                    <td style={pdfStyles.tdValue}>Đã hoàn tất</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Image Section - Side by Side for PDF */}
+                    <div style={pdfStyles.section}>
+                        <h3 style={pdfStyles.sectionTitle}>HÌNH ẢNH SOI ĐÁY MẮT</h3>
+                        <div style={pdfStyles.imageRow}>
+                            <div style={pdfStyles.imageBox}>
+                                <p style={pdfStyles.imageCaption}>Ảnh gốc</p>
+                                {/* Dùng crossOrigin="anonymous" để tránh lỗi CORS khi vẽ canvas */}
+                                <img src={data.image_url} crossOrigin="anonymous" style={pdfStyles.medicalImage} alt="Original" />
+                            </div>
+                            {data.annotated_image_url && (
+                                <div style={pdfStyles.imageBox}>
+                                    <p style={pdfStyles.imageCaption}>Phân tích tổn thương (AI)</p>
+                                    <img src={data.annotated_image_url} crossOrigin="anonymous" style={pdfStyles.medicalImage} alt="AI Analysis" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Detailed Result */}
+                    <div style={pdfStyles.section}>
+                        <h3 style={pdfStyles.sectionTitle}>KẾT QUẢ PHÂN TÍCH CHI TIẾT</h3>
+                        <div style={pdfStyles.resultContent}>
+                            {data.ai_detailed_report}
+                        </div>
+                    </div>
+
+                    {/* Doctor Note */}
+                    {data.doctor_note && (
+                        <div style={{...pdfStyles.section, backgroundColor: '#f9f9f9', padding: '15px', border: '1px dashed #ccc'}}>
+                            <h3 style={{...pdfStyles.sectionTitle, margin: 0, color: '#0d47a1'}}>LỜI KHUYÊN CỦA BÁC SĨ</h3>
+                            <p style={{marginTop: '10px', whiteSpace: 'pre-wrap'}}>{data.doctor_note}</p>
+                        </div>
+                    )}
+
+                    {/* Footer / Signature */}
+                    <div style={pdfStyles.footer}>
+                        <div style={pdfStyles.signatureBox}>
+                            <p style={{fontWeight: 'bold', marginBottom: '50px'}}>BÁC SĨ CHUYÊN KHOA</p>
+                            <p>(Ký và ghi rõ họ tên)</p>
+                        </div>
+                    </div>
+                    <p style={pdfStyles.footerNote}>* Báo cáo này được tạo tự động bởi hệ thống AI AURA. Kết quả mang tính chất tham khảo, vui lòng tham vấn bác sĩ chuyên khoa.</p>
                 </div>
             </div>
         </div>
     );
 };
 
+// --- STYLES CHO UI MÀN HÌNH ---
 const styles: { [key: string]: React.CSSProperties } = {
-    // --- KHU VỰC QUAN TRỌNG NHẤT ---
-    fullScreenOverlay: {
-        position: 'fixed', // Bắt buộc dùng fixed để đè lên parent layout
-        top: 0,
-        left: 0,
-        width: '100vw',  // Chiếm trọn bề ngang màn hình
-        height: '100vh', // Chiếm trọn bề dọc màn hình
-        backgroundColor: '#ffffff', // Nền trắng tuyệt đối
-        zIndex: 9999, // Đảm bảo nổi lên trên cùng (hơn cả sidebar/header cũ nếu có)
-        overflowY: 'auto', // Cho phép cuộn nội dung bên trong trang trắng này
-        boxSizing: 'border-box',
-    },
-    innerContainer: {
-        maxWidth: '1200px', // Giới hạn chiều rộng nội dung để dễ đọc
-        margin: '0 auto',   // Căn giữa nội dung
-        padding: '40px 20px', // Khoảng cách với mép màn hình
-        minHeight: '100%',
-        backgroundColor: '#ffffff',
-    },
-    // ---------------------------------
-
-    loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#666', backgroundColor: '#fff', position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 10000 },
-    
-    // Style cũ giữ nguyên
-    modernBackBtn: { display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '6px 16px 6px 6px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '30px', color: '#475569', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '25px', transition: 'all 0.2s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
-    iconCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '40px', borderBottom: '2px solid #f5f5f5', paddingBottom: '20px' },
-    dateBadge: { background: '#f8f9fa', padding: '6px 14px', borderRadius: '20px', fontSize: '14px', color: '#666', fontWeight: '600', border: '1px solid #eee' },
-    
-    contentGrid: { display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '50px' }, // Tỉ lệ cột hơi lệch một chút để phần chữ rộng hơn
-    
+    fullScreenOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#fff', zIndex: 9999, overflowY: 'auto' },
+    innerContainer: { maxWidth: '1200px', margin: '0 auto', padding: '40px 20px', minHeight: '100%', backgroundColor: '#fff' },
+    loadingScreen: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#666' },
+    modernBackBtn: { display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '6px 16px 6px 6px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '30px', color: '#475569', cursor: 'pointer', marginBottom: '25px' },
+    iconCircle: { width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '30px', borderBottom: '2px solid #f5f5f5', paddingBottom: '20px' },
+    exportBtn: { display: 'inline-flex', alignItems: 'center', padding: '8px 16px', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
+    contentGrid: { display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '40px' },
     leftColumn: { display: 'flex', flexDirection: 'column', gap: '20px' },
-    imageContainer: { position: 'relative', width: '100%', aspectRatio: '1/1', backgroundColor: '#000', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-    image: { width: '100%', height: '100%', objectFit: 'contain' },
-    toggleContainer: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,255,255,0.95)', borderRadius: '30px', padding: '5px', display: 'flex', gap: '5px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
-    toggleBtn: { border: 'none', background: 'transparent', padding: '8px 20px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#555' },
-    toggleActive: { border: 'none', background: '#007bff', color: 'white', padding: '8px 20px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,123,255,0.3)' },
-    
-    legendBox: { backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '12px', border: '1px solid #e9ecef' },
-    legendGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '14px' },
-    legendItem: { display: 'flex', alignItems: 'center', gap: '10px', color: '#444', fontWeight: '500' },
-    dot: { width: '14px', height: '14px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' },
-    
-    rightColumn: { display: 'flex', flexDirection: 'column', gap: '30px' },
+    imageContainer: { position: 'relative', width: '100%', aspectRatio: '1/1', backgroundColor: '#000', borderRadius: '12px', overflow: 'hidden' },
+    toggleContainer: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,255,255,0.95)', borderRadius: '30px', padding: '5px', display: 'flex', gap: '5px' },
+    toggleBtn: { border: 'none', background: 'transparent', padding: '6px 15px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px' },
+    toggleActive: { border: 'none', background: '#007bff', color: 'white', padding: '6px 15px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
+    rightColumn: { display: 'flex', flexDirection: 'column', gap: '25px' },
     resultBox: {},
-    label: { textTransform: 'uppercase', fontSize: '13px', color: '#999', fontWeight: '700', letterSpacing: '0.8px', marginBottom: '5px', display: 'block' },
-    
-    doctorNoteBox: { padding: '25px', backgroundColor: '#e3f2fd', borderRadius: '12px', border: '1px solid #90caf9' },
-    doctorNoteText: { margin: 0, fontSize: '15px', fontWeight: '500', color: '#1565c0', whiteSpace: 'pre-wrap', lineHeight: '1.6' },
-    
-    analysisDetails: { backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', padding: '25px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' },
-    reportContent: { whiteSpace: 'pre-line', lineHeight: '1.7', color: '#333', fontSize: '15px' },
+    label: { textTransform: 'uppercase', fontSize: '12px', color: '#999', fontWeight: 'bold' },
+    doctorNoteBox: { padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '12px', border: '1px solid #90caf9' },
+    doctorNoteText: { margin: '10px 0 0 0', fontSize: '15px', color: '#1565c0', whiteSpace: 'pre-wrap' },
+    analysisDetails: { backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', padding: '20px' },
+    reportContent: { whiteSpace: 'pre-line', lineHeight: '1.6', fontSize: '14px', color: '#333' }
+};
 
-    exportBtn: {display: 'inline-flex',alignItems: 'center',padding: '8px 14px',color: 'white',border: 'none',borderRadius: '6px',fontSize: '13px',fontWeight: '600',cursor: 'pointer',boxShadow: '0 2px 4px rgba(0,0,0,0.1)',transition: 'opacity 0.2s'}
+// --- STYLES CHO FILE PDF (A4 Format) ---
+const pdfStyles: { [key: string]: React.CSSProperties } = {
+    container: {
+        width: '190mm', // Chiều rộng nội dung A4 (trừ margin)
+        minHeight: '270mm',
+        padding: '10mm',
+        backgroundColor: '#ffffff',
+        fontFamily: 'Times New Roman, serif',
+        color: '#000',
+        fontSize: '12pt',
+        lineHeight: '1.5'
+    },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' },
+    brandTitle: { fontSize: '24pt', fontWeight: 'bold', color: '#1a73e8', margin: 0, letterSpacing: '1px' },
+    brandSubtitle: { fontSize: '10pt', fontWeight: 'bold', color: '#555', margin: '5px 0' },
+    metaInfo: { fontSize: '9pt', color: '#666', margin: 0 },
+    reportBadge: { border: '2px solid #d93025', color: '#d93025', padding: '5px 10px', fontWeight: 'bold', fontSize: '14pt', borderRadius: '4px', display: 'inline-block', marginBottom: '5px' },
+    divider: { height: '2px', backgroundColor: '#1a73e8', margin: '10px 0 20px 0' },
+    section: { marginBottom: '20px' },
+    sectionTitle: { fontSize: '14pt', fontWeight: 'bold', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginBottom: '10px', color: '#333', textTransform: 'uppercase' },
+    table: { width: '100%', borderCollapse: 'collapse', marginBottom: '10px' },
+    tdLabel: { width: '15%', fontWeight: 'bold', padding: '5px', verticalAlign: 'top', color: '#555' },
+    tdValue: { width: '35%', padding: '5px', verticalAlign: 'top' },
+    imageRow: { display: 'flex', justifyContent: 'space-between', gap: '10mm' },
+    imageBox: { flex: 1, textAlign: 'center', border: '1px solid #eee', padding: '5px' },
+    imageCaption: { fontSize: '10pt', fontStyle: 'italic', marginBottom: '5px', color: '#444' },
+    medicalImage: { width: '100%', height: 'auto', maxHeight: '200px', objectFit: 'contain' },
+    resultContent: { fontSize: '11pt', textAlign: 'justify', whiteSpace: 'pre-line' },
+    footer: { marginTop: '30px', display: 'flex', justifyContent: 'flex-end' },
+    signatureBox: { textAlign: 'center', width: '200px' },
+    footerNote: { marginTop: '50px', fontSize: '9pt', fontStyle: 'italic', textAlign: 'center', color: '#777', borderTop: '1px solid #eee', paddingTop: '10px' }
 };
 
 export default AnalysisResult;
