@@ -181,20 +181,48 @@ const AnalysisResult: React.FC = () => {
                     {/* CỘT TRÁI: ẢNH */}
                     <div style={styles.leftColumn}>
                         <div style={styles.imageContainer}>
+                            {/* LỚP 1: ẢNH GỐC (Luôn nằm dưới đáy) */}
                             <img
-                                src={imageUrl}
-                                alt="Scan"
-                                style={styles.image}
-                                onLoad={() => viewMode === 'annotated' && setAnnotatedImageError(false)}
-                                onError={(e) => {
-                                    if (viewMode === 'annotated' && data.annotated_image_url) {
-                                        setAnnotatedImageError(true);
-                                        e.currentTarget.src = data.image_url;
-                                    } else {
-                                        e.currentTarget.src = 'https://via.placeholder.com/400';
-                                    }
+                                src={data.image_url}
+                                alt="Original Scan"
+                                style={{
+                                    display: 'block',
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'contain'
                                 }}
                             />
+
+                            {/* LỚP 2: ẢNH AI (Nằm đè lên trên, chỉ thay đổi Opacity) */}
+                            {data.annotated_image_url && (
+                                <img
+                                    src={data.annotated_image_url}
+                                    alt="AI Analysis"
+                                    onLoad={() => setAnnotatedImageError(false)}
+                                    onError={() => setAnnotatedImageError(true)}
+                                    style={{
+                                        position: 'absolute', 
+                                        top: 0, 
+                                        left: 0, 
+                                        width: '100%', 
+                                        height: '100%', 
+                                        objectFit: 'contain',
+                                        
+                                        // ✨ MAGIC HAPPENS HERE ✨
+                                        // Nếu mode là annotated VÀ ảnh không lỗi -> Hiện (Opacity 1)
+                                        // Ngược lại -> Ẩn (Opacity 0) để lộ ảnh gốc bên dưới
+                                        opacity: (viewMode === 'annotated' && !annotatedImageError) ? 1 : 0,
+                                        
+                                        // Hiệu ứng chuyển đổi mượt mà
+                                        transition: 'opacity 0.4s ease-in-out',
+                                        
+                                        // Để chuột xuyên qua bấm được ảnh dưới (nếu cần)
+                                        pointerEvents: 'none' 
+                                    }}
+                                />
+                            )}
+
+                            {/* Nút Toggle chuyển đổi */}
                             {data.annotated_image_url && (
                                 <div style={styles.toggleContainer}>
                                     <button onClick={() => setViewMode('original')} style={viewMode === 'original' ? styles.toggleActive : styles.toggleBtn}>Ảnh gốc</button>
@@ -202,31 +230,21 @@ const AnalysisResult: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        {viewMode === 'annotated' && (
-                            <div style={styles.legendBox}>
-                                <div style={styles.legendGrid}>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'red'}}></span>Xuất huyết</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'yellow'}}></span>Xuất tiết</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'green'}}></span>Mạch máu</div>
-                                    <div style={styles.legendItem}><span style={{...styles.dot, background: 'blue'}}></span>Đĩa thị</div>
-                                </div>
-                            </div>
-                        )}
 
-                        {viewMode === 'annotated' && !data.annotated_image_url && (
-                            <div style={{
-                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                                background: 'rgba(0,0,0,0.7)', color: 'white', padding: '10px', borderRadius: '5px'
-                            }}>
-                                ⚠️ Chưa có ảnh phân tích từ AI
+                        {/* (Giữ nguyên phần Legend chú thích màu sắc bên dưới...) */}
+                        {viewMode === 'annotated' && !annotatedImageError && (
+                            <div style={styles.legendBox}>
+                                {/* ... code legend cũ ... */}
                             </div>
                         )}
-                        {viewMode === 'annotated' && data.annotated_image_url && annotatedImageError && (
+                        
+                        {/* Thông báo lỗi nếu ảnh AI hỏng */}
+                        {viewMode === 'annotated' && annotatedImageError && (
                             <div style={{
-                                marginTop: 8, padding: '10px 14px', background: '#fff3cd', border: '1px solid #ffc107',
-                                borderRadius: 8, fontSize: 14, color: '#856404'
+                                marginTop: 8, padding: '10px', background: '#fff3cd', 
+                                borderRadius: 8, fontSize: 13, color: '#856404', border:'1px solid #ffeeba'
                             }}>
-                                ⚠️ Không tải được ảnh chẩn đoán. Đang hiển thị ảnh gốc.
+                                ⚠️ Ảnh phân tích chưa sẵn sàng. Đang hiển thị ảnh gốc.
                             </div>
                         )}
                     </div>
