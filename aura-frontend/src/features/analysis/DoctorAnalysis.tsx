@@ -6,7 +6,8 @@ import {
     FaPen, FaEraser
 } from 'react-icons/fa';
 
-// Interface dữ liệu
+// --- 1. CẬP NHẬT INTERFACE ---
+// Thêm trường doctor_diagnosis để lưu trạng thái sau khi lưu
 interface MedicalRecord {
     id: number;
     ai_result: string;
@@ -15,6 +16,7 @@ interface MedicalRecord {
     image_url: string;
     upload_date: string;
     doctor_note: string | null;
+    doctor_diagnosis?: string | null; // <--- MỚI: Thêm trường này
     ai_analysis_status: string;
 }
 
@@ -26,26 +28,22 @@ const DoctorAnalysis: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageContainerRef = useRef<HTMLDivElement>(null);
 
-    // --- STATES DỮ LIỆU ---
     const [data, setData] = useState<MedicalRecord | null>(null);
     const [loading, setLoading] = useState(true);
     
-    // --- STATES GIAO DIỆN ---
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated');
     const [isFullscreen, setIsFullscreen] = useState(false); 
     
-    // --- STATES VẼ (CANVAS) ---
     const [isDrawing, setIsDrawing] = useState(false);
     const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
 
-    // --- STATES FORM VALIDATION ---
     const [isAiCorrect, setIsAiCorrect] = useState<boolean>(true);
     const [finalDiagnosis, setFinalDiagnosis] = useState('');      
     const [internalNote, setInternalNote] = useState('');          
     const [isSaving, setIsSaving] = useState(false);
     const [reportContent, setReportContent] = useState(''); 
 
-    // --- 1. HÀM XỬ LÝ DỮ LIỆU ---
+    // --- 2. CẬP NHẬT NORMALIZE DATA ---
     const normalizeData = (rawData: any): MedicalRecord => {
         const analysisData = rawData.analysis_result || rawData.ai_analysis_result || rawData;
         return {
@@ -56,6 +54,8 @@ const DoctorAnalysis: React.FC = () => {
             image_url: rawData.image_url || rawData.original_image_url || "",
             upload_date: rawData.upload_date || rawData.created_at || new Date().toISOString(),
             doctor_note: rawData.doctor_note || null,
+            // Lấy thông tin chẩn đoán của bác sĩ từ API (nếu có)
+            doctor_diagnosis: rawData.doctor_diagnosis || null, 
             ai_analysis_status: rawData.ai_analysis_status || "COMPLETED"
         };
     };
@@ -68,6 +68,7 @@ const DoctorAnalysis: React.FC = () => {
         { value: "PDR", label: "PDR (Tăng sinh - Nguy hiểm)" }
     ];
 
+    // --- 3. CẬP NHẬT FETCH DATA ---
     const fetchData = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!id || !token) return;
@@ -83,7 +84,18 @@ const DoctorAnalysis: React.FC = () => {
                 setData(normalized);
                 
                 if (normalized.doctor_note) setInternalNote(normalized.doctor_note);
-                setFinalDiagnosis(normalized.ai_result); 
+                
+                // LOGIC MỚI: Ưu tiên hiển thị chẩn đoán của bác sĩ nếu đã có
+                const currentDiagnosis = normalized.doctor_diagnosis || normalized.ai_result;
+                setFinalDiagnosis(currentDiagnosis);
+                
+                // Tự động xác định trạng thái "Đúng/Sai" dựa trên so sánh
+                if (normalized.doctor_diagnosis) {
+                    setIsAiCorrect(normalized.doctor_diagnosis === normalized.ai_result);
+                } else {
+                    setIsAiCorrect(true); // Mặc định ban đầu
+                }
+
                 setReportContent(normalized.ai_detailed_report);
             }
         } catch (err) {
@@ -108,7 +120,7 @@ const DoctorAnalysis: React.FC = () => {
         }
     };
 
-    // --- 2. LOGIC VẼ CANVAS ---
+    // --- LOGIC VẼ CANVAS (Giữ nguyên) ---
     const initCanvas = () => {
         const container = imageContainerRef.current;
         const canvas = canvasRef.current;
@@ -123,7 +135,6 @@ const DoctorAnalysis: React.FC = () => {
 
     useEffect(() => {
         window.addEventListener('resize', initCanvas);
-        // Delay 1 chút để ảnh load xong mới init canvas size
         const timer = setTimeout(initCanvas, 500);
         return () => {
             window.removeEventListener('resize', initCanvas);
@@ -136,7 +147,6 @@ const DoctorAnalysis: React.FC = () => {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
         const rect = canvas.getBoundingClientRect();
         ctx.beginPath();
         ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
@@ -149,23 +159,20 @@ const DoctorAnalysis: React.FC = () => {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
         const rect = canvas.getBoundingClientRect();
-        ctx.lineWidth = brushSize; // Dùng biến cục bộ hoặc state nếu cần thay đổi size
+        ctx.lineWidth = brushSize;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
         if (tool === 'pen') {
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = '#00ff00'; 
         } else {
             ctx.globalCompositeOperation = 'destination-out';
         }
-
         ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
         ctx.stroke();
     };
-    const brushSize = tool === 'eraser' ? 15 : 3; // Định nghĩa nhanh size cọ
+    const brushSize = tool === 'eraser' ? 15 : 3;
 
     const stopDrawing = () => {
         if(isDrawing) {
@@ -184,7 +191,7 @@ const DoctorAnalysis: React.FC = () => {
         }
     };
     
-    // --- 3. XỬ LÝ LƯU ---
+    // --- 4. CẬP NHẬT HÀM SUBMIT ---
     const handleSubmitDiagnosis = async () => {
         if (!id) return;
         if (isAiCorrect === false && (!finalDiagnosis || finalDiagnosis === "")) {
@@ -216,8 +223,12 @@ const DoctorAnalysis: React.FC = () => {
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                alert("✅ Đã lưu kết quả thẩm định thành công!");
-                navigate('/dashboarddr'); 
+                alert("✅ Đã lưu hồ sơ thành công! Dữ liệu đã được cập nhật.");
+                
+                // THAY ĐỔI Ở ĐÂY:
+                // 1. Không navigate nữa
+                // 2. Gọi fetchData để cập nhật lại giao diện với thông tin mới lưu
+                fetchData(); 
             } else {
                 const err = await res.json();
                 alert("Lỗi: " + err.detail);
@@ -229,8 +240,11 @@ const DoctorAnalysis: React.FC = () => {
         }
     };
 
+    // Hàm chuyển hướng sang trang Report (giữ nguyên logic truyền state)
     const handleReportIssue = () => {
-        navigate(`/doctor/report/${id}`);
+        navigate(`/doctor/report/${id}`, { 
+            state: { existingData: data } 
+        });
     };
 
     if (loading) return <div style={styles.loading}><FaSpinner className="spin" size={40} color="#007bff"/></div>;
@@ -264,8 +278,6 @@ const DoctorAnalysis: React.FC = () => {
             <div style={styles.mainGrid}>
                 {/* --- CỘT TRÁI (Hình ảnh & Công cụ vẽ) --- */}
                 <div style={styles.leftPanel}>
-                    
-                    {/* Toolbar Vẽ & Toggle */}
                     <div style={styles.drawingToolbar}>
                         <div style={{display:'flex', gap:'8px'}}>
                             <button onClick={()=>setTool('pen')} style={{...styles.drawBtn, background: tool==='pen'?'#22c55e':'#f1f5f9', color: tool==='pen'?'white':'#475569'}} title="Bút vẽ"><FaPen/></button>
@@ -288,19 +300,14 @@ const DoctorAnalysis: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* KHUNG ẢNH (LAYER SYSTEM) */}
                     <div style={styles.imageBox} ref={imageContainerRef}>
                         <div style={{position: 'relative', display: 'inline-block', lineHeight: 0}}>
-                            
-                            {/* Layer 1: Ảnh Gốc */}
                             <img 
                                 src={data.image_url} 
                                 alt="Original"
                                 style={{display:'block', maxWidth:'100%', maxHeight:'500px', objectFit: 'contain'}}
                                 onLoad={initCanvas}
                             />
-
-                            {/* Layer 2: Ảnh AI */}
                             {data.annotated_image_url && (
                                 <img 
                                     src={data.annotated_image_url}
@@ -313,8 +320,6 @@ const DoctorAnalysis: React.FC = () => {
                                     }}
                                 />
                             )}
-
-                            {/* Layer 3: Canvas */}
                             <canvas
                                 ref={canvasRef}
                                 onMouseDown={startDrawing}
@@ -331,7 +336,6 @@ const DoctorAnalysis: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Info Card */}
                     <div className="slide-up-card" style={{marginTop: '10px'}}>
                         <div style={styles.cardInfo}>
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', borderBottom:'1px solid #f1f5f9', paddingBottom:'10px'}}>
@@ -382,7 +386,6 @@ const DoctorAnalysis: React.FC = () => {
                     </div>
                     
                     <div style={styles.formScroll}>
-                        {/* Section 1 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>1. Đánh giá kết quả AI</label>
                             <div style={styles.radioGroup}>
@@ -428,7 +431,6 @@ const DoctorAnalysis: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Section 2 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>
                                 2. Kết luận cuối cùng
@@ -455,7 +457,6 @@ const DoctorAnalysis: React.FC = () => {
                             </select>
                         </div>
 
-                        {/* Section 3 */}
                         <div style={styles.section}>
                             <label style={styles.sectionLabel}>3. Ghi chú</label>
                             <textarea
@@ -485,103 +486,43 @@ const DoctorAnalysis: React.FC = () => {
     );
 };
 
-// --- STYLES OBJECT (ĐỊNH NGHĨA CSS) ---
+// --- STYLES OBJECT ---
 const styles: { [key: string]: React.CSSProperties } = {
     loading: { display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', backgroundColor: '#f4f6f9', color: '#64748b' },
-    
-    container: { 
-        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', 
-        zIndex: 9999, backgroundColor: '#f4f6f9', display: 'flex', flexDirection: 'column', 
-        fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', boxSizing: 'border-box'
-    },
-    
-    // Toolbar Header
-    toolbar: { 
-        height: '60px', padding: '0 25px', background: 'white', borderBottom: '1px solid #e2e8f0', 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, zIndex: 10
-    },
+    container: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, backgroundColor: '#f4f6f9', display: 'flex', flexDirection: 'column', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden', boxSizing: 'border-box' },
+    toolbar: { height: '60px', padding: '0 25px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, zIndex: 10 },
     backBtn: { background: 'white', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', color: '#64748b', cursor: 'pointer', fontWeight: '600', fontSize:'13px', display:'flex', alignItems:'center', transition: 'all 0.2s' },
     divider: { height: '24px', width: '1px', background: '#e2e8f0', margin: '0 5px' },
     toolBtn: { background: '#f1f5f9', border: 'none', color: '#475569', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display:'flex', alignItems:'center', transition: 'all 0.2s' },
     reportBtn: { background: '#fffbeb', border: '1px solid #fcd34d', color: '#b45309', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', display:'flex', alignItems:'center', transition: 'all 0.2s' },
-
-    // Main Layout
     mainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', overflow: 'hidden' },
-
-    // Left Panel
     leftPanel: { padding: '20px', overflowY: 'auto', backgroundColor: '#f1f5f9', display: 'flex', flexDirection: 'column', gap: '20px' },
-    
-    // Drawing Toolbar (Quan trọng)
-    drawingToolbar: { 
-        background:'white', padding:'10px', borderRadius:'8px', 
-        display:'flex', alignItems:'center', gap:'10px', 
-        marginBottom: '0px', boxShadow:'0 2px 4px rgba(0,0,0,0.03)' 
-    },
+    drawingToolbar: { background:'white', padding:'10px', borderRadius:'8px', display:'flex', alignItems:'center', gap:'10px', marginBottom: '0px', boxShadow:'0 2px 4px rgba(0,0,0,0.03)' },
     drawBtn: { width:'36px', height:'36px', border:'none', borderRadius:'6px', cursor:'pointer', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'16px', transition:'all 0.2s' },
     dividerVertical: { width:'1px', height:'24px', background:'#e2e8f0' },
-    
-    // Toggle Buttons
     viewModeGroup: { background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', gap: '4px', border: '1px solid #e2e8f0' },
     toggleBtn: { padding: '6px 12px', border: 'none', background: 'transparent', color: '#64748b', fontSize: '13px', fontWeight: '600', cursor: 'pointer', borderRadius: '6px', transition: 'all 0.2s' },
     toggleActive: { padding: '6px 12px', border: 'none', background: 'white', color: '#0f172a', fontSize: '13px', fontWeight: '700', cursor: 'pointer', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
-
-    // Image Box
-    imageBox: { 
-        width: '100%', flex: 1, minHeight: '450px', backgroundColor: '#0f172a', 
-        borderRadius: '12px', overflow: 'hidden', position: 'relative', 
-        display: 'flex', justifyContent: 'center', alignItems: 'center', 
-        boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #334155'
-    },
-    
-    // Card Info
+    imageBox: { width: '100%', flex: 1, minHeight: '450px', backgroundColor: '#0f172a', borderRadius: '12px', overflow: 'hidden', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #334155' },
     cardInfo: { background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', border: '1px solid #e2e8f0' },
     badge: { padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: '700' },
     codeEditor: { width: '100%', height: '180px', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '13px', fontFamily: 'Consolas, monospace', lineHeight: '1.6', color: '#334155', resize: 'vertical', marginTop: '8px', outline:'none', boxSizing: 'border-box' },
     label: { fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display:'flex', alignItems:'center' },
-
-    // Right Panel (Form)
     rightPanel: { backgroundColor: 'white', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0,0,0,0.03)', zIndex: 20 },
     formHeader: { padding: '25px', borderBottom: '1px solid #f1f5f9', background: '#fff' },
     formScroll: { flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '30px' },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionLabel: { fontWeight: '700', fontSize: '14px', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    
     radioGroup: { display: 'flex', flexDirection: 'column', gap: '15px' },
     radioCard: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', borderRadius: '10px', border: '1px solid', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' },
     radioCircle: { width: '20px', height: '20px', borderRadius: '50%', border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-
     select: { padding: '12px', borderRadius: '8px', border: '1px solid', fontSize: '14px', width: '100%', outline: 'none', transition: 'all 0.2s' },
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: '"Segoe UI", sans-serif', width: '100%', outline: 'none', transition: 'all 0.2s', backgroundColor:'#fff', boxSizing:'border-box' },
-    
     formFooter: { padding: '25px', borderTop: '1px solid #f1f5f9', background: '#fff' },
     saveBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #007bff, #0069d9)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,123,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' },
-
-    legendGrid: { 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr', // Chia 2 cột
-        gap: '10px', 
-        fontSize: '13px', 
-        marginBottom: '15px', 
-        background: '#f8fafc', 
-        padding: '10px', 
-        borderRadius: '8px',
-        border: '1px solid #e2e8f0'
-    },
-    legendItem: { 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px', 
-        color: '#475569', 
-        fontWeight: '500' 
-    },
-    dot: { 
-        width: '10px', 
-        height: '10px', 
-        borderRadius: '50%', 
-        display: 'inline-block',
-        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' 
-    },
-
+    legendGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px', marginBottom: '15px', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' },
+    legendItem: { display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontWeight: '500' },
+    dot: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' },
 };
 
 // --- CSS GLOBAL ---
@@ -590,18 +531,15 @@ const cssGlobal = `
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-
 .spin { animation: spin 1s linear infinite; }
 .fade-in { animation: fadeIn 0.4s ease-out forwards; }
 .slide-up-card { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
-
 .input-focus:focus { border-color: #007bff !important; box-shadow: 0 0 0 3px rgba(0,123,255,0.1) !important; background-color: #fff !important; }
 .btn-secondary-hover:hover { background-color: #f1f5f9 !important; color: #1e293b !important; }
 .btn-primary-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,123,255,0.3) !important; }
 .btn-primary-hover:active { transform: translateY(0); }
 .btn-warning-hover:hover { background-color: #fef3c7 !important; color: #92400e !important; }
 .pulse-on-active:active { animation: pulse 0.3s; }
-
 ::-webkit-scrollbar { width: 6px; } 
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
