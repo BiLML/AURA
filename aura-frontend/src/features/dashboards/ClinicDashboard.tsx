@@ -880,36 +880,39 @@ const ClinicDashboard: React.FC = () => {
                                                 <p style={{margin:0, color:'#991b1b', fontSize:'14px', fontWeight:'600'}}>Ca nguy cơ cao</p>
                                             </div>
                                         </div>
-                                        <div style={{height:'400px', marginBottom:'30px'}}>
+                                        <div style={{marginBottom:'30px'}}> {/* Bỏ height: 400px ở đây */}
                                             <h4 style={{textAlign:'center', marginBottom:'20px', color:'#334155'}}>
                                                 So sánh: AI Sàng lọc vs Bác sĩ Xác nhận
                                             </h4>
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart 
-                                                    // Dùng trực tiếp dữ liệu từ API (đã có field doctor_value từ Service)
-                                                    data={reportData.chart_data} 
-                                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                                >
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                                    <XAxis dataKey="name" tick={{fontSize: 12}} stroke="#64748b" />
-                                                    <YAxis stroke="#64748b" />
-                                                    <RechartsTooltip 
-                                                        cursor={{fill: '#f8fafc'}}
-                                                        contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}
-                                                    />
-                                                    <Legend wrapperStyle={{paddingTop: '20px'}}/>
-                                                    
-                                                    {/* CỘT 1: AI SÀNG LỌC (Màu Xanh Dương / Đỏ) */}
-                                                    <Bar dataKey="value" name="AI Sàng lọc" radius={[4, 4, 0, 0]}>
-                                                        {reportData.chart_data.map((entry:any, index:number) => (
-                                                            <Cell key={`cell-ai-${index}`} fill={entry.name.includes('SEVERE') || entry.name.includes('PDR') ? '#ef4444' : '#3b82f6'} />
-                                                        ))}
-                                                    </Bar>
+                                            
+                                            {/* [SỬA LỖI] Tạo một div riêng biệt có chiều cao cố định để chứa Chart */}
+                                            <div style={{ width: '100%', height: '400px' }}>
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart 
+                                                        data={reportData.chart_data} 
+                                                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                    >
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                        <XAxis dataKey="name" tick={{fontSize: 12}} stroke="#64748b" />
+                                                        <YAxis stroke="#64748b" />
+                                                        <RechartsTooltip 
+                                                            cursor={{fill: '#f8fafc'}}
+                                                            contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}
+                                                        />
+                                                        <Legend wrapperStyle={{paddingTop: '20px'}}/>
+                                                        
+                                                        {/* Cột AI */}
+                                                        <Bar dataKey="value" name="AI Sàng lọc" radius={[4, 4, 0, 0]}>
+                                                            {reportData.chart_data.map((entry:any, index:number) => (
+                                                                <Cell key={`cell-ai-${index}`} fill={entry.name.includes('SEVERE') || entry.name.includes('PDR') ? '#ef4444' : '#3b82f6'} />
+                                                            ))}
+                                                        </Bar>
 
-                                                    {/* CỘT 2: BÁC SĨ XÁC NHẬN (Màu Xanh Lá - Uy tín) */}
-                                                    <Bar dataKey="doctor_value" name="Bác sĩ Xác nhận" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                                        {/* Cột Bác sĩ */}
+                                                        <Bar dataKey="doctor_value" name="Bác sĩ Xác nhận" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

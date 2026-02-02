@@ -123,7 +123,7 @@ class ClinicRepository(IClinicRepository):
             .join(User, Patient.user_id == User.id)
             # Load thêm thông tin validate của bác sĩ (nếu cần so sánh AI vs Bác sĩ)
             .options(
-                joinedload(RetinalImage.analysis_result),
+                joinedload(RetinalImage.analysis_result).joinedload(AIAnalysisResult.doctor_validation),
                 joinedload(RetinalImage.patient).joinedload(Patient.user) # Load User để lấy giới tính/tuổi từ profile
             )
             .filter(
