@@ -84,6 +84,9 @@ const ClinicDashboard: React.FC = () => {
     const [isBuying, setIsBuying] = useState(false);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'SEPAY' | 'VNPAY'>('SEPAY');
+    const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+
     // --- STATE AI ANALYSIS & UPLOAD ---
     const [aiSubTab, setAiSubTab] = useState<'clinic' | 'patient'>('clinic');
     const [clinicHistory, setClinicHistory] = useState<any[]>([]);
@@ -330,28 +333,43 @@ const ClinicDashboard: React.FC = () => {
     };
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        if (!window.confirm(`Xác nhận thanh toán VNPay cho gói "${pkg.name}"?`)) return;
+        // [SỬA] Thông báo rõ phương thức đang chọn
+        const methodName = paymentMethod === 'SEPAY' ? 'Quét mã QR (SePay)' : 'VNPay';
+        if (!window.confirm(`Xác nhận thanh toán qua ${methodName} cho gói "${pkg.name}"?`)) return;
         
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            // Gọi API tạo URL
-            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/vnpay/create_url', {
+            // [SỬA] Gọi API chung (create-url) thay vì gọi cứng vnpay
+            // Lưu ý: Backend cần đảm bảo endpoint này xử lý được cho cả ROLE CLINIC
+            const res = await fetch('https://aurahealth.name.vn/api/v1/billing/payment/create-url', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ package_id: pkg.id })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ 
+                    package_id: pkg.id,
+                    payment_method: paymentMethod // Gửi phương thức lên
+                })
             });
 
             const data = await res.json();
+            
             if (res.ok && data.payment_url) {
-                // Redirect sang VNPay
-                window.location.href = data.payment_url;
+                if (paymentMethod === 'VNPAY') {
+                    // VNPay: Chuyển hướng
+                    window.location.href = data.payment_url;
+                } else {
+                    // SePay: Hiện Popup QR
+                    setQrCodeUrl(data.payment_url);
+                }
             } else {
-                alert("❌ Lỗi: " + (data.detail || "Không thể tạo liên kết thanh toán"));
-                setIsBuying(false);
+                alert("❌ Lỗi: " + (data.detail || "Không thể tạo giao dịch"));
             }
         } catch (e) {
             alert("Lỗi kết nối server");
+        } finally {
             setIsBuying(false);
         }
     };
@@ -684,6 +702,50 @@ const ClinicDashboard: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* [THÊM MỚI] UI CHỌN PHƯƠNG THỨC THANH TOÁN */}
+                            <div style={{background:'white', padding:'20px', borderRadius:'16px', boxShadow:'0 4px 10px rgba(0,0,0,0.03)', border:'1px solid #e1e4e8'}}>
+                                <h3 style={{marginTop:0, marginBottom:'15px', color:'#334155', fontSize:'16px'}}>Chọn hình thức thanh toán:</h3>
+                                <div style={{display:'flex', gap:'15px'}}>
+                                    <button 
+                                        onClick={() => setPaymentMethod('SEPAY')}
+                                        style={{
+                                            flex: 1, padding:'15px', borderRadius:'12px', cursor:'pointer',
+                                            border: paymentMethod === 'SEPAY' ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                                            background: paymentMethod === 'SEPAY' ? '#f0fdf4' : 'white',
+                                            color: paymentMethod === 'SEPAY' ? '#166534' : '#64748b',
+                                            fontWeight: paymentMethod === 'SEPAY' ? 'bold' : 'normal',
+                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <FaCreditCard size={20} color={paymentMethod === 'SEPAY' ? "#16a34a" : "#94a3b8"}/> 
+                                        <div>
+                                            <div style={{fontSize:'15px'}}>Quét QR (SePay)</div>
+                                            <div style={{fontSize:'12px', opacity:0.8, fontWeight:'normal'}}>Kích hoạt tự động</div>
+                                        </div>
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={() => setPaymentMethod('VNPAY')}
+                                        style={{
+                                            flex: 1, padding:'15px', borderRadius:'12px', cursor:'pointer',
+                                            border: paymentMethod === 'VNPAY' ? '2px solid #007bff' : '1px solid #e2e8f0',
+                                            background: paymentMethod === 'VNPAY' ? '#eff6ff' : 'white',
+                                            color: paymentMethod === 'VNPAY' ? '#1d4ed8' : '#64748b',
+                                            fontWeight: paymentMethod === 'VNPAY' ? 'bold' : 'normal',
+                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <FaCreditCard size={20} color={paymentMethod === 'VNPAY' ? "#007bff" : "#94a3b8"}/> 
+                                        <div>
+                                            <div style={{fontSize:'15px'}}>Thẻ ATM / VNPay</div>
+                                            <div style={{fontSize:'12px', opacity:0.8, fontWeight:'normal'}}>Cổng thanh toán</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Card 2: Mua thêm gói */}
                             <div style={styles.card} className="slide-up-card">
                                 <div style={styles.cardHeader}><h2 style={styles.pageTitle}><FaBoxOpen style={{marginRight:10, color:'#f59e0b'}}/>Mua thêm gói dịch vụ</h2></div>
@@ -875,6 +937,36 @@ const ClinicDashboard: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {qrCodeUrl && (
+                <div style={{
+                    position:'fixed', top:0, left:0, width:'100%', height:'100%', 
+                    background:'rgba(0,0,0,0.5)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 2000, backdropFilter: 'blur(4px)'
+                }}>
+                    <div className="pop-in" style={{background:'white', padding:'30px', borderRadius:'20px', width:'400px', textAlign:'center', position:'relative', boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
+                        <button onClick={() => setQrCodeUrl(null)} style={{position:'absolute', top:'15px', right:'15px', border:'none', background:'none', fontSize:'20px', cursor:'pointer', color:'#94a3b8'}}><FaTimes/></button>
+                        
+                        <h3 style={{margin:'0 0 20px 0', color:'#1e293b'}}>Quét mã thanh toán</h3>
+                        
+                        <div style={{padding:'15px', border:'2px dashed #007bff', borderRadius:'12px', background:'#f0f9ff', marginBottom:'20px'}}>
+                            <img src={qrCodeUrl} alt="QR Code" style={{width:'100%', borderRadius:'8px'}} />
+                        </div>
+                        
+                        <p style={{fontSize:'14px', color:'#64748b', marginBottom:'25px'}}>
+                            Sử dụng App Ngân hàng để quét mã.<br/>
+                            Hệ thống sẽ tự động kích hoạt sau vài giây.
+                        </p>
+                        
+                        <button 
+                            onClick={() => { setQrCodeUrl(null); fetchBillingData(); }} 
+                            className="btn-primary-hover"
+                            style={{...styles.primaryBtn, width:'100%', justifyContent:'center'}}
+                        >
+                            <FaCheck style={{marginRight:8}}/> Tôi đã thanh toán xong
+                        </button>
+                    </div>
+                </div>
+            )}  
         </div>
     );
 };
