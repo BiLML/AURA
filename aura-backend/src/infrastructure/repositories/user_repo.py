@@ -6,6 +6,7 @@ from uuid import UUID
 from models.users import User, Profile
 from models.enums import UserRole, UserStatus
 from models.medical import Patient 
+from models.billing import Subscription
 
 from schemas.user_schema import UserCreate
 
@@ -60,8 +61,9 @@ class UserRepository(IUserRepository):
         
     def get_all_users(self, skip: int = 0, limit: int = 100):
         return self.db.query(User).options(
-            joinedload(User.profile),       # Đã có
-            joinedload(User.subscriptions)  # <--- THÊM DÒNG NÀY
+            joinedload(User.profile),
+            # Load Subscription -> Load tiếp Package bên trong nó
+            joinedload(User.subscriptions).joinedload(Subscription.package) 
         ).all()
 
     # --- 🔥 BƯỚC B: THÊM 2 HÀM MỚI Ở ĐÂY 🔥 ---

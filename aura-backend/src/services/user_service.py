@@ -21,7 +21,7 @@ import secrets
 import requests
 import os
 from jose import jwt, JWTError
-from datetime import timedelta
+from datetime import timedelta, date
 from uuid import UUID
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -151,25 +151,28 @@ class UserService:
         
         results = []
         for user in users:
-            # --- LOGIC XỬ LÝ SUBSCRIPTION ---
+            # --- LOGIC XỬ LÝ SUBSCRIPTION [ĐÃ SỬA] ---
             active_sub_data = None
             
-            # Nếu user có danh sách gói cước
             if user.subscriptions:
-                # Cách 1: Lấy gói mới nhất (dựa vào ngày tạo hoặc ngày hết hạn)
-                # Giả sử model Subscription có cột 'end_date' hoặc 'is_active'
-                # Sắp xếp giảm dần theo ngày hết hạn -> Lấy cái đầu tiên
-                valid_subs = [s for s in user.subscriptions if s.is_active] # Hoặc check ngày: if s.end_date > datetime.now()
+                # Lọc các gói cước chưa hết hạn (expired_at >= hôm nay)
+                # Sắp xếp giảm dần theo ngày hết hạn để lấy gói mới nhất
+                valid_subs = [
+                    s for s in user.subscriptions 
+                    if s.expired_at and s.expired_at >= date.today()
+                ]
                 
+                # Sắp xếp: Gói nào hết hạn xa nhất thì lấy (hoặc logic tùy bạn)
+                valid_subs.sort(key=lambda x: x.expired_at, reverse=True)
+
                 if valid_subs:
-                    # Lấy gói đang chạy
                     current = valid_subs[0] 
                     
-                    # Map sang Schema
+                    # Map dữ liệu
                     active_sub_data = {
-                        "plan_name": current.plan_name,        # Tên gói (VD: "Gói Vip")
-                        "remaining_analyses": current.remaining_usage, # Số lượt còn lại
-                        "total_limit": current.limit           # Tổng lượt (VD: 100)
+                        "plan_name": current.package.name if current.package else "Unknown Plan", # Lấy tên từ relationship package
+                        "remaining_analyses": current.credits_left, 
+                        "total_limit": current.package.analysis_limit if current.package else 0
                     }
                 else:
                      # Nếu hết hạn hết rồi -> Trả về mặc định hoặc None
