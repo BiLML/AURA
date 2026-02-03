@@ -261,6 +261,8 @@ class AdminService:
         
         # 3. Gộp dữ liệu (Merge) dựa trên ngày tháng
         final_trends = []
+        total_correct = 0   # <--- Thêm biến đếm
+        total_incorrect = 0 # <--- Thêm biến đếm
         
         for item in upload_trends:
             # Chuyển ngày sang string để làm key tra cứu
@@ -275,7 +277,20 @@ class AdminService:
                 "correct": val_data["correct"],    # AI Đúng (Data mới)
                 "incorrect": val_data["incorrect"] # AI Sai (Data mới)
             })
+
+            total_correct += val_data["correct"]
+            total_incorrect += val_data["incorrect"]
+
+        error_rates = [
+            {"name": "Chính xác", "value": total_correct, "fill": "#22c55e"},
+            {"name": "Sai lệch", "value": total_incorrect, "fill": "#ef4444"}
+        ]
+
+        if total_correct == 0 and total_incorrect == 0:
+            error_rates = []
             
         return {
-            "upload_trends": final_trends
+            "upload_trends": final_trends,
+            "error_rates": error_rates,        # <--- Frontend đang cần cái này
+            "risk_distribution": []            # <--- Frontend cũng cần cái này (trả rỗng tạm thời)
         }

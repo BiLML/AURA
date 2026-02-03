@@ -233,7 +233,7 @@ const DashboardAdmin: React.FC = () => {
                 fetch('https://aurahealth.name.vn/api/v1/admin/reports', { headers }).then(r => r.json()).then(d => setFeedbackList(d.reports || [])),
                 fetch('https://aurahealth.name.vn/api/v1/admin/config', { headers }).then(r => r.json()).then(d => setAiConfig(d)),
                 fetch('https://aurahealth.name.vn/api/v1/billing/packages', { headers }).then(r => r.json()).then(d => setPackageList(d)),
-                fetch('https://aurahealth.name.vn/api/v1/admin/stats/analytics', { headers }).then(r => r.json()).then(d => setAnalyticsData(d)),
+                fetch('https://aurahealth.name.vn/api/v1/admin/stats/analytics', { headers }).then(r => r.json()).then(d => setAnalyticsData({risk_distribution: d.risk_distribution || [], upload_trends: d.upload_trends || [], error_rates: d.error_rates || [] })),
                 fetch('https://aurahealth.name.vn/api/v1/admin/audit-logs', { headers }).then(r => r.json()).then(d => setAuditLogs(d)),
                 fetch('https://aurahealth.name.vn/api/v1/admin/templates', { headers }).then(r => r.json()).then(d => setTemplates(d)),
                 fetch('https://aurahealth.name.vn/api/v1/admin/stats/global', { headers }).then(r => r.json()).then(data => {
@@ -495,6 +495,7 @@ const DashboardAdmin: React.FC = () => {
                             <div style={{flex: 1, width: '100%', minHeight: 0, minWidth: 0, position: 'relative'}}>
                                 {chartView === 'revenue' && (
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                        {globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                                 <defs>
@@ -510,44 +511,52 @@ const DashboardAdmin: React.FC = () => {
                                                 <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
                                             </AreaChart>
                                         </ResponsiveContainer>
+                                        ) : (
+                                        <div style={{padding: 20}}>Đang tải dữ liệu biểu đồ...</div>    
+                                        )}
                                     </div>
                                 )}
 
                                 {chartView === 'performance' && (
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                                                <defs>
-                                                    <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                                                    </linearGradient>
-                                                    <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
-                                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                                                    </linearGradient>
-                                                </defs>
+                                        {analyticsData.upload_trends && analyticsData.upload_trends.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                                                        </linearGradient>
+                                                        <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
+                                                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                                        </linearGradient>
+                                                    </defs>
 
-                                                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
-                                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                                
-                                                <RechartsTooltip 
-                                                    contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                                    formatter={(value: any, name: any) => {
-                                                        if (name === 'count') return [value, "Tổng lượt Scan"];
-                                                        if (name === 'correct') return [value, "AI Đúng"];
-                                                        if (name === 'incorrect') return [value, "AI Sai"];
-                                                        return [value, name];
-                                                    }}
-                                                />
-                                                
-                                                <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
-                                                <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
-                                                <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
-                                                
-                                            </AreaChart>
-                                        </ResponsiveContainer>
+                                                    <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                                                    
+                                                    <RechartsTooltip 
+                                                        contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                                                        formatter={(value: any, name: any) => {
+                                                            if (name === 'count') return [value, "Tổng lượt Scan"];
+                                                            if (name === 'correct') return [value, "AI Đúng"];
+                                                            if (name === 'incorrect') return [value, "AI Sai"];
+                                                            return [value, name];
+                                                        }}
+                                                    />
+                                                    
+                                                    <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
+                                                    <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
+                                                    <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
+                                                    
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        ) : (
+                                            /* --- BỔ SUNG DÒNG NÀY --- */
+                                            <div style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>Đang tải dữ liệu hiệu suất...</div>
+                                        )}
                                     </div>
                                 )}
 
@@ -862,7 +871,7 @@ const DashboardAdmin: React.FC = () => {
                                             <ResponsiveContainer>
                                                 <PieChart>
                                                     <Pie data={analyticsData.error_rates} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                                        {analyticsData.error_rates.map((entry:any, index:number) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                                        {analyticsData.error_rates?.map((entry:any, index:number) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
                                                     </Pie>
                                                     <RechartsTooltip />
                                                     <Legend verticalAlign="bottom" />
