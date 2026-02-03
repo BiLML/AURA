@@ -489,68 +489,67 @@ const DashboardAdmin: React.FC = () => {
 
                             {/* BODY CONTENT */}
                             <div style={{flex: 1, width: '100%', minHeight: 0, position: 'relative'}}>
+                                
                                 {chartView === 'revenue' && (
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                                        <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                                            <defs>
-                                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#007bff" stopOpacity={0.2}/>
-                                                    <stop offset="95%" stopColor="#007bff" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
-                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(value)} />
-                                            <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]} />
-                                            <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
-                                        </AreaChart>
-                                    </ResponsiveContainer>
+                                    // [FIX] Thêm div tuyệt đối để neo kích thước, tránh lỗi width(-1)
+                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#007bff" stopOpacity={0.2}/>
+                                                        <stop offset="95%" stopColor="#007bff" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(value)} />
+                                                <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]} />
+                                                <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 )}
 
                                 {chartView === 'performance' && (
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                                        <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                                            <defs>
-                                                {/* Gradient Tím (Tổng Scan) */}
-                                                <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                                                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                                                </linearGradient>
-                                                {/* Gradient Xanh Lá (AI Đúng) */}
-                                                <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
-                                                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
+                                    // [FIX] Thêm div tuyệt đối tương tự cho biểu đồ này
+                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                    <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
+                                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
 
-                                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
-                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                            
-                                            <RechartsTooltip 
-                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                                formatter={(value: any, name: any) => {
-                                                    if (name === 'count') return [value, "Tổng lượt Scan"];
-                                                    if (name === 'correct') return [value, "AI Đúng"];
-                                                    if (name === 'incorrect') return [value, "AI Sai"];
-                                                    return [value, name];
-                                                }}
-                                            />
-                                            
-                                            {/* Đường 1: Tổng lượt Scan (Tím - Nền tảng) */}
-                                            <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
-                                            
-                                            {/* Đường 2: AI Đúng (Xanh lá) */}
-                                            <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
-                                            
-                                            {/* Đường 3: AI Sai (Đỏ - Nét đứt cảnh báo) */}
-                                            <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
-                                            
-                                        </AreaChart>
-                                    </ResponsiveContainer>
+                                                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                                                
+                                                <RechartsTooltip 
+                                                    contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                                                    formatter={(value: any, name: any) => {
+                                                        if (name === 'count') return [value, "Tổng lượt Scan"];
+                                                        if (name === 'correct') return [value, "AI Đúng"];
+                                                        if (name === 'incorrect') return [value, "AI Sai"];
+                                                        return [value, name];
+                                                    }}
+                                                />
+                                                
+                                                <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
+                                                <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
+                                                <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
+                                                
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 )}
 
-                                {/* --- MỚI: BẢNG MỨC SỬ DỤNG --- */}
                                 {chartView === 'usage' && (
                                     <div style={{overflowX: 'auto', overflowY: 'auto', height: '100%'}}>
                                         <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
@@ -565,8 +564,6 @@ const DashboardAdmin: React.FC = () => {
                                             </thead>
                                             <tbody>
                                                 {userList.filter(u => u.role === 'user' || u.role === 'clinic').map((u) => {
-                                                    // Giả lập dữ liệu nếu API chưa trả về (Để bạn thấy UI trước)
-                                                    // Khi backend bạn update API admin/users trả về subscription, dòng này sẽ tự nhận.
                                                     const planName = u.subscription?.plan_name || (u.role === 'clinic' ? 'Enterprise Clinic' : 'Free Tier');
                                                     const remaining = u.subscription?.remaining_analyses ?? (u.role === 'clinic' ? 999 : 5);
                                                     const total = u.subscription?.total_limit || 10;
