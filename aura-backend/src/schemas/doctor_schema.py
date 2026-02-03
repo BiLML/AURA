@@ -14,6 +14,7 @@ class PatientResponse(BaseModel):
     full_name: Optional[str] = None
     email: str
     phone: Optional[str] = None
+    medical_info: Optional[dict] = None
     latest_scan: Optional[LatestScan] = None
 
 class MyPatientsResponse(BaseModel):

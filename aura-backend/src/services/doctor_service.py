@@ -74,6 +74,7 @@ class DoctorService:
                 full_name=full_name,
                 email=user.email,
                 phone=phone,
+                medical_info=user.profile.medical_info if user.profile else None,
                 latest_scan=scan_data
             ))
             

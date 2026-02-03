@@ -397,7 +397,10 @@ const DashboardDr: React.FC = () => {
 
     const filteredPatients = useMemo(() => {
         return patientsData.filter(p => {
-            const matchName = (p.full_name||p.userName).toLowerCase().includes(searchTerm.toLowerCase());
+            const matchNameOrId = 
+                (p.full_name || p.userName).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.id.toLowerCase().includes(searchTerm.toLowerCase()); // Thêm tìm kiếm theo ID
+            
             const res = (p.latest_scan?.ai_result || '').toLowerCase();
             let matchRisk = true;
             if (riskFilter === 'ALL') matchRisk = true;
@@ -406,7 +409,7 @@ const DashboardDr: React.FC = () => {
             else if (riskFilter === 'Moderate NPDR') matchRisk = res.includes('moderate') || res.includes('trung bình');
             else if (riskFilter === 'Severe NPDR') matchRisk = res.includes('severe') || res.includes('nặng');
             else if (riskFilter === 'PDR') matchRisk = res.includes('pdr');
-            return matchName && matchRisk;
+            return matchNameOrId && matchRisk;
         });
     }, [patientsData, searchTerm, riskFilter]);
 
@@ -650,12 +653,32 @@ const DashboardDr: React.FC = () => {
                                     </div>
                                 </div>
                                 <table style={styles.table} className="table-hover">
-                                    <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Liên hệ</th><th style={styles.th}>Kết quả gần nhất</th><th style={styles.th}>Thao tác</th></tr></thead>
+                                    <thead>
+                                        <tr>
+                                            <th style={styles.th}>ID Bệnh nhân</th> {/* Cột mới */}
+                                            <th style={styles.th}>Bệnh nhân</th>
+                                            <th style={styles.th}>Thông tin y tế</th> {/* Cột mới */}
+                                            <th style={styles.th}>Kết quả gần nhất</th>
+                                            <th style={styles.th}>Thao tác</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         {filteredPatients.map((p) => (
                                             <tr key={p.id} style={styles.tr}>
-                                                <td style={styles.td}><b>{p.full_name || p.userName}</b></td>
-                                                <td style={styles.td}>{p.email}<br/><small style={{color:'#94a3b8'}}>{p.phone}</small></td>
+                                                <td style={styles.td}><code style={{fontSize:'12px', color:'#64748b'}}>{p.id.substring(0, 8)}...</code></td>
+                                                <td style={styles.td}>
+                                                    <b>{p.full_name || p.userName}</b>
+                                                    <br/><small style={{color:'#94a3b8'}}>{p.phone || p.email}</small>
+                                                </td>
+                                                <td style={styles.td}>
+                                                    {p.medical_info ? (
+                                                        <div style={{fontSize: '13px'}}>
+                                                            <span>GT: {p.medical_info.gender || '--'}</span> | 
+                                                            <span> Cao: {p.medical_info.height}cm</span><br/>
+                                                            <small>BHYT: {p.medical_info.insurance_id || 'Chưa cập nhật'}</small>
+                                                        </div>
+                                                    ) : 'N/A'}
+                                                </td>
                                                 <td style={styles.td}>
                                                     {p.latest_scan?.ai_result ? (
                                                          <span style={{
