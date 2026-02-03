@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from uuid import UUID
 from datetime import date
 from models.enums import EyeSide
@@ -61,3 +61,7 @@ class IMedicalRepository(ABC):
     def update_analysis_result(self, result_id: Union[UUID, int, str], risk_level: str, annotated_url: str, report_content: str) -> bool:
         pass
 
+    @abstractmethod
+    def get_upload_trends(self, days: int = 7) -> List[Dict[str, Any]]:
+        """Lấy thống kê số lượt upload ảnh theo ngày"""
+        pass

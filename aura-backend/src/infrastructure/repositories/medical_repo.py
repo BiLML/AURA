@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, cast, Date
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import date, timedelta
 
 # --- 1. IMPORT INTERFACE TỪ DOMAIN ---
 # Đây là bước quan trọng nhất để kết nối "Luật chơi" (Domain) với "Cách chơi" (Infrastructure)
@@ -197,3 +198,22 @@ class MedicalRepository(IMedicalRepository):
             self.db.rollback()
             print(f"Error updating analysis result: {e}")
             return False
+        
+    def get_upload_trends(self, days: int = 7) -> List[Dict[str, Any]]:
+        # Tính ngày bắt đầu (Ví dụ: 7 ngày trước)
+        start_date = date.today() - timedelta(days=days)
+        
+        # Query Group By Date
+        results = self.db.query(
+            cast(RetinalImage.created_at, Date).label('date'),
+            func.count(RetinalImage.id).label('count')
+        ).filter(
+            RetinalImage.created_at >= start_date
+        ).group_by(
+            cast(RetinalImage.created_at, Date)
+        ).order_by(
+            cast(RetinalImage.created_at, Date)
+        ).all()
+        
+        # Format dữ liệu trả về dạng list dict: [{'date': '2023-10-01', 'count': 5}, ...]
+        return [{"date": str(r.date), "count": r.count} for r in results]
