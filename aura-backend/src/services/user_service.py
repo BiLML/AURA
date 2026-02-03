@@ -247,56 +247,74 @@ class UserService:
     
     # 3. FACEBOOK LOGIN
     def facebook_login(self, token: str, user_id_from_fe: str):
+        # 1. Gọi API Facebook
         facebook_graph_url = "https://graph.facebook.com/me"
         params = {"access_token": token, "fields": "id,name,email,picture.type(large)"}
         
         try:
             response = requests.get(facebook_graph_url, params=params)
             fb_data = response.json()
+            
             if "error" in fb_data:
                 raise HTTPException(status_code=400, detail=f"Facebook Error: {fb_data['error']['message']}")
                 
-            email = fb_data.get("email")
-            name = fb_data.get("name")
+            # Lấy thông tin
             fb_id = fb_data.get("id")
+            name = fb_data.get("name")
+            email = fb_data.get("email") # Có thể là None
 
+            # Kiểm tra ID khớp nhau
             if fb_id != user_id_from_fe:
                  raise HTTPException(status_code=400, detail="User ID không khớp!")
+            
+            # --- SỬA LỖI TẠI ĐÂY ---
+            # Nếu không có email (do đăng ký bằng SĐT), tự tạo email ảo dựa trên ID
             if not email:
-                raise HTTPException(status_code=400, detail="Không tìm thấy email từ Facebook.")
+                email = f"{fb_id}@facebook.user"  # Ví dụ: 1022384...@facebook.user
 
+        except HTTPException as he:
+            raise he
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Lỗi xác thực Facebook: {str(e)}")
 
+        # 2. Tìm user trong DB
         user = self.user_repo.get_by_email(email)
         is_new_user = False
 
+        # 3. Nếu chưa có thì tạo mới
         if not user:
             is_new_user = True
             random_password = secrets.token_urlsafe(16)
             hashed_pwd = get_password_hash(random_password)
+            
+            # Tạo username unique
             base_username = email.split("@")[0]
             unique_username = f"{base_username}_{uuid.uuid4().hex[:4]}"
 
             new_user_data = UserCreate(
                 username=unique_username,
-                email=email,
+                email=email, # Email thật hoặc email ảo đã tạo ở trên
                 password=random_password,
                 full_name=name,
                 role=UserRole.USER
             )
             
-            # Repo tạo User + Profile
+            # Repo tạo User
             user = self.user_repo.create_user(new_user_data, hashed_pwd)
             
-            # Cập nhật Avatar nếu có
+            # Cập nhật Avatar
             if user.profile and fb_data.get('picture') and fb_data['picture'].get('data'):
                 user.profile.avatar_url = fb_data['picture']['data']['url']
                 self.db.commit()
                 
-            self._send_welcome_notification(user) # Gửi thông báo
+            self._send_welcome_notification(user)
 
-        access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value if hasattr(user.role, 'value') else user.role})
+        # 4. Trả về Token
+        access_token = create_access_token(data={
+            "sub": str(user.id), 
+            "role": user.role.value if hasattr(user.role, 'value') else user.role
+        })
+        
         return {
             "access_token": access_token,
             "token_type": "bearer",

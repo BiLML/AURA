@@ -50,21 +50,42 @@ const Login = () => {
         onError: () => setError('Đăng nhập Google thất bại'),
     });
 
-    // --- FACEBOOK ---
+    // --- FACEBOOK (Đã sửa lỗi logic lấy Token) ---
     const handleFacebookResponse = async (response: any) => {
+        // 1. In ra để kiểm tra (Debug)
+        console.log("Facebook Response Raw:", response);
+
+        // 2. Lấy Token an toàn (Chấp nhận cả 2 cấu trúc phẳng hoặc lồng nhau)
+        const token = response.accessToken || response.authResponse?.accessToken;
+        const uid = response.userID || response.authResponse?.userID;
+
+        // 3. Nếu không tìm thấy token thì dừng ngay, không gọi API để tránh lỗi 400
+        if (!token || !uid) {
+            console.error("Lỗi: Không tìm thấy AccessToken trong response Facebook");
+            setError("Không lấy được dữ liệu từ Facebook. Vui lòng thử lại.");
+            return;
+        }
+
         try {
             const res = await fetch('https://aurahealth.name.vn/api/v1/auth/facebook-login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    accessToken: response.accessToken,
-                    userID: response.userID
+                    accessToken: token, // Dùng biến đã xử lý an toàn
+                    userID: uid
                 })
             });
             const data = await res.json();
-            if (res.ok) handleLoginSuccess(data);
-            else setError(data.detail || "Đăng nhập Facebook thất bại");
+            
+            if (res.ok) {
+                handleLoginSuccess(data);
+            } else {
+                // Hiển thị lỗi chi tiết từ Server nếu có
+                console.error("Server Error:", data);
+                setError(data.detail || "Đăng nhập Facebook thất bại");
+            }
         } catch (error) {
+            console.error("Network Error:", error);
             setError('Lỗi kết nối Server (Facebook Login)');
         }
     };
@@ -159,6 +180,8 @@ const Login = () => {
                     {/* Nút Facebook đã được làm sạch style để đồng bộ */}
                     <FacebookLogin
                         appId="1383927066801418"
+			scope="public_profile,email" 
+   			fields="name,email,picture"
                         onSuccess={handleFacebookResponse}
                         onFail={(error) => console.log('Login Failed!', error)}
                         className="social-button facebook-btn-custom"
