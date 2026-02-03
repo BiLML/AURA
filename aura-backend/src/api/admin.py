@@ -36,8 +36,9 @@ def get_admin_service(db: Session = Depends(get_db)) -> AdminService:
     config_repo = ConfigRepository(db)
     audit_repo = AuditRepository(db)
     noti_repo = NotificationRepository(db)
+    doctor_repo = DoctorRepository(db)
 
-    return AdminService(user_repo, medical_repo, billing_repo, config_repo, audit_repo, noti_repo)
+    return AdminService(user_repo, medical_repo, billing_repo, config_repo, audit_repo, noti_repo, doctor_repo)
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     repo = UserRepository(db)
