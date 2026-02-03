@@ -17,7 +17,9 @@ class DoctorRepository(IDoctorRepository):
 
     def get_assigned_patients(self, doctor_id: UUID) -> List[User]:
         """Lấy danh sách bệnh nhân được phân công cho bác sĩ này"""
-        return self.db.query(User).filter(
+        return self.db.query(User).options(
+            joinedload(User.profile) # <--- THÊM DÒNG NÀY: Eager load Profile
+        ).filter(
             User.assigned_doctor_id == doctor_id,
             User.role == UserRole.USER
         ).all()

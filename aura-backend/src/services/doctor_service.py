@@ -64,9 +64,13 @@ class DoctorService:
 
             full_name = user.username
             phone = None
+            medical_info = None
+
             if user.profile:
                 full_name = user.profile.full_name or user.username
                 phone = user.profile.phone
+                medical_info = user.profile.medical_info
+
 
             results.append(PatientResponse(
                 id=str(user.id),
@@ -74,7 +78,7 @@ class DoctorService:
                 full_name=full_name,
                 email=user.email,
                 phone=phone,
-                medical_info=user.profile.medical_info if user.profile else None,
+                medical_info=medical_info,
                 latest_scan=scan_data
             ))
             
