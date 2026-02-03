@@ -76,71 +76,92 @@ def clean_mask(mask_array, min_size=10):
             cleaned[labels == i] = 255
     return cleaned.astype(np.float32) / 255.0
 
-# --- PHÂN TÍCH VASCULAR (THUẬT TOÁN MỚI) ---
-def analyze_vascular_health(vessel_mask_full):
+# --- PHÂN TÍCH SỨC KHỎE TOÀN DIỆN (SYSTEMIC HEALTH) ---
+def analyze_systemic_health(vessel_mask_full, findings):
+    """
+    Phân tích: Huyết áp, Tim mạch, Tiểu đường, Thần kinh
+    """
+    # 1. Tính toán chỉ số mạch máu
     mask_bin = (vessel_mask_full * 255).astype(np.uint8) if vessel_mask_full.max() <= 1.0 else vessel_mask_full.astype(np.uint8)
     _, mask_bin = cv2.threshold(mask_bin, 127, 255, cv2.THRESH_BINARY)
-    
     h, w = mask_bin.shape
     total_area = h * w
     vessel_area = np.sum(mask_bin > 0)
     
-    # 1. Mật độ (Density)
+    # Density & Tortuosity
     density = (vessel_area / total_area) * 100 
-    
-    # 2. Độ cong (Tortuosity) - [THUẬT TOÁN MỚI: ARC-CHORD RATIO]
     contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     tortuosity_indices = []
-    
     for cnt in contours:
-        # Chỉ xét các đoạn mạch máu đủ dài
         if cv2.contourArea(cnt) > 30: 
             perimeter = cv2.arcLength(cnt, True)
-            
-            # Thay vì dùng ConvexHull (dễ sai với nhánh cây), ta dùng Rotated Bounding Box
             rect = cv2.minAreaRect(cnt)
             (center), (width, height), angle = rect
-            
-            # Chiều dài lớn nhất của hộp bao quanh (xấp xỉ Chord Length)
             major_axis = max(width, height)
-            
             if major_axis > 5:
-                # Chu vi mạch máu (2 mặt) chia 2 = Chiều dài thực tế của mạch (Arc Length)
                 actual_length = perimeter / 2.0
-                
-                # Công thức: Arc / Chord
                 t_index = actual_length / major_axis
                 tortuosity_indices.append(t_index)
-
-    # Lấy trung bình (nếu không có mạch nào thì mặc định 1.0)
     avg_tortuosity = np.mean(tortuosity_indices) if tortuosity_indices else 1.0
 
-    # 3. Đánh giá Rủi ro
-    risks = []
-    
-    # Tăng Huyết Áp (Ngưỡng đã được chuẩn hóa lại theo công thức mới)
-    # Công thức Arc/Chord thường cho giá trị nhỏ hơn Hull, nên ngưỡng thấp hơn chút
-    # Bình thường ~1.0 - 1.05. Cong nhẹ > 1.08. Cong nặng > 1.12
+    # --- KHỐI 1: TIM MẠCH & HUYẾT ÁP ---
     htn_risk = "Thấp"
-    if avg_tortuosity > 1.15: # Cong xoắn lò xo
+    htn_note = ""
+    if avg_tortuosity > 1.15: 
         htn_risk = "Cao (Cảnh báo)"
-        risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {avg_tortuosity:.2f} > 1.15).")
-    elif avg_tortuosity > 1.09: # Hơi uốn lượn
+        htn_note = f"Mạch máu co kéo rõ rệt (Tortuosity: {avg_tortuosity:.2f}), gợi ý áp lực thành mạch lớn."
+    elif avg_tortuosity > 1.09: 
         htn_risk = "Trung bình"
-        risks.append(f"- Tăng huyết áp: Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {avg_tortuosity:.2f}).")
+        htn_note = f"Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {avg_tortuosity:.2f})."
 
-    # Tim mạch / Đột quỵ (Ngưỡng 3.5% như đã chốt)
     cvd_risk = "Ổn định"
+    cvd_note = ""
     if density < 3.5: 
-        cvd_risk = "Cảnh báo thiếu máu cục bộ"
-        risks.append(f"- Nguy cơ Đột quỵ/Tim mạch: Mật độ mạch máu thấp ({density:.2f}% < 3.5%), gợi ý tình trạng thiếu máu cục bộ.")
+        cvd_risk = "Cảnh báo thiếu máu"
+        cvd_note = f"Mật độ mạch máu thấp ({density:.2f}% < 3.5%), nguy cơ thiếu máu cục bộ võng mạc/não."
+
+    # --- KHỐI 2: NGUY CƠ TIỂU ĐƯỜNG (METABOLIC) ---
+    # Dựa trên MA (Vi phình mạch) và HE (Xuất huyết)
+    diabetic_risk = "Thấp"
+    diabetic_note = "Chưa phát hiện dấu hiệu tổn thương do đường huyết."
     
+    ma_count = findings.get('MA', 0)
+    he_count = findings.get('HE', 0)
+    
+    if ma_count > 5 or he_count > 5:
+        diabetic_risk = "Cao"
+        diabetic_note = f"Phát hiện {int(ma_count)} điểm vi phình mạch và {int(he_count)} vùng xuất huyết. Dấu hiệu điển hình của đường huyết không kiểm soát."
+    elif ma_count > 0 or he_count > 0:
+        diabetic_risk = "Trung bình"
+        diabetic_note = "Có dấu hiệu tổn thương vi mạch nhỏ, cần theo dõi đường huyết."
+
+    # --- KHỐI 3: SỨC KHỎE THẦN KINH (NEUROLOGICAL) ---
+    # Dựa trên SE (Soft Exudates - Cotton Wool Spots) và OD (Optic Disc)
+    neuro_risk = "Ổn định"
+    neuro_notes = []
+    
+    se_count = findings.get('SE', 0)
+    od_found = findings.get('OD', 0) > 0
+    
+    if se_count > 0:
+        neuro_risk = "Cảnh báo (Tổn thương sợi thần kinh)"
+        neuro_notes.append(f"⚠️ Phát hiện {int(se_count)} đốm bông (Cotton Wool Spots): Dấu hiệu nhồi máu lớp sợi thần kinh võng mạc.")
+    
+    if not od_found:
+        neuro_notes.append("⚠️ Không tìm thấy Gai thị (Optic Disc): Ảnh chụp có thể bị khuất hoặc gai thị bất thường.")
+    else:
+        neuro_notes.append("✅ Gai thị (Đầu dây thần kinh thị giác): Cấu trúc quan sát rõ ràng.")
+
+    if avg_tortuosity > 1.15:
+        neuro_notes.append("⚠️ Độ cong mạch máu cao có liên quan đến nguy cơ suy giảm nhận thức mạch máu.")
+
+    if not neuro_notes: neuro_notes.append("Chưa phát hiện dấu hiệu bất thường.")
+
     return {
-        "density": density,
-        "tortuosity": avg_tortuosity,
-        "htn_risk": htn_risk,
-        "cvd_risk": cvd_risk,
-        "systemic_notes": risks
+        "metrics": {"density": density, "tortuosity": avg_tortuosity},
+        "cardio": {"htn_risk": htn_risk, "htn_note": htn_note, "cvd_risk": cvd_risk, "cvd_note": cvd_note},
+        "diabetes": {"risk": diabetic_risk, "note": diabetic_note},
+        "neuro": {"risk": neuro_risk, "notes": neuro_notes}
     }
 
 # --- CORE LOGIC ---
@@ -175,7 +196,7 @@ def run_aura_inference(image_bytes):
 
         # 2. SEGMENTATION LOOP
         overlay_full = np.zeros((orig_h, orig_w, 3), dtype=np.uint8) 
-        findings = {'HE': 0, 'MA': 0, 'EX': 0, 'SE': 0, 'Vessels': 0}
+        findings = {'HE': 0, 'MA': 0, 'EX': 0, 'SE': 0, 'Vessels': 0, 'OD': 0}
         vessel_mask_full = np.zeros((orig_h, orig_w), dtype=np.float32)
 
         def draw_mask_on_overlay(mask_cleaned, color):
@@ -234,65 +255,52 @@ def run_aura_inference(image_bytes):
                 pred = session.run(None, {session.get_inputs()[0].name: input_seg})[0]
                 mask_od = clean_mask(pred[0,:,:,0], 0)
                 if np.sum(mask_od) > 0:
+                    findings['OD'] = 1 # Mark as found
                     mask_full = cv2.resize(mask_od, (orig_w, orig_h))
                     _, mask_bin = cv2.threshold(mask_full, 0.5, 1, cv2.THRESH_BINARY)
                     contours, _ = cv2.findContours(mask_bin.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     cv2.drawContours(overlay_full, contours, -1, (255, 0, 0), 2)
             except: pass
 
-        # 3. PHÂN TÍCH CHUYÊN SÂU
-        def re_evaluate_vascular(info):
-            t_val = info['tortuosity']
-            new_risks = []
-            htn_status = "Thấp"
-            # Cập nhật ngưỡng mới cho công thức Arc/Chord
-            if t_val > 1.15: 
-                htn_status = "Cao (Cảnh báo)"
-                new_risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {t_val:.2f} > 1.15).")
-            elif t_val > 1.09: 
-                htn_status = "Trung bình"
-                new_risks.append(f"- Tăng huyết áp: Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {t_val:.2f}).")
-            info['htn_risk'] = htn_status
-            info['systemic_notes'] = new_risks + [n for n in info['systemic_notes'] if "Tăng huyết áp" not in n]
-            return info
+        # 3. GỌI PHÂN TÍCH HỆ THỐNG
+        sys_health = analyze_systemic_health(vessel_mask_full, findings)
 
-        vascular_info = re_evaluate_vascular(analyze_vascular_health(vessel_mask_full))
-
-        # 4. REPORTING
+        # 4. TẠO BÁO CÁO (REPORTING)
         risk_score = (findings['MA']*1) + (findings['EX']*2) + (findings['HE']*3) + (findings['SE']*4)
         ai_grade_origin = dr_grade
         
-        if risk_score > 8000: dr_grade = "Severe NPDR (Nặng - Cần can thiệp gấp)"
+        if risk_score > 8000: dr_grade = "Severe NPDR (Nặng)"
         elif risk_score > 3500: dr_grade = "Moderate NPDR (Trung bình)"
-        elif risk_score > 500 and "Normal" in dr_grade: dr_grade = "Mild NPDR (Dấu hiệu sớm)"
-        if "PDR" in ai_grade_origin: dr_grade = "PDR (Võng mạc đái tháo đường tăng sinh)"
+        elif risk_score > 500 and "Normal" in dr_grade: dr_grade = "Mild NPDR (Nhẹ)"
+        if "PDR" in ai_grade_origin: dr_grade = "PDR (Tăng sinh)"
 
         report_lines = []
-        report_lines.append("=== KẾT QUẢ PHÂN TÍCH TỔNG QUÁT ===")
-        report_lines.append(f"• Chẩn đoán cuối cùng: {dr_grade.upper()}")
-        report_lines.append(f"• Phân loại gốc từ AI: {ai_grade_origin}")
-        report_lines.append(f"• Điểm tổn thương vùng mắt: {int(risk_score)}")
+        report_lines.append("=== 1. TỔNG QUAN VÕNG MẠC (DR) ===")
+        report_lines.append(f"• Chẩn đoán: {dr_grade.upper()}")
+        report_lines.append(f"• Điểm tổn thương: {int(risk_score)}")
         
-        if risk_score > 8000:
-            report_lines.append("⚠️ CẢNH BÁO: Mức độ tổn thương RẤT CAO. Số lượng điểm xuất huyết và xuất tiết vượt ngưỡng an toàn.")
+        report_lines.append("\n=== 2. SÀNG LỌC TIM MẠCH & HUYẾT ÁP ===")
+        report_lines.append(f"- Chỉ số độ cong mạch máu: {sys_health['metrics']['tortuosity']:.2f}")
+        report_lines.append(f"► Nguy cơ Tăng Huyết Áp: {sys_health['cardio']['htn_risk'].upper()}")
+        if sys_health['cardio']['htn_note']: report_lines.append(f"  ({sys_health['cardio']['htn_note']})")
         
-        report_lines.append("\n=== SÀNG LỌC SỨC KHỎE TOÀN THÂN (QUA MẠCH MÁU) ===")
-        report_lines.append(f"🔍 Chỉ số mạch máu (Vessel Metrics):")
-        report_lines.append(f"   - Mật độ (Density): {vascular_info['density']:.2f}%")
-        report_lines.append(f"   - Độ cong (Tortuosity): {vascular_info['tortuosity']:.2f} (Ngưỡng an toàn < 1.09)")
-        report_lines.append(f"\n► Nguy cơ Tăng Huyết Áp: {vascular_info['htn_risk'].upper()}")
-        report_lines.append(f"► Nguy cơ Tim mạch/Đột quỵ: {vascular_info['cvd_risk'].upper()}")
-        
-        if vascular_info['systemic_notes']:
-            report_lines.append("\n⚠️ DẤU HIỆU TOÀN THÂN:")
-            for note in vascular_info['systemic_notes']: report_lines.append(note)
-        else:
-            report_lines.append("\n✅ Chưa phát hiện dấu hiệu bất thường liên quan đến bệnh lý toàn thân.")
+        report_lines.append(f"► Sức khỏe Tim mạch/Đột quỵ: {sys_health['cardio']['cvd_risk'].upper()}")
+        if sys_health['cardio']['cvd_note']: report_lines.append(f"  ({sys_health['cardio']['cvd_note']})")
 
-        report_lines.append("\n=== CHI TIẾT TỔN THƯƠNG VÕNG MẠC ===")
-        report_lines.append(f"- Xuất huyết (HE): {int(findings['HE'])} vùng")
-        report_lines.append(f"- Vi phình mạch (MA): {int(findings['MA'])} điểm")
-        report_lines.append(f"- Xuất tiết (EX/SE): {int(findings['EX'] + findings['SE'])} vùng")
+        report_lines.append("\n=== 3. SÀNG LỌC TIỂU ĐƯỜNG (CHUYỂN HÓA) ===")
+        report_lines.append(f"► Nguy cơ Biến chứng Tiểu đường: {sys_health['diabetes']['risk'].upper()}")
+        report_lines.append(f"  - {sys_health['diabetes']['note']}")
+
+        report_lines.append("\n=== 4. SỨC KHỎE THẦN KINH (NEURO) ===")
+        report_lines.append(f"► Tình trạng Lớp sợi thần kinh & Gai thị: {sys_health['neuro']['risk'].upper()}")
+        for n in sys_health['neuro']['notes']:
+            report_lines.append(f"  - {n}")
+
+        report_lines.append("\n=== 5. CHI TIẾT KỸ THUẬT ===")
+        report_lines.append(f"- Xuất huyết (HE): {int(findings['HE'])}")
+        report_lines.append(f"- Vi phình mạch (MA): {int(findings['MA'])}")
+        report_lines.append(f"- Xuất tiết cứng (EX): {int(findings['EX'])}")
+        report_lines.append(f"- Xuất tiết mềm (SE): {int(findings['SE'])}")
         
         final_report = "\n".join(report_lines)
 
