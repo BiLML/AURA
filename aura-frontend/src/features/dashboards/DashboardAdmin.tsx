@@ -499,8 +499,8 @@ const DashboardAdmin: React.FC = () => {
                                 {chartView === 'revenue' && (
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
                                         {globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
-                                        // [FIX] Thêm minWidth={0} và debounce={50}
-                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                                        
+                                        <ResponsiveContainer width="99%" height="100%" minWidth={0} debounce={200}>
                                             <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                                 <defs>
                                                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -515,6 +515,7 @@ const DashboardAdmin: React.FC = () => {
                                                 <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
                                             </AreaChart>
                                         </ResponsiveContainer>
+
                                         ) : <div style={{padding: 20}}>Đang tải dữ liệu biểu đồ...</div>}
                                     </div>
                                 )}
@@ -522,9 +523,10 @@ const DashboardAdmin: React.FC = () => {
                                 {chartView === 'performance' && (
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
                                         {analyticsData.upload_trends && analyticsData.upload_trends.length > 0 ? (
-                                            // [FIX] Thêm minWidth={0} và debounce={50}
-                                            <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                                            
+                                            <ResponsiveContainer width="99%" height="100%" minWidth={0} debounce={200}>
                                                 <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                                    {/* ... (Giữ nguyên nội dung bên trong AreaChart) ... */}
                                                     <defs>
                                                         <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
                                                             <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
@@ -546,6 +548,7 @@ const DashboardAdmin: React.FC = () => {
                                                     <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
                                                 </AreaChart>
                                             </ResponsiveContainer>
+
                                         ) : (
                                             <div style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>Đang tải dữ liệu hiệu suất...</div>
                                         )}
@@ -804,7 +807,7 @@ const DashboardAdmin: React.FC = () => {
                                     <div style={styles.configBox} className="hover-card">
                                         <h4 style={styles.configTitle}>🔄 Auto-Training</h4>
                                         <div style={{marginBottom:'15px', display:'flex', gap:'10px', alignItems:'center'}}>
-                                            <input type="checkbox" id="auto_retrain" style={{width: 16, height: 16}} checked={aiConfig.auto_retrain} onChange={(e)=>setAiConfig({...aiConfig, auto_retrain: e.target.checked})} />
+                                            <input type="checkbox" id="auto_retrain" style={{width: 16, height: 16}} checked={aiConfig.auto_retrain ?? false} onChange={(e)=>setAiConfig({...aiConfig, auto_retrain: e.target.checked})} />
                                             <label htmlFor="auto_retrain" style={{margin:0, fontSize:'14px', fontWeight:'600'}}>Bật tự động huấn luyện</label>
                                         </div>
                                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap: 10}}>
@@ -823,7 +826,12 @@ const DashboardAdmin: React.FC = () => {
                                         <h4 style={{...styles.configTitle, color:'#c2410c'}}>🛡️ Quyền riêng tư</h4>
                                         <div style={{marginBottom: 10}}>
                                             <label style={{display:'flex', gap: 10, cursor:'pointer'}}>
-                                                <input type="checkbox" checked={aiConfig.anonymize_patient_data} onChange={(e)=>setAiConfig({...aiConfig, anonymize_patient_data: e.target.checked})} />
+                                                {/* [FIX] Thêm ?? false vào sau aiConfig.anonymize_patient_data */}
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={aiConfig.anonymize_patient_data ?? false} 
+                                                    onChange={(e)=>setAiConfig({...aiConfig, anonymize_patient_data: e.target.checked})} 
+                                                />
                                                 <span style={{fontSize:'13px'}}>Ẩn danh dữ liệu (Anonymize)</span>
                                             </label>
                                         </div>
