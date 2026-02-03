@@ -93,6 +93,12 @@ interface NotificationTemplate {
     updated_at: string;
 }
 
+interface Transaction {
+    user: string;
+    amount: number;
+    date: string;
+}
+
 // --- CSS STYLES FOR ANIMATIONS ---
 const cssStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -232,12 +238,12 @@ const DashboardAdmin: React.FC = () => {
                 fetch('https://aurahealth.name.vn/api/v1/admin/templates', { headers }).then(r => r.json()).then(d => setTemplates(d)),
                 fetch('https://aurahealth.name.vn/api/v1/admin/stats/global', { headers }).then(r => r.json()).then(data => {
                     setGlobalStats({
-                        revenue: data.total_revenue,
-                        totalScans: data.total_scans,
-                        recentTransactions: data.recent_transactions,
+                        revenue: data.total_revenue || 0,
+                        totalScans: data.total_scans || 0,
+                        recentTransactions: data.recent_transactions || [], // Thêm || []
                         aiAccuracy: data.ai_performance?.accuracy || 0,
                         validatedCount: data.ai_performance?.total_validated || 0,
-                        revenueChart: data.revenue_chart || [] 
+                        revenueChart: data.revenue_chart || []
                     });
                 })
             ]);
@@ -455,8 +461,7 @@ const DashboardAdmin: React.FC = () => {
                         </div>
 
                         {/* RIGHT CONTENT: CHART OR TABLE */}
-                        <div style={{flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
-                            
+                        <div style={{flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0}}>                            
                             {/* HEADER */}
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', flexShrink: 0}}>
                                 <div>
@@ -1004,7 +1009,7 @@ const DashboardAdmin: React.FC = () => {
                             <h3 style={{fontSize: 16, marginBottom: 15}}>Giao dịch gần đây</h3>
                             <table style={styles.table}>
                                 <tbody>
-                                    {globalStats.recentTransactions.map((tx: any, i) => (
+                                    {globalStats.recentTransactions.map((tx: Transaction, i) => (
                                         <tr key={i} className="hover-row">
                                             <td style={styles.td}>{tx.user}</td>
                                             <td style={{...styles.td, color:'#15803d', fontWeight:'bold'}}>+{formatCurrency(tx.amount)}</td>
