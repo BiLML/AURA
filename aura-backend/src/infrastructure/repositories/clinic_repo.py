@@ -12,7 +12,6 @@ from models.clinic import Clinic
 from models.enums import ClinicStatus
 from models.medical import RetinalImage, AIAnalysisResult, Patient
 from models.users import User
-from models.clinic import Clinic
 
 class ClinicRepository(IClinicRepository):
     def __init__(self, db: Session):
@@ -37,7 +36,11 @@ class ClinicRepository(IClinicRepository):
         return self.db.query(Clinic).all()
 
     def get_clinic_by_id(self, clinic_id: str) -> Optional[Clinic]:
-        return self.db.query(Clinic).filter(Clinic.id == clinic_id).first()
+        try:
+            real_id = UUID(str(clinic_id)) if isinstance(clinic_id, str) else clinic_id
+            return self.db.query(Clinic).filter(Clinic.id == real_id).first()
+        except ValueError:
+            return None
     
     def get_unverified_clinics(self) -> List[Clinic]:
         return self.db.query(Clinic).options(joinedload(Clinic.admin)).filter(

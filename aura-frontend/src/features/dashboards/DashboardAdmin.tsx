@@ -497,7 +497,7 @@ const DashboardAdmin: React.FC = () => {
 
                             <div style={{flex: 1, width: '100%', minHeight: 0, minWidth: 0, position: 'relative'}}>
                                 {chartView === 'revenue' && (
-                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
                                         {globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
@@ -519,7 +519,7 @@ const DashboardAdmin: React.FC = () => {
                                 )}
 
                                 {chartView === 'performance' && (
-                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
                                         {analyticsData.upload_trends && analyticsData.upload_trends.length > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
@@ -551,7 +551,6 @@ const DashboardAdmin: React.FC = () => {
                                 )}
                                 
                                 {chartView === 'usage' && (
-                                    /* BẢNG MỨC SỬ DỤNG - GIỮ NGUYÊN CODE CŨ */
                                     <div style={{overflowX: 'auto', overflowY: 'auto', height: '100%'}}>
                                         <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
                                             <thead>
