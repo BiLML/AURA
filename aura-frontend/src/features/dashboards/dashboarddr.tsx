@@ -606,7 +606,6 @@ const DashboardDr: React.FC = () => {
                                     </div>
                                     <table style={styles.table} className="table-hover">
                                         <thead>
-                                            {/* Lưu ý: Không để comment hoặc khoảng trắng giữa các thẻ th trong tr */}
                                             <tr>
                                                 <th style={styles.th}>ID</th>
                                                 <th style={styles.th}>Bệnh nhân</th>
@@ -620,20 +619,15 @@ const DashboardDr: React.FC = () => {
                                         <tbody>
                                             {filteredPatients.map((p) => (
                                                 <tr key={p.id} style={styles.tr}>
-                                                    {/* Cột ID */}
                                                     <td style={styles.td}>
                                                         <code style={{fontSize:'12px', color:'#64748b', background:'#f1f5f9', padding:'2px 6px', borderRadius:'4px'}}>
                                                             {p.id.substring(0, 8)}
                                                         </code>
                                                     </td>
-
-                                                    {/* Cột Tên & Liên hệ */}
                                                     <td style={styles.td}>
                                                         <div style={{fontWeight:'bold', color:'#334155'}}>{p.full_name || p.userName}</div>
                                                         <div style={{fontSize:'12px', color:'#94a3b8'}}>{p.phone || p.email}</div>
                                                     </td>
-
-                                                    {/* Cột Giới tính (Tách riêng) */}
                                                     <td style={styles.td}>
                                                         {p.medical_info?.gender ? (
                                                             <span style={{textTransform:'capitalize'}}>{p.medical_info.gender}</span>
@@ -641,8 +635,6 @@ const DashboardDr: React.FC = () => {
                                                             <span style={{color:'#ccc'}}>--</span>
                                                         )}
                                                     </td>
-
-                                                    {/* Cột Chiều cao (Tách riêng) */}
                                                     <td style={styles.td}>
                                                         {p.medical_info?.height ? (
                                                             <span>{p.medical_info.height} cm</span>
@@ -650,8 +642,6 @@ const DashboardDr: React.FC = () => {
                                                             <span style={{color:'#ccc'}}>--</span>
                                                         )}
                                                     </td>
-
-                                                    {/* Cột BHYT (Tách riêng) */}
                                                     <td style={styles.td}>
                                                         {p.medical_info?.insurance_id ? (
                                                             <span style={{fontFamily:'monospace', color:'#007bff'}}>{p.medical_info.insurance_id}</span>
@@ -659,8 +649,6 @@ const DashboardDr: React.FC = () => {
                                                             <span style={{color:'#ccc', fontSize:'12px'}}>Chưa có</span>
                                                         )}
                                                     </td>
-
-                                                    {/* Cột Kết quả AI */}
                                                     <td style={styles.td}>
                                                         {p.latest_scan?.ai_result ? (
                                                                 <span style={{
@@ -673,8 +661,6 @@ const DashboardDr: React.FC = () => {
                                                                 }}>{p.latest_scan.ai_result}</span>
                                                         ) : <span style={{color:'#94a3b8', fontStyle:'italic'}}>Chưa khám</span>}
                                                     </td>
-
-                                                    {/* Cột Thao tác */}
                                                     <td style={styles.td}>
                                                         <div style={{display:'flex', gap:'8px'}}>
                                                             <button onClick={() => {setActiveTab('chat'); openChat(p.id)}} className="btn-secondary-hover" style={styles.actionBtn}>Chat</button>
@@ -715,9 +701,9 @@ const DashboardDr: React.FC = () => {
                                 <table style={styles.table} className="table-hover">
                                     <thead>
                                         <tr>
-                                            <th style={styles.th}>ID Bệnh nhân</th> {/* Cột mới */}
+                                            <th style={styles.th}>ID Bệnh nhân</th>
                                             <th style={styles.th}>Bệnh nhân</th>
-                                            <th style={styles.th}>Thông tin y tế</th> {/* Cột mới */}
+                                            <th style={styles.th}>Thông tin y tế</th>
                                             <th style={styles.th}>Kết quả gần nhất</th>
                                             <th style={styles.th}>Thao tác</th>
                                         </tr>
@@ -741,11 +727,11 @@ const DashboardDr: React.FC = () => {
                                                 </td>
                                                 <td style={styles.td}>
                                                     {p.latest_scan?.ai_result ? (
-                                                         <span style={{
+                                                            <span style={{
                                                             color: p.latest_scan.ai_result.toLowerCase().includes('nặng') ? '#dc2626' : 
-                                                                   p.latest_scan.ai_result.toLowerCase().includes('trung bình') ? '#ea580c' : '#16a34a',
+                                                                    p.latest_scan.ai_result.toLowerCase().includes('trung bình') ? '#ea580c' : '#16a34a',
                                                             fontWeight:'700'
-                                                         }}>{p.latest_scan.ai_result}</span>
+                                                            }}>{p.latest_scan.ai_result}</span>
                                                     ) : <span style={{color:'#94a3b8'}}>--</span>}
                                                 </td>
                                                 <td style={styles.td}>
@@ -854,7 +840,7 @@ const DashboardDr: React.FC = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {loadingReports ? <tr><td colSpan={5} style={styles.emptyCell}>Đang tải dữ liệu...</td></tr> : myReports.length === 0 ? <tr><td colSpan={5} style={styles.emptyCell}>Bạn chưa gửi báo cáo nào.</td></tr> : myReports.map(report => (
+                                                {loadingReports ? <tr><td colSpan={3} style={styles.emptyCell}>Đang tải dữ liệu...</td></tr> : myReports.length === 0 ? <tr><td colSpan={3} style={styles.emptyCell}>Bạn chưa gửi báo cáo nào.</td></tr> : myReports.map(report => (
                                                     <tr key={report.id} style={styles.tr}>
                                                         <td style={styles.td}>{new Date(report.created_at).toLocaleDateString('vi-VN')}<br/><small style={{color:'#94a3b8'}}>{new Date(report.created_at).toLocaleTimeString('vi-VN')}</small></td>
                                                         <td style={styles.td}>{report.image_url ? <a href={report.image_url} target="_blank" rel="noreferrer"><img src={report.image_url} alt="Scan" className="hover-lift" style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'8px', border:'1px solid #e2e8f0'}}/></a> : <span style={{color:'#ccc'}}>Không có ảnh</span>}</td>
