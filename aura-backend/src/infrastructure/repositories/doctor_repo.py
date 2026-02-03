@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func, case, or_ , and_ , not_
+from sqlalchemy import desc, func, case, or_ , and_ , not_, cast, Date
 from uuid import UUID
 from typing import List, Optional, Dict, Any
+from datetime import date, timedelta
 
 # Import Interface
 from domain.models.idoctor_repository import IDoctorRepository
@@ -144,3 +145,35 @@ class DoctorRepository(IDoctorRepository):
             .order_by(desc(RetinalImage.created_at))
             .all()
         )
+    
+    def get_validation_trends(self, days: int = 7) -> dict:
+        """
+        Thống kê số lượng bác sĩ xác nhận AI Đúng/Sai theo ngày trong 7 ngày gần nhất.
+        Trả về: { "2024-02-01": {"correct": 5, "incorrect": 1}, ... }
+        """
+        start_date = date.today() - timedelta(days=days)
+        
+        results = self.db.query(
+            cast(DoctorValidation.created_at, Date).label('date'),
+            DoctorValidation.is_correct,
+            func.count(DoctorValidation.id).label('count')
+        ).filter(
+            DoctorValidation.created_at >= start_date
+        ).group_by(
+            cast(DoctorValidation.created_at, Date),
+            DoctorValidation.is_correct
+        ).all()
+        
+        # Chuyển đổi dữ liệu sang dạng Dictionary để dễ map
+        data = {}
+        for r in results:
+            d_str = r.date.strftime("%Y-%m-%d")
+            if d_str not in data:
+                data[d_str] = {"correct": 0, "incorrect": 0}
+            
+            if r.is_correct:
+                data[d_str]["correct"] = r.count
+            else:
+                data[d_str]["incorrect"] = r.count
+                
+        return data

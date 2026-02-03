@@ -15,7 +15,7 @@ from domain.models.ibilling_repository import IBillingRepository
 from domain.models.iconfig_repository import IConfigRepository 
 from domain.models.iaudit_repository import IAuditRepository
 from domain.models.inotification_repository import INotificationRepository
-
+from domain.models.idoctor_repository import IDoctorRepository
 class AdminService:
     def __init__(self, 
                  user_repo: IUserRepository, 
@@ -23,13 +23,15 @@ class AdminService:
                  billing_repo: IBillingRepository, 
                  config_repo: IConfigRepository, 
                  audit_repo: IAuditRepository, 
-                 noti_repo: INotificationRepository):
+                 noti_repo: INotificationRepository,
+                 doctor_repo: IDoctorRepository):
         self.user_repo = user_repo
         self.medical_repo = medical_repo
         self.billing_repo = billing_repo
         self.config_repo = config_repo
         self.audit_repo = audit_repo
         self.noti_repo = noti_repo
+        self.doctor_repo = doctor_repo
 
     def get_user_by_id(self, user_id: UUID) -> User:
         user = self.user_repo.get_by_id(user_id)
@@ -193,42 +195,6 @@ class AdminService:
             }
         }
     
-    def get_system_analytics(self):
-        # 1. Lấy phân bố rủi ro
-        risk_data = self.medical_repo.get_risk_distribution_stats()
-        # Format lại: [{'name': 'SEVERE', 'value': 10}, ...]
-        risk_chart = [
-            {"name": risk if risk else "Unknown", "value": count} 
-            for risk, count in risk_data
-        ]
-
-        # 2. Lấy xu hướng 7 ngày
-        trend_data = self.medical_repo.get_upload_trends_last_7_days()
-        # Đảo ngược lại để ngày cũ bên trái, ngày mới bên phải
-        trend_data.reverse() 
-        trend_chart = [
-            {"date": d.strftime("%d/%m"), "count": c} 
-            for d, c in trend_data
-        ]
-
-        # 3. Lấy tỷ lệ lỗi (Dựa trên hàm cũ get_ai_validation_stats)
-        val_stats = self.medical_repo.get_ai_validation_stats()
-        total_val = val_stats["total_validated"]
-        correct = val_stats["correct_ai"]
-        incorrect = total_val - correct
-        
-        error_chart = [
-            {"name": "Chính xác", "value": correct, "fill": "#28a745"}, # Màu xanh
-            {"name": "Sai lệch", "value": incorrect, "fill": "#dc3545"}  # Màu đỏ
-        ]
-
-        return {
-            "risk_distribution": risk_chart,
-            "upload_trends": trend_chart,
-            "error_rates": error_chart,
-            "total_samples": total_val
-        }
-    
     def get_audit_logs(self):
         logs = self.audit_repo.get_recent_logs()
         # Format dữ liệu trả về cho đẹp
@@ -276,3 +242,40 @@ class AdminService:
         except: pass
         
         return updated_tpl
+    
+    def get_analytics_stats(self):
+        """
+        API tổng hợp dữ liệu cho biểu đồ Hiệu suất AI (Analytics).
+        Gồm:
+        1. Tổng số lượt Upload/Scan (Đường Tím)
+        2. Số lượt Bác sĩ xác nhận Đúng (Đường Xanh)
+        3. Số lượt Bác sĩ xác nhận Sai (Đường Đỏ)
+        """
+        # 1. Lấy xu hướng Upload ảnh trong 7 ngày qua (Từ MedicalRepo)
+        # Hàm này trả về list dạng: [{'date': '2023-10-27', 'count': 15}, ...]
+        upload_trends = self.medical_repo.get_upload_trends(7)
+        
+        # 2. Lấy xu hướng Bác sĩ xác nhận trong 7 ngày qua (Từ DoctorRepo)
+        # Hàm này trả về dict dạng: {'2023-10-27': {'correct': 10, 'incorrect': 2}, ...}
+        validation_trends = self.doctor_repo.get_validation_trends(7)
+        
+        # 3. Gộp dữ liệu (Merge) dựa trên ngày tháng
+        final_trends = []
+        
+        for item in upload_trends:
+            # Chuyển ngày sang string để làm key tra cứu
+            d_str = str(item['date']) 
+            
+            # Lấy data đúng/sai tương ứng với ngày đó (Nếu không có thì mặc định là 0)
+            val_data = validation_trends.get(d_str, {"correct": 0, "incorrect": 0})
+            
+            final_trends.append({
+                "date": d_str,
+                "count": item['count'],            # Tổng lượt scan (Data cũ)
+                "correct": val_data["correct"],    # AI Đúng (Data mới)
+                "incorrect": val_data["incorrect"] # AI Sai (Data mới)
+            })
+            
+        return {
+            "upload_trends": final_trends
+        }

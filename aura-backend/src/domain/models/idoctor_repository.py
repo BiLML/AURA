@@ -28,3 +28,11 @@ class IDoctorRepository(ABC):
     @abstractmethod
     def get_critical_unreviewed_records(self, doctor_id: UUID):
         pass
+
+    @abstractmethod
+    def get_critical_unreviewed_records(self, doctor_id: UUID):
+        pass
+
+    @abstractmethod
+    def get_validation_trends(self, days: int = 7) -> dict:
+        pass

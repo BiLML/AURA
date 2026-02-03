@@ -161,9 +161,9 @@ def get_global_dashboard_stats(
 @router.get("/stats/analytics")
 def get_analytics_data(
     service: AdminService = Depends(get_admin_service),
-    current_user: User = Depends(get_current_admin) # Chỉ Admin mới được xem
+    current_user: User = Depends(get_current_admin)
 ):
-    return service.get_system_analytics()
+    return service.get_analytics_stats()
 
 # api/admin.py
 @router.get("/audit-logs")

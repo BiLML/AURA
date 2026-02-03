@@ -511,16 +511,41 @@ const DashboardAdmin: React.FC = () => {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                             <defs>
+                                                {/* Gradient Tím (Tổng Scan) */}
                                                 <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
                                                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                                                 </linearGradient>
+                                                {/* Gradient Xanh Lá (AI Đúng) */}
+                                                <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
+                                                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                                </linearGradient>
                                             </defs>
+
                                             <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
                                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                            <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} formatter={(value: any) => [value, "Lượt Scan"]} />
-                                            <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" animationDuration={1000}/>
+                                            
+                                            <RechartsTooltip 
+                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                                                formatter={(value: any, name: any) => {
+                                                    if (name === 'count') return [value, "Tổng lượt Scan"];
+                                                    if (name === 'correct') return [value, "AI Đúng"];
+                                                    if (name === 'incorrect') return [value, "AI Sai"];
+                                                    return [value, name];
+                                                }}
+                                            />
+                                            
+                                            {/* Đường 1: Tổng lượt Scan (Tím - Nền tảng) */}
+                                            <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
+                                            
+                                            {/* Đường 2: AI Đúng (Xanh lá) */}
+                                            <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
+                                            
+                                            {/* Đường 3: AI Sai (Đỏ - Nét đứt cảnh báo) */}
+                                            <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
+                                            
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 )}
