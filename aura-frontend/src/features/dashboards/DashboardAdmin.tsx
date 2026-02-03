@@ -488,9 +488,9 @@ const DashboardAdmin: React.FC = () => {
                             </div>
 
                             {/* BODY CONTENT */}
-                            <div style={{flex: 1, width: '100%', minHeight: 0, overflowY: 'auto'}}>
+                            <div style={{flex: 1, width: '100%', minHeight: 0, position: 'relative'}}>
                                 {chartView === 'revenue' && (
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                         <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                             <defs>
                                                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -508,7 +508,7 @@ const DashboardAdmin: React.FC = () => {
                                 )}
 
                                 {chartView === 'performance' && (
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                         <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                             <defs>
                                                 {/* Gradient Tím (Tổng Scan) */}
@@ -552,7 +552,7 @@ const DashboardAdmin: React.FC = () => {
 
                                 {/* --- MỚI: BẢNG MỨC SỬ DỤNG --- */}
                                 {chartView === 'usage' && (
-                                    <div style={{overflowX: 'auto'}}>
+                                    <div style={{overflowX: 'auto', overflowY: 'auto', height: '100%'}}>
                                         <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
                                             <thead>
                                                 <tr>
