@@ -65,3 +65,8 @@ class IMedicalRepository(ABC):
     def get_upload_trends(self, days: int = 7) -> List[Dict[str, Any]]:
         """Lấy thống kê số lượt upload ảnh theo ngày"""
         pass
+
+    @abstractmethod
+    def get_analytics_summary(self) -> dict:
+        """Lấy dữ liệu tổng hợp cho màn hình Analytics chi tiết"""
+        pass

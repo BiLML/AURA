@@ -1,13 +1,15 @@
-# FILE: services/admin_service.py
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from models.users import User
+from models.users import User, UserRole
 from models.enums import UserRole, UserStatus 
 from models.system_config import SystemConfig
 from models.audit_log import AuditLog
+from models.medical import RetinalImage, AIAnalysisResult, DoctorValidation
 from uuid import UUID
 
 from schemas.notification_schema import TemplateUpdate
+from schemas.admin_schema import DetailedAnalyticsResponse, UploadsByRole, AIPerformanceStats
 
 from domain.models.iuser_repository import IUserRepository
 from domain.models.imedical_repository import IMedicalRepository
@@ -294,3 +296,60 @@ class AdminService:
             "error_rates": error_rates,        # <--- Frontend đang cần cái này
             "risk_distribution": []            # <--- Frontend cũng cần cái này (trả rỗng tạm thời)
         }
+    
+    def get_detailed_analytics(self) -> DetailedAnalyticsResponse:
+        # 1. Gọi Repo lấy dữ liệu thô
+        raw_data = self.medical_repo.get_analytics_summary()
+        
+        # 2. Xử lý: Uploads By Role
+        # raw_data["upload_stats"] trả về list tuple, ví dụ: [('user', 10), ('clinic', 5)]
+        stats_map = {role: count for role, count in raw_data["upload_stats"]}
+        user_uploads = stats_map.get(UserRole.USER, 0)
+        clinic_uploads = stats_map.get(UserRole.CLINIC, 0)
+
+        # 3. Xử lý: Risk Distribution & Màu sắc
+        color_map = {
+            "Normal": "#22c55e",      # Xanh
+            "Mild": "#eab308",        # Vàng
+            "Moderate": "#f97316",    # Cam
+            "Severe": "#ef4444",      # Đỏ
+            "PDR": "#b91c1c"          # Đỏ đậm
+        }
+        
+        risk_dist = []
+        for level, count in raw_data["risk_query"]:
+            if not level: continue
+            
+            # Tìm màu tương đối (Case-insensitive)
+            color = "#64748b" # Mặc định xám
+            for key, val in color_map.items():
+                if key.upper() in level.upper():
+                    color = val
+                    break
+            
+            risk_dist.append({"name": level, "value": count, "color": color})
+        
+        # Sắp xếp giảm dần theo số lượng
+        risk_dist.sort(key=lambda x: x['value'], reverse=True)
+
+        # 4. Xử lý: Error Rate
+        total_val = raw_data["val_total"]
+        total_inc = raw_data["val_incorrect"]
+        err_rate = 0.0
+        if total_val > 0:
+            err_rate = round((total_inc / total_val * 100), 1)
+
+        # 5. Trả về đúng Schema đã định nghĩa
+        return DetailedAnalyticsResponse(
+            uploads_by_role=UploadsByRole(
+                user=user_uploads,
+                clinic=clinic_uploads,
+                total=user_uploads + clinic_uploads
+            ),
+            risk_distribution=risk_dist,
+            ai_performance=AIPerformanceStats(
+                error_rate=err_rate,
+                total_validated=total_val,
+                total_incorrect=total_inc
+            )
+        )

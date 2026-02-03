@@ -9,8 +9,8 @@ import {
 } from 'react-icons/fa';
 
 import { 
-    XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-    PieChart, Pie, Cell, AreaChart, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+    AreaChart, Area,
 } from 'recharts';
 
 
@@ -99,6 +99,13 @@ interface Transaction {
     date: string;
 }
 
+// [MỚI] Interface cho dữ liệu Analytics chi tiết
+interface DetailedAnalytics {
+    uploads_by_role: { user: number; clinic: number; total: number };
+    risk_distribution: { name: string; value: number; color: string }[];
+    ai_performance: { error_rate: number; total_validated: number; total_incorrect: number };
+}
+
 // --- CSS STYLES FOR ANIMATIONS ---
 const cssStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -120,10 +127,15 @@ const cssStyles = `
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
+  @keyframes slideRight {
+    from { width: 0; }
+    to { width: 100%; }
+  }
 
   /* Utility Classes */
   .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
   .animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .animate-slide-right { animation: slideRight 1s ease-in-out forwards; }
   
   /* Hover Effects */
   .hover-card { transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
@@ -182,8 +194,14 @@ const DashboardAdmin: React.FC = () => {
         data_retention_days: 90,
     });
 
+    // [CẬP NHẬT] State Analytics chứa cả data cũ (cho chart trên) và data mới (cho tab dưới)
     const [analyticsData, setAnalyticsData] = useState({
-        risk_distribution: [], upload_trends: [], error_rates: []
+        upload_trends: [] as any[], // Cho biểu đồ Performance phía trên
+        error_rates: [] as any[],   // (Legacy)
+        // Data mới cho tab Analytics
+        uploads_by_role: { user: 0, clinic: 0, total: 0 },
+        risk_distribution: [] as { name: string; value: number; color: string }[],
+        ai_performance: { error_rate: 0, total_validated: 0, total_incorrect: 0 }
     });
 
     // --- STATE MODAL ---
@@ -200,9 +218,6 @@ const DashboardAdmin: React.FC = () => {
 
     // --- FETCH DATA ---
     const fetchData = useCallback(async () => {
-        // (Mock logic for demonstration if API fails or to simulate flow)
-        // In real app, keep your fetch logic here.
-        // For this UI enhancement demo, I'll assume data fetching works as in your original code.
         const token = localStorage.getItem('token');
         if (!token) { navigate('/login'); return; }
 
@@ -219,10 +234,9 @@ const DashboardAdmin: React.FC = () => {
                  localStorage.removeItem('token'); navigate('/login'); return;
              }
 
-            // Parallel fetching for speed
+            // Parallel fetching
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            // Using Promise.allSettled to prevent one failure from stopping everything
             await Promise.allSettled([
                 fetch('https://aurahealth.name.vn/api/v1/admin/users', { headers }).then(r => r.json()).then(d => setUserList((d.users || d || []).filter((u:User) => u.role !== 'admin'))),
                 fetch('https://aurahealth.name.vn/api/v1/clinics/admin/pending', { headers }).then(r => r.json()).then(d => setClinicRequests(d.requests || [])),
@@ -233,14 +247,33 @@ const DashboardAdmin: React.FC = () => {
                 fetch('https://aurahealth.name.vn/api/v1/admin/reports', { headers }).then(r => r.json()).then(d => setFeedbackList(d.reports || [])),
                 fetch('https://aurahealth.name.vn/api/v1/admin/config', { headers }).then(r => r.json()).then(d => setAiConfig(d)),
                 fetch('https://aurahealth.name.vn/api/v1/billing/packages', { headers }).then(r => r.json()).then(d => setPackageList(d)),
-                fetch('https://aurahealth.name.vn/api/v1/admin/stats/analytics', { headers }).then(r => r.json()).then(d => setAnalyticsData({risk_distribution: d.risk_distribution || [], upload_trends: d.upload_trends || [], error_rates: d.error_rates || [] })),
+                
+                // [API CŨ] Lấy upload_trends cho biểu đồ Performance
+                fetch('https://aurahealth.name.vn/api/v1/admin/stats/analytics', { headers })
+                    .then(r => r.json())
+                    .then(d => setAnalyticsData(prev => ({
+                        ...prev, 
+                        upload_trends: d.upload_trends || [], 
+                        error_rates: d.error_rates || [] // Fallback để tránh crash
+                    }))),
+
+                // [API MỚI] Lấy dữ liệu chi tiết cho tab Analytics
+                fetch('https://aurahealth.name.vn/api/v1/admin/stats/detailed-analytics', { headers })
+                    .then(r => r.json())
+                    .then((d: DetailedAnalytics) => setAnalyticsData(prev => ({
+                        ...prev,
+                        uploads_by_role: d.uploads_by_role || { user: 0, clinic: 0, total: 0 },
+                        risk_distribution: d.risk_distribution || [],
+                        ai_performance: d.ai_performance || { error_rate: 0, total_validated: 0, total_incorrect: 0 }
+                    }))),
+
                 fetch('https://aurahealth.name.vn/api/v1/admin/audit-logs', { headers }).then(r => r.json()).then(d => setAuditLogs(d)),
                 fetch('https://aurahealth.name.vn/api/v1/admin/templates', { headers }).then(r => r.json()).then(d => setTemplates(d)),
                 fetch('https://aurahealth.name.vn/api/v1/admin/stats/global', { headers }).then(r => r.json()).then(data => {
                     setGlobalStats({
                         revenue: data.total_revenue || 0,
                         totalScans: data.total_scans || 0,
-                        recentTransactions: data.recent_transactions || [], // Thêm || []
+                        recentTransactions: data.recent_transactions || [],
                         aiAccuracy: data.ai_performance?.accuracy || 0,
                         validatedCount: data.ai_performance?.total_validated || 0,
                         revenueChart: data.revenue_chart || []
@@ -248,7 +281,6 @@ const DashboardAdmin: React.FC = () => {
                 })
             ]);
             
-            // Artificial delay to show smooth loading (optional)
             setTimeout(() => setIsLoading(false), 500);
 
         } catch (error) {
@@ -267,7 +299,7 @@ const DashboardAdmin: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // --- ACTION HANDLERS (Giữ nguyên logic cũ) ---
+    // --- ACTION HANDLERS ---
     const openEditUser = (user: User) => {
         setEditingUser(user);
         setEditForm({ role: user.role, status: user.status });
@@ -417,7 +449,7 @@ const DashboardAdmin: React.FC = () => {
             <main style={styles.mainBody}>
                 <div style={styles.contentWrapper} className="animate-fade-in">
 
-                    {/* --- CHART SECTION WITH TABS [UPDATED V2] --- */}
+                    {/* --- CHART SECTION (TOP) --- */}
                     <div style={{...styles.chartCard, padding: 0, display: 'flex', overflow: 'hidden', height: '450px', marginBottom: '24px'}} className="hover-card">
                         
                         {/* LEFT SIDEBAR: MENU */}
@@ -426,36 +458,21 @@ const DashboardAdmin: React.FC = () => {
                                 <h4 style={{margin: 0, color: '#334155', fontSize: '14px', fontWeight: '700', textTransform: 'uppercase'}}>Thống kê</h4>
                             </div>
                             
-                            {/* Nút Doanh thu */}
-                            <button 
-                                onClick={() => setChartView('revenue')}
-                                style={chartView === 'revenue' ? styles.chartTabActive : styles.chartTab}
-                            >
+                            <button onClick={() => setChartView('revenue')} style={chartView === 'revenue' ? styles.chartTabActive : styles.chartTab}>
                                 <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
-                                    <FaMoneyBillWave size={16} />
-                                    <span>Doanh thu</span>
+                                    <FaMoneyBillWave size={16} /> <span>Doanh thu</span>
                                 </div>
                             </button>
 
-                            {/* Nút Hiệu suất AI */}
-                            <button 
-                                onClick={() => setChartView('performance')}
-                                style={chartView === 'performance' ? styles.chartTabActive : styles.chartTab}
-                            >
+                            <button onClick={() => setChartView('performance')} style={chartView === 'performance' ? styles.chartTabActive : styles.chartTab}>
                                 <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
-                                    <FaBrain size={16} />
-                                    <span>Hiệu suất AI</span>
+                                    <FaBrain size={16} /> <span>Hiệu suất AI</span>
                                 </div>
                             </button>
 
-                            {/* Nút Mức sử dụng (MỚI) */}
-                            <button 
-                                onClick={() => setChartView('usage')}
-                                style={chartView === 'usage' ? styles.chartTabActive : styles.chartTab}
-                            >
+                            <button onClick={() => setChartView('usage')} style={chartView === 'usage' ? styles.chartTabActive : styles.chartTab}>
                                 <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
-                                    <FaChartPie size={16} />
-                                    <span>Mức sử dụng</span>
+                                    <FaChartPie size={16} /> <span>Mức sử dụng</span>
                                 </div>
                             </button>
                         </div>
@@ -476,20 +493,6 @@ const DashboardAdmin: React.FC = () => {
                                         {chartView === 'usage' && 'Danh sách User/Clinic và số lượt AI còn lại của họ'}
                                     </p>
                                 </div>
-                                
-                                {chartView !== 'usage' && (
-                                    <div style={{textAlign:'right'}}>
-                                        <span style={{fontSize:'12px', color:'#64748b', fontWeight:'600', display:'block', textTransform:'uppercase', letterSpacing:'0.5px'}}>
-                                            {chartView === 'revenue' ? 'Tổng Doanh Thu' : 'Tổng Lượt Scan'}
-                                        </span>
-                                        <span style={{fontSize:'26px', fontWeight:'800', color: chartView === 'revenue' ? '#15803d' : '#8b5cf6', letterSpacing:'-0.5px'}}>
-                                            {chartView === 'revenue' 
-                                                ? formatCurrency(globalStats.revenue)
-                                                : new Intl.NumberFormat('vi-VN').format(globalStats.totalScans)
-                                            }
-                                        </span>
-                                    </div>
-                                )}
                             </div>
 
                             <div style={{flex: 1, width: '100%', minHeight: 0, minWidth: 0, position: 'relative'}}>
@@ -511,9 +514,7 @@ const DashboardAdmin: React.FC = () => {
                                                 <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
                                             </AreaChart>
                                         </ResponsiveContainer>
-                                        ) : (
-                                        <div style={{padding: 20}}>Đang tải dữ liệu biểu đồ...</div>    
-                                        )}
+                                        ) : <div style={{padding: 20}}>Đang tải dữ liệu biểu đồ...</div>}
                                     </div>
                                 )}
 
@@ -536,31 +537,21 @@ const DashboardAdmin: React.FC = () => {
                                                     <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
                                                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
                                                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                                    
-                                                    <RechartsTooltip 
-                                                        contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                                        formatter={(value: any, name: any) => {
-                                                            if (name === 'count') return [value, "Tổng lượt Scan"];
-                                                            if (name === 'correct') return [value, "AI Đúng"];
-                                                            if (name === 'incorrect') return [value, "AI Sai"];
-                                                            return [value, name];
-                                                        }}
-                                                    />
+                                                    <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} />
                                                     
                                                     <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
                                                     <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
                                                     <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
-                                                    
                                                 </AreaChart>
                                             </ResponsiveContainer>
                                         ) : (
-                                            /* --- BỔ SUNG DÒNG NÀY --- */
                                             <div style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>Đang tải dữ liệu hiệu suất...</div>
                                         )}
                                     </div>
                                 )}
-
+                                
                                 {chartView === 'usage' && (
+                                    /* BẢNG MỨC SỬ DỤNG - GIỮ NGUYÊN CODE CŨ */
                                     <div style={{overflowX: 'auto', overflowY: 'auto', height: '100%'}}>
                                         <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
                                             <thead>
@@ -657,6 +648,7 @@ const DashboardAdmin: React.FC = () => {
 
                     <div style={styles.tableCard} className="animate-fade-in">
                         
+                        {/* --- USER TAB --- */}
                         {activeTab === 'users' && (
                             <>
                                 <div style={styles.cardHeader}>
@@ -720,6 +712,7 @@ const DashboardAdmin: React.FC = () => {
                             </>
                         )}
 
+                        {/* --- CLINICS TAB --- */}
                         {activeTab === 'clinics' && (
                             <>
                                 <div style={styles.cardHeader}>
@@ -783,6 +776,7 @@ const DashboardAdmin: React.FC = () => {
                             </>
                         )}
 
+                        {/* --- CONFIG TAB --- */}
                         {activeTab === 'config' && (
                             <div style={{padding:'30px'}} className="animate-fade-in">
                                 <div style={styles.cardHeader}>
@@ -842,47 +836,106 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         )}
 
+                        {/* --- ANALYTICS TAB (MỚI: CARD + PROGRESS) --- */}
                         {activeTab === 'analytics' && (
                             <div style={{padding: '30px'}} className="animate-fade-in">
-                                <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:'30px', marginBottom: 30}}>
-                                    <div style={styles.chartCard} className="hover-card">
-                                        <h3 style={styles.chartTitle}>📈 Xu hướng Tải lên (7 ngày)</h3>
-                                        <div style={{height:'300px', width:'100%'}}>
-                                            <ResponsiveContainer>
-                                                <AreaChart data={analyticsData.upload_trends}>
-                                                    <defs>
-                                                        <linearGradient id="colorUploads" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3}/>
-                                                            <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                                                    <XAxis dataKey="date" style={{fontSize:'12px'}} axisLine={false} tickLine={false} />
-                                                    <YAxis style={{fontSize:'12px'}} axisLine={false} tickLine={false} />
-                                                    <RechartsTooltip contentStyle={{borderRadius: 8, border:'none', boxShadow:'0 5px 15px rgba(0,0,0,0.1)'}}/>
-                                                    <Area type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={3} fill="url(#colorUploads)" />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
+                                <div style={styles.cardHeader}>
+                                    <h3 style={styles.cardTitle}>📊 Phân tích Chi tiết Hệ thống</h3>
+                                </div>
+
+                                {/* --- PHẦN 1: CÁC THẺ THỐNG KÊ (GRID 3 CỘT) --- */}
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '30px', marginTop: '20px'}}>
+                                    
+                                    {/* Card 1: Người dùng cá nhân */}
+                                    <div style={{...styles.statCard, borderLeft: '4px solid #3b82f6'}} className="hover-card">
+                                        <div style={{...styles.iconBox, background: '#eff6ff', color: '#3b82f6'}}>
+                                            <FaUserShield size={24}/>
+                                        </div>
+                                        <div>
+                                            <span style={{fontSize:'13px', color:'#64748b', fontWeight:'600'}}>NGƯỜI DÙNG TẢI LÊN</span>
+                                            <div style={{fontSize:'28px', fontWeight:'800', color:'#1e293b'}}>
+                                                {analyticsData.uploads_by_role.user} <span style={{fontSize:'14px', fontWeight:'500', color:'#94a3b8'}}>ảnh</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style={styles.chartCard} className="hover-card">
-                                        <h3 style={styles.chartTitle}>🎯 Tỷ lệ Lỗi (RLHF)</h3>
-                                        <div style={{height:'300px', width:'100%'}}>
-                                            <ResponsiveContainer>
-                                                <PieChart>
-                                                    <Pie data={analyticsData.error_rates} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                                        {analyticsData.error_rates?.map((entry:any, index:number) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
-                                                    </Pie>
-                                                    <RechartsTooltip />
-                                                    <Legend verticalAlign="bottom" />
-                                                </PieChart>
-                                            </ResponsiveContainer>
+
+                                    {/* Card 2: Phòng khám */}
+                                    <div style={{...styles.statCard, borderLeft: '4px solid #8b5cf6'}} className="hover-card">
+                                        <div style={{...styles.iconBox, background: '#f3e8ff', color: '#8b5cf6'}}>
+                                            <FaHospital size={24}/>
                                         </div>
+                                        <div>
+                                            <span style={{fontSize:'13px', color:'#64748b', fontWeight:'600'}}>PHÒNG KHÁM TẢI LÊN</span>
+                                            <div style={{fontSize:'28px', fontWeight:'800', color:'#1e293b'}}>
+                                                {analyticsData.uploads_by_role.clinic} <span style={{fontSize:'14px', fontWeight:'500', color:'#94a3b8'}}>ảnh</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Tỷ lệ lỗi AI */}
+                                    <div style={{...styles.statCard, borderLeft: analyticsData.ai_performance.error_rate > 10 ? '4px solid #ef4444' : '4px solid #22c55e'}} className="hover-card">
+                                        <div style={{...styles.iconBox, background: analyticsData.ai_performance.error_rate > 10 ? '#fef2f2' : '#dcfce7', color: analyticsData.ai_performance.error_rate > 10 ? '#ef4444' : '#16a34a'}}>
+                                            <FaBrain size={24}/>
+                                        </div>
+                                        <div>
+                                            <span style={{fontSize:'13px', color:'#64748b', fontWeight:'600'}}>TỶ LỆ AI SAI LỆCH</span>
+                                            <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                                <span style={{fontSize:'28px', fontWeight:'800', color: analyticsData.ai_performance.error_rate > 10 ? '#ef4444' : '#16a34a'}}>
+                                                    {analyticsData.ai_performance.error_rate}%
+                                                </span>
+                                                <span style={{fontSize:'12px', color:'#64748b'}}>
+                                                    ({analyticsData.ai_performance.total_incorrect}/{analyticsData.ai_performance.total_validated} mẫu)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* --- PHẦN 2: PHÂN BỐ RỦI RO (DẠNG PROGRESS BAR) --- */}
+                                <div style={styles.chartCard} className="hover-card">
+                                    <h3 style={{...styles.chartTitle, borderBottom:'1px solid #f1f5f9', paddingBottom:'15px'}}>
+                                        🎯 Phân bố Mức độ Rủi ro (Risk Distribution)
+                                    </h3>
+                                    
+                                    <div style={{marginTop: '20px'}}>
+                                        {analyticsData.risk_distribution && analyticsData.risk_distribution.length > 0 ? (
+                                            analyticsData.risk_distribution.map((item: any, index: number) => {
+                                                const total = analyticsData.risk_distribution.reduce((acc: number, cur: any) => acc + cur.value, 0);
+                                                const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                                                
+                                                return (
+                                                    <div key={index} style={{marginBottom: '20px'}}>
+                                                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
+                                                            <span style={{fontWeight: '600', color: '#334155', display:'flex', alignItems:'center', gap: 8}}>
+                                                                <span style={{width: 10, height: 10, borderRadius: '50%', background: item.color}}></span>
+                                                                {item.name}
+                                                            </span>
+                                                            <span style={{fontWeight: '700', color: '#0f172a'}}>{item.value} <small style={{color:'#94a3b8', fontWeight:'400'}}>({percent}%)</small></span>
+                                                        </div>
+                                                        <div style={{width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '5px', overflow: 'hidden'}}>
+                                                            <div 
+                                                                className="animate-slide-right"
+                                                                style={{
+                                                                    width: `${percent}%`, 
+                                                                    height: '100%', 
+                                                                    background: item.color, 
+                                                                    borderRadius: '5px',
+                                                                    transition: 'width 1s ease-in-out'
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div style={styles.emptyState}>Chưa có dữ liệu phân tích</div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* --- FEEDBACK, AUDIT, BILLING TAB --- */}
                         {(activeTab === 'feedback' || activeTab === 'audit' || activeTab === 'billing') && (
                             <div className="animate-fade-in">
                                 <div style={styles.cardHeader}>

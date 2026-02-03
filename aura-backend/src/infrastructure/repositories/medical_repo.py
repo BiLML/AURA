@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func, cast, Date, case
 from uuid import UUID
 from typing import List, Optional, Dict, Any
 from datetime import date, timedelta
@@ -11,7 +11,7 @@ from domain.models.imedical_repository import IMedicalRepository
 # Import Models (Giữ nguyên như cũ)
 from models.medical import Patient, RetinalImage, AIAnalysisResult, DoctorValidation
 from models.enums import ImageType, EyeSide
-from models.users import User
+from models.users import User, UserRole
 
 # --- 2. KẾ THỪA INTERFACE ---
 class MedicalRepository(IMedicalRepository):
@@ -217,3 +217,39 @@ class MedicalRepository(IMedicalRepository):
         
         # Format dữ liệu trả về dạng list dict: [{'date': '2023-10-01', 'count': 5}, ...]
         return [{"date": str(r.date), "count": r.count} for r in results]
+    
+    def get_analytics_summary(self) -> dict:
+        """
+        Thực hiện 3 truy vấn thống kê riêng biệt:
+        1. Số lượng ảnh theo User Role
+        2. Phân bố Risk Level
+        3. Hiệu suất AI (Validation)
+        """
+        # 1. Thống kê số lượng ảnh theo vai trò (User vs Clinic)
+        upload_stats = (
+            self.db.query(User.role, func.count(RetinalImage.id))
+            .join(RetinalImage, User.id == RetinalImage.uploader_id)
+            .group_by(User.role)
+            .all()
+        )
+        
+        # 2. Thống kê Phân bố mức độ rủi ro (Risk Distribution)
+        risk_query = (
+            self.db.query(AIAnalysisResult.risk_level, func.count(AIAnalysisResult.id))
+            .group_by(AIAnalysisResult.risk_level)
+            .all()
+        )
+
+        # 3. Thống kê Hiệu suất AI (Dựa trên DoctorValidation)
+        # Đếm tổng số đã duyệt và số lượng sai (is_correct = False)
+        validation_stats = self.db.query(
+            func.count(DoctorValidation.id).label("total"),
+            func.sum(case((DoctorValidation.is_correct == False, 1), else_=0)).label("incorrect")
+        ).first()
+
+        return {
+            "upload_stats": upload_stats,     # List [(role, count), ...]
+            "risk_query": risk_query,         # List [(risk, count), ...]
+            "val_total": validation_stats.total or 0,
+            "val_incorrect": validation_stats.incorrect or 0
+        }

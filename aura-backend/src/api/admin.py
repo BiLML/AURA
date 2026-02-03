@@ -14,6 +14,7 @@ from schemas.user_schema import UserResponse
 from schemas.admin_schema import UpdateUserStatusRequest, UpdateUserRoleRequest
 from schemas.config_schema import SystemConfigResponse, SystemConfigUpdate
 from schemas.notification_schema import TemplateResponse, TemplateUpdate
+from schemas.admin_schema import DetailedAnalyticsResponse
 
 from models.users import User
 from models.enums import UserRole
@@ -187,3 +188,13 @@ def update_template(
     current_user = Depends(get_current_admin)
 ):
     return service.update_notification_template(code, data, current_user.id, request.client.host)
+
+@router.get("/stats/detailed-analytics", response_model=DetailedAnalyticsResponse)
+def get_detailed_analytics_view(
+    service: AdminService = Depends(get_admin_service),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    API lấy số liệu chi tiết cho tab 'Phân tích'
+    """
+    return service.get_detailed_analytics()
