@@ -495,7 +495,7 @@ const DashboardAdmin: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div style={{width: '100%', height: '340px', marginTop: '10px'}}>
+                            <div style={{width: '100%', height: '340px', marginTop: '10px', minWidth: 0}}>
                                 
                                 {chartView === 'revenue' && (
                                     globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
