@@ -617,7 +617,9 @@ const DashboardDr: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {filteredPatients.map((p) => (
+                                            {patientsData
+                                                .filter(p => alerts.some(alert => String(alert.patient_id) === String(p.id)))
+                                                .map((p) => (
                                                 <tr key={p.id} style={styles.tr}>
                                                     <td style={styles.td}>
                                                         <code style={{fontSize:'12px', color:'#64748b', background:'#f1f5f9', padding:'2px 6px', borderRadius:'4px'}}>
