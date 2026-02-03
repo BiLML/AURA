@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Any, Optional
+from typing import Any, Optional, List
 from uuid import UUID
 from datetime import datetime, date
 from models.enums import UserRole, UserStatus
@@ -29,16 +29,25 @@ class UserLogin(BaseModel):
     password: str
 
 # --- OUTPUT Schemas (Backend trả về) ---
+class UserSubscriptionDTO(BaseModel):
+    plan_name: str
+    remaining_analyses: int
+    total_limit: int
+    
+    class Config:
+        from_attributes = True
+
 class UserResponse(BaseModel):
     id: UUID
     username: str
-    email: EmailStr
+    email: str
     role: UserRole
     status: UserStatus
     created_at: datetime
     
     profile: Optional[ProfileResponse] = None
 
+    subscription: Optional[UserSubscriptionDTO] = None
     consent_for_training: bool = False
 
     class Config:

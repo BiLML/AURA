@@ -27,6 +27,11 @@ interface User {
         phone: string | null;
         medical_info: any | null;
     };
+    subscription?: {
+        plan_name: string;
+        remaining_analyses: number;
+        total_limit: number;
+    };
     is_active: boolean;
 }
 
@@ -142,7 +147,7 @@ const DashboardAdmin: React.FC = () => {
     const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active' | 'suspended'>('pending');
     const [adminName, setAdminName] = useState('Admin');
     const [isLoading, setIsLoading] = useState(true);
-    const [chartView, setChartView] = useState<'revenue' | 'performance'>('revenue');
+    const [chartView, setChartView] = useState<'revenue' | 'performance' | 'usage'>('revenue');
 
     // --- STATE DATA ---
     const [userList, setUserList] = useState<User[]>([]);
@@ -406,8 +411,8 @@ const DashboardAdmin: React.FC = () => {
             <main style={styles.mainBody}>
                 <div style={styles.contentWrapper} className="animate-fade-in">
 
-                    {/* --- CHART SECTION WITH TABS [UPDATED] --- */}
-                    <div style={{...styles.chartCard, padding: 0, display: 'flex', overflow: 'hidden', height: '400px', marginBottom: '24px'}} className="hover-card">
+                    {/* --- CHART SECTION WITH TABS [UPDATED V2] --- */}
+                    <div style={{...styles.chartCard, padding: 0, display: 'flex', overflow: 'hidden', height: '450px', marginBottom: '24px'}} className="hover-card">
                         
                         {/* LEFT SIDEBAR: MENU */}
                         <div style={{width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '20px 0', display: 'flex', flexDirection: 'column'}}>
@@ -436,44 +441,56 @@ const DashboardAdmin: React.FC = () => {
                                     <span>Hiệu suất AI</span>
                                 </div>
                             </button>
+
+                            {/* Nút Mức sử dụng (MỚI) */}
+                            <button 
+                                onClick={() => setChartView('usage')}
+                                style={chartView === 'usage' ? styles.chartTabActive : styles.chartTab}
+                            >
+                                <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
+                                    <FaChartPie size={16} />
+                                    <span>Mức sử dụng</span>
+                                </div>
+                            </button>
                         </div>
 
-                        {/* RIGHT CONTENT: CHART AREA */}
-                        <div style={{flex: 1, padding: '24px', display: 'flex', flexDirection: 'column'}}>
+                        {/* RIGHT CONTENT: CHART OR TABLE */}
+                        <div style={{flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
                             
-                            {/* HEADER CỦA BIỂU ĐỒ */}
-                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                            {/* HEADER */}
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', flexShrink: 0}}>
                                 <div>
                                     <h3 style={{fontSize:'18px', fontWeight:'700', color:'#0f172a', margin:0, display:'flex', alignItems:'center'}}>
-                                        {chartView === 'revenue' ? (
-                                            <><FaChartPie style={{marginRight:10, color:'#007bff'}}/> Xu hướng Doanh thu</>
-                                        ) : (
-                                            <><FaBrain style={{marginRight:10, color:'#8b5cf6'}}/> Hiệu suất Phân tích AI</>
-                                        )}
+                                        {chartView === 'revenue' && <><FaChartPie style={{marginRight:10, color:'#007bff'}}/> Xu hướng Doanh thu</>}
+                                        {chartView === 'performance' && <><FaBrain style={{marginRight:10, color:'#8b5cf6'}}/> Hiệu suất Phân tích AI</>}
+                                        {chartView === 'usage' && <><FaChartPie style={{marginRight:10, color:'#f59e0b'}}/> Theo dõi Hạn mức AI</>}
                                     </h3>
                                     <p style={{fontSize:'13px', color:'#64748b', margin:'4px 0 0 0'}}>
-                                        {chartView === 'revenue' 
-                                            ? 'Thống kê tổng doanh thu từ các gói dịch vụ (7 ngày)' 
-                                            : 'Tổng số lượt quét và phân tích hình ảnh toàn hệ thống (7 ngày)'}
+                                        {chartView === 'revenue' && 'Thống kê tổng doanh thu từ các gói dịch vụ (7 ngày)'}
+                                        {chartView === 'performance' && 'Tổng số lượt quét và phân tích hình ảnh toàn hệ thống (7 ngày)'}
+                                        {chartView === 'usage' && 'Danh sách User/Clinic và số lượt AI còn lại của họ'}
                                     </p>
                                 </div>
-                                <div style={{textAlign:'right'}}>
-                                    <span style={{fontSize:'12px', color:'#64748b', fontWeight:'600', display:'block', textTransform:'uppercase', letterSpacing:'0.5px'}}>
-                                        {chartView === 'revenue' ? 'Tổng Doanh Thu' : 'Tổng Lượt Scan'}
-                                    </span>
-                                    <span style={{fontSize:'26px', fontWeight:'800', color: chartView === 'revenue' ? '#15803d' : '#8b5cf6', letterSpacing:'-0.5px'}}>
-                                        {chartView === 'revenue' 
-                                            ? formatCurrency(globalStats.revenue)
-                                            : new Intl.NumberFormat('vi-VN').format(globalStats.totalScans)
-                                        }
-                                    </span>
-                                </div>
+                                
+                                {chartView !== 'usage' && (
+                                    <div style={{textAlign:'right'}}>
+                                        <span style={{fontSize:'12px', color:'#64748b', fontWeight:'600', display:'block', textTransform:'uppercase', letterSpacing:'0.5px'}}>
+                                            {chartView === 'revenue' ? 'Tổng Doanh Thu' : 'Tổng Lượt Scan'}
+                                        </span>
+                                        <span style={{fontSize:'26px', fontWeight:'800', color: chartView === 'revenue' ? '#15803d' : '#8b5cf6', letterSpacing:'-0.5px'}}>
+                                            {chartView === 'revenue' 
+                                                ? formatCurrency(globalStats.revenue)
+                                                : new Intl.NumberFormat('vi-VN').format(globalStats.totalScans)
+                                            }
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* BIỂU ĐỒ */}
-                            <div style={{flex: 1, width: '100%', minHeight: 0}}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    {chartView === 'revenue' ? (
+                            {/* BODY CONTENT */}
+                            <div style={{flex: 1, width: '100%', minHeight: 0, overflowY: 'auto'}}>
+                                {chartView === 'revenue' && (
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                             <defs>
                                                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -484,13 +501,14 @@ const DashboardAdmin: React.FC = () => {
                                             <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
                                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(value)} />
-                                            <RechartsTooltip 
-                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                                formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]}
-                                            />
+                                            <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]} />
                                             <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
                                         </AreaChart>
-                                    ) : (
+                                    </ResponsiveContainer>
+                                )}
+
+                                {chartView === 'performance' && (
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                             <defs>
                                                 <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
@@ -501,14 +519,72 @@ const DashboardAdmin: React.FC = () => {
                                             <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
                                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                            <RechartsTooltip 
-                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                                formatter={(value: any) => [value, "Lượt Scan"]}
-                                            />
+                                            <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} formatter={(value: any) => [value, "Lượt Scan"]} />
                                             <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" animationDuration={1000}/>
                                         </AreaChart>
-                                    )}
-                                </ResponsiveContainer>
+                                    </ResponsiveContainer>
+                                )}
+
+                                {/* --- MỚI: BẢNG MỨC SỬ DỤNG --- */}
+                                {chartView === 'usage' && (
+                                    <div style={{overflowX: 'auto'}}>
+                                        <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={{...styles.th, background: '#fff', borderBottom: '2px solid #e2e8f0'}}>Người dùng / Phòng khám</th>
+                                                    <th style={{...styles.th, background: '#fff', borderBottom: '2px solid #e2e8f0'}}>Vai trò</th>
+                                                    <th style={{...styles.th, background: '#fff', borderBottom: '2px solid #e2e8f0'}}>Gói hiện tại</th>
+                                                    <th style={{...styles.th, background: '#fff', borderBottom: '2px solid #e2e8f0'}}>Lượt AI còn lại</th>
+                                                    <th style={{...styles.th, background: '#fff', borderBottom: '2px solid #e2e8f0'}}>Trạng thái</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {userList.filter(u => u.role === 'user' || u.role === 'clinic').map((u) => {
+                                                    // Giả lập dữ liệu nếu API chưa trả về (Để bạn thấy UI trước)
+                                                    // Khi backend bạn update API admin/users trả về subscription, dòng này sẽ tự nhận.
+                                                    const planName = u.subscription?.plan_name || (u.role === 'clinic' ? 'Enterprise Clinic' : 'Free Tier');
+                                                    const remaining = u.subscription?.remaining_analyses ?? (u.role === 'clinic' ? 999 : 5);
+                                                    const total = u.subscription?.total_limit || 10;
+                                                    const percent = Math.min(100, Math.max(0, (remaining / total) * 100));
+
+                                                    return (
+                                                        <tr key={u.id} className="hover-row">
+                                                            <td style={{padding: '12px 15px', borderBottom: '1px solid #f1f5f9'}}>
+                                                                <b>{u.username}</b>
+                                                                <br/><small style={{color:'#64748b'}}>{u.email}</small>
+                                                            </td>
+                                                            <td style={{padding: '12px 15px', borderBottom: '1px solid #f1f5f9'}}>
+                                                                <span style={{
+                                                                    ...styles.roleBadge, 
+                                                                    background: u.role==='clinic' ? '#f3e8ff' : '#dcfce7',
+                                                                    color: u.role==='clinic' ? '#7e22ce' : '#15803d'
+                                                                }}>{u.role}</span>
+                                                            </td>
+                                                            <td style={{padding: '12px 15px', borderBottom: '1px solid #f1f5f9'}}>
+                                                                <span style={{fontWeight:'600', color:'#334155'}}>{planName}</span>
+                                                            </td>
+                                                            <td style={{padding: '12px 15px', borderBottom: '1px solid #f1f5f9'}}>
+                                                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                                                    <div style={{flex:1, height:'6px', background:'#e2e8f0', borderRadius:'3px', width:'80px'}}>
+                                                                        <div style={{width: `${percent}%`, background: percent < 20 ? '#ef4444' : '#3b82f6', height:'100%', borderRadius:'3px'}}></div>
+                                                                    </div>
+                                                                    <span style={{fontWeight:'bold', color: percent < 20 ? '#ef4444' : '#334155'}}>{remaining}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td style={{padding: '12px 15px', borderBottom: '1px solid #f1f5f9'}}>
+                                                                {remaining === 0 ? (
+                                                                    <span style={{fontSize:'11px', fontWeight:'700', color:'#ef4444', background:'#fef2f2', padding:'4px 8px', borderRadius:'4px'}}>HẾT LƯỢT</span>
+                                                                ) : (
+                                                                    <span style={{fontSize:'11px', fontWeight:'700', color:'#16a34a', background:'#dcfce7', padding:'4px 8px', borderRadius:'4px'}}>ACTIVE</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -59,7 +59,10 @@ class UserRepository(IUserRepository):
             raise e
         
     def get_all_users(self, skip: int = 0, limit: int = 100):
-        return self.db.query(User).offset(skip).limit(limit).all()
+        return self.db.query(User).options(
+            joinedload(User.profile),       # Đã có
+            joinedload(User.subscriptions)  # <--- THÊM DÒNG NÀY
+        ).all()
 
     # --- 🔥 BƯỚC B: THÊM 2 HÀM MỚI Ở ĐÂY 🔥 ---
     

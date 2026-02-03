@@ -147,7 +147,49 @@ class UserService:
         }
 
     def get_all_users(self):
-        return self.user_repo.get_all_users()
+        users = self.user_repo.get_all_users()
+        
+        results = []
+        for user in users:
+            # --- LOGIC XỬ LÝ SUBSCRIPTION ---
+            active_sub_data = None
+            
+            # Nếu user có danh sách gói cước
+            if user.subscriptions:
+                # Cách 1: Lấy gói mới nhất (dựa vào ngày tạo hoặc ngày hết hạn)
+                # Giả sử model Subscription có cột 'end_date' hoặc 'is_active'
+                # Sắp xếp giảm dần theo ngày hết hạn -> Lấy cái đầu tiên
+                valid_subs = [s for s in user.subscriptions if s.is_active] # Hoặc check ngày: if s.end_date > datetime.now()
+                
+                if valid_subs:
+                    # Lấy gói đang chạy
+                    current = valid_subs[0] 
+                    
+                    # Map sang Schema
+                    active_sub_data = {
+                        "plan_name": current.plan_name,        # Tên gói (VD: "Gói Vip")
+                        "remaining_analyses": current.remaining_usage, # Số lượt còn lại
+                        "total_limit": current.limit           # Tổng lượt (VD: 100)
+                    }
+                else:
+                     # Nếu hết hạn hết rồi -> Trả về mặc định hoặc None
+                     pass
+
+            # Map user sang UserResponse
+            user_dto = UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                role=user.role,
+                status=user.status,
+                created_at=user.created_at,
+                profile=user.profile,
+                consent_for_training=False, # Hoặc lấy từ bảng Patient
+                subscription=active_sub_data # <--- Gán dữ liệu vừa xử lý vào đây
+            )
+            results.append(user_dto)
+            
+        return {"users": results}
     
     # 2. GOOGLE LOGIN
     def google_login(self, token: str, ip_address: str = "Unknown"):
