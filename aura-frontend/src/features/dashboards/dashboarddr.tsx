@@ -605,24 +605,84 @@ const DashboardDr: React.FC = () => {
                                         </h3>
                                     </div>
                                     <table style={styles.table} className="table-hover">
-                                        <thead><tr><th style={styles.th}>Bệnh nhân</th><th style={styles.th}>Ngày khám</th><th style={styles.th}>Kết quả AI</th><th style={styles.th}>Thao tác</th></tr></thead>
+                                        <thead>
+                                            {/* Lưu ý: Không để comment hoặc khoảng trắng giữa các thẻ th trong tr */}
+                                            <tr>
+                                                <th style={styles.th}>ID</th>
+                                                <th style={styles.th}>Bệnh nhân</th>
+                                                <th style={styles.th}>Giới tính</th>
+                                                <th style={styles.th}>Chiều cao</th>
+                                                <th style={styles.th}>BHYT</th>
+                                                <th style={styles.th}>Kết quả gần nhất</th>
+                                                <th style={styles.th}>Thao tác</th>
+                                            </tr>
+                                        </thead>
                                         <tbody>
-                                            {alerts.length === 0 ? (
-                                                <tr><td colSpan={4} style={styles.emptyCell}>Hiện tại không có hồ sơ nguy hiểm cần xử lý.</td></tr>
-                                            ) : (
-                                                alerts.map((item, index) => (
-                                                    <tr key={index} style={styles.tr}>
-                                                        <td style={styles.td}><b>{item.patient_name}</b></td>
-                                                        <td style={styles.td}>{new Date(item.date).toLocaleDateString('vi-VN')}</td>
-                                                        <td style={styles.td}><span style={{color:'#ef4444', fontWeight:'700', background:'#fef2f2', padding:'4px 10px', borderRadius:'6px'}}>{item.ai_result}</span></td>
-                                                        <td style={styles.td}>
-                                                            <button onClick={() => navigate(`/doctor/analysis/${item.record_id}`)} className="btn-primary-hover" style={{...styles.primaryBtnSm, background: 'linear-gradient(135deg, #ef4444, #dc2626)'}}>
-                                                                <FaStethoscope style={{marginRight:5}}/> Chẩn đoán
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            )}
+                                            {filteredPatients.map((p) => (
+                                                <tr key={p.id} style={styles.tr}>
+                                                    {/* Cột ID */}
+                                                    <td style={styles.td}>
+                                                        <code style={{fontSize:'12px', color:'#64748b', background:'#f1f5f9', padding:'2px 6px', borderRadius:'4px'}}>
+                                                            {p.id.substring(0, 8)}
+                                                        </code>
+                                                    </td>
+
+                                                    {/* Cột Tên & Liên hệ */}
+                                                    <td style={styles.td}>
+                                                        <div style={{fontWeight:'bold', color:'#334155'}}>{p.full_name || p.userName}</div>
+                                                        <div style={{fontSize:'12px', color:'#94a3b8'}}>{p.phone || p.email}</div>
+                                                    </td>
+
+                                                    {/* Cột Giới tính (Tách riêng) */}
+                                                    <td style={styles.td}>
+                                                        {p.medical_info?.gender ? (
+                                                            <span style={{textTransform:'capitalize'}}>{p.medical_info.gender}</span>
+                                                        ) : (
+                                                            <span style={{color:'#ccc'}}>--</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Cột Chiều cao (Tách riêng) */}
+                                                    <td style={styles.td}>
+                                                        {p.medical_info?.height ? (
+                                                            <span>{p.medical_info.height} cm</span>
+                                                        ) : (
+                                                            <span style={{color:'#ccc'}}>--</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Cột BHYT (Tách riêng) */}
+                                                    <td style={styles.td}>
+                                                        {p.medical_info?.insurance_id ? (
+                                                            <span style={{fontFamily:'monospace', color:'#007bff'}}>{p.medical_info.insurance_id}</span>
+                                                        ) : (
+                                                            <span style={{color:'#ccc', fontSize:'12px'}}>Chưa có</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Cột Kết quả AI */}
+                                                    <td style={styles.td}>
+                                                        {p.latest_scan?.ai_result ? (
+                                                                <span style={{
+                                                                color: p.latest_scan.ai_result.toLowerCase().includes('nặng') || p.latest_scan.ai_result.toLowerCase().includes('severe') ? '#dc2626' : 
+                                                                        p.latest_scan.ai_result.toLowerCase().includes('trung bình') || p.latest_scan.ai_result.toLowerCase().includes('moderate') ? '#ea580c' : '#16a34a',
+                                                                fontWeight:'700',
+                                                                background: p.latest_scan.ai_result.toLowerCase().includes('nặng') || p.latest_scan.ai_result.toLowerCase().includes('severe') ? '#fef2f2' : 'transparent',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px'
+                                                                }}>{p.latest_scan.ai_result}</span>
+                                                        ) : <span style={{color:'#94a3b8', fontStyle:'italic'}}>Chưa khám</span>}
+                                                    </td>
+
+                                                    {/* Cột Thao tác */}
+                                                    <td style={styles.td}>
+                                                        <div style={{display:'flex', gap:'8px'}}>
+                                                            <button onClick={() => {setActiveTab('chat'); openChat(p.id)}} className="btn-secondary-hover" style={styles.actionBtn}>Chat</button>
+                                                            <button onClick={() => handleViewHistory(p.id, p.full_name)} className="btn-secondary-hover" style={styles.actionBtn}>Hồ sơ</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
