@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 # --- CẤU HÌNH ---
 SEG_INPUT_SIZE = 256
 CLS_INPUT_SIZE = 224
-VESSEL_INPUT_SIZE = 512  # [QUAN TRỌNG] Tăng độ phân giải cho mạch máu
+VESSEL_INPUT_SIZE = 512 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ONNX_DIR = os.path.join(BASE_DIR, 'ai_onnx')
@@ -46,7 +46,6 @@ def encode_image_to_base64(img_array):
     _, buffer = cv2.imencode('.jpg', img_array)
     return base64.b64encode(buffer).decode('utf-8')
 
-# [CŨ] Hàm này chỉ dùng cho Lesions (HE, EX, MA)
 def preprocess_image(img, target_size, use_graham=True):
     img_resized = cv2.resize(img, (target_size, target_size))
     if use_graham and target_size == 224:
@@ -55,30 +54,14 @@ def preprocess_image(img, target_size, use_graham=True):
     img_float /= 255.0 
     return img_float
 
-# [MỚI] Hàm chuyên biệt cho mạch máu (CLAHE + Green Channel)
 def preprocess_for_vessels(img_rgb):
-    """
-    Tách kênh Green và áp dụng CLAHE để làm nổi bật mạch máu.
-    Resize lên 512x512 để giữ chi tiết mảnh.
-    """
-    # 1. Resize chuẩn
     img_resized = cv2.resize(img_rgb, (VESSEL_INPUT_SIZE, VESSEL_INPUT_SIZE))
-    
-    # 2. Lấy kênh Green (Kênh này mạch máu đen rõ nhất)
-    # OpenCV đọc RGB (vì ở hàm main đã convert), Green là kênh 1
     g_channel = img_resized[:, :, 1]
-
-    # 3. Áp dụng CLAHE (Contrast Limited Adaptive Histogram Equalization)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(g_channel)
-
-    # 4. Normalize 0-1
     img_float = enhanced.astype(np.float32) / 255.0
-    
-    # 5. Expand dims để thành (1, 512, 512, 1)
     img_expanded = np.expand_dims(img_float, axis=0)
     img_expanded = np.expand_dims(img_expanded, axis=-1)
-    
     return img_expanded
 
 def clean_mask(mask_array, min_size=10):
@@ -93,9 +76,8 @@ def clean_mask(mask_array, min_size=10):
             cleaned[labels == i] = 255
     return cleaned.astype(np.float32) / 255.0
 
-# --- PHÂN TÍCH VASCULAR (GIỮ NGUYÊN LOGIC MỚI) ---
+# --- PHÂN TÍCH VASCULAR ---
 def analyze_vascular_health(vessel_mask_full):
-    # 1. Chuẩn bị mask
     mask_bin = (vessel_mask_full * 255).astype(np.uint8) if vessel_mask_full.max() <= 1.0 else vessel_mask_full.astype(np.uint8)
     _, mask_bin = cv2.threshold(mask_bin, 127, 255, cv2.THRESH_BINARY)
     
@@ -103,15 +85,15 @@ def analyze_vascular_health(vessel_mask_full):
     total_area = h * w
     vessel_area = np.sum(mask_bin > 0)
     
-    # 2. Tính Mật độ (Density)
+    # Tính Density
     density = (vessel_area / total_area) * 100 
     
-    # 3. Tính Độ cong (Tortuosity)
+    # Tính Tortuosity
     contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     tortuosity_indices = []
     
     for cnt in contours:
-        if cv2.contourArea(cnt) > 30: # Giảm min size xuống để bắt mạch nhỏ
+        if cv2.contourArea(cnt) > 30: 
             perimeter = cv2.arcLength(cnt, True)
             hull = cv2.convexHull(cnt)
             hull_perimeter = cv2.arcLength(hull, True)
@@ -120,10 +102,10 @@ def analyze_vascular_health(vessel_mask_full):
 
     avg_tortuosity = np.mean(tortuosity_indices) if tortuosity_indices else 1.0
 
-    # 4. Đánh giá Rủi ro (Đã tinh chỉnh ngưỡng)
+    # Đánh giá Rủi ro
     risks = []
     
-    # -- Tăng Huyết Áp --
+    # Tăng Huyết Áp
     htn_risk = "Thấp"
     if avg_tortuosity > 1.12: 
         htn_risk = "Cao (Cảnh báo)"
@@ -132,11 +114,11 @@ def analyze_vascular_health(vessel_mask_full):
         htn_risk = "Trung bình"
         risks.append(f"- Tăng huyết áp: Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {avg_tortuosity:.2f}).")
 
-    # -- Tim mạch / Đột quỵ --
+    # Tim mạch / Đột quỵ
     cvd_risk = "Ổn định"
-    if density < 1.5: 
+    if density < 3.5: 
         cvd_risk = "Cảnh báo thiếu máu cục bộ"
-        risks.append(f"- Nguy cơ Đột quỵ/Tim mạch: Mật độ mạch máu võng mạc thấp ({density:.2f}%), gợi ý tình trạng thiếu máu cục bộ.")
+        risks.append(f"- Nguy cơ Đột quỵ/Tim mạch: Mật độ mạch máu thấp ({density:.2f}% < 3.5%), gợi ý tình trạng thiếu máu cục bộ.")
     
     return {
         "density": density,
@@ -156,13 +138,16 @@ def run_aura_inference(image_bytes):
         orig_h, orig_w = original_img.shape[:2]
         original_rgb = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
         
-        # Preprocessing cho DR
+        # [QUAN TRỌNG] Lấy kênh Green để lọc nhiễu màu
+        g_channel = original_img[:, :, 1] # BGR -> Index 1 là Green
+        avg_brightness = np.mean(g_channel)
+
         input_seg = preprocess_image(original_rgb, target_size=SEG_INPUT_SIZE, use_graham=False)
         input_cls = preprocess_image(original_rgb, target_size=CLS_INPUT_SIZE, use_graham=True)
         if input_seg.ndim == 3: input_seg = np.expand_dims(input_seg, axis=0)
         if input_cls.ndim == 3: input_cls = np.expand_dims(input_cls, axis=0)
 
-        # 1. CLASSIFIER (DR Grading)
+        # 1. CLASSIFIER
         dr_grade = "Unknown"
         confidence = 0.0
         if 'CLASSIFIER' in loaded_sessions:
@@ -176,51 +161,61 @@ def run_aura_inference(image_bytes):
         # 2. SEGMENTATION LOOP
         overlay_full = np.zeros((orig_h, orig_w, 3), dtype=np.uint8) 
         findings = {'HE': 0, 'MA': 0, 'EX': 0, 'SE': 0, 'Vessels': 0}
-        
         vessel_mask_full = np.zeros((orig_h, orig_w), dtype=np.float32)
 
         def draw_mask_on_overlay(mask_cleaned, color):
-            mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-            color_np = np.array(color, dtype=np.float32)
-            current_region = overlay_full.astype(np.float32)
-            for c in range(3):
-                current_region[:, :, c] = np.maximum(current_region[:, :, c], mask_full * color_np[c])
-            np.copyto(overlay_full, current_region.astype(np.uint8))
+            mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+            mask_bool = mask_full > 0.5
+            color_np = np.array(color, dtype=np.uint8)
+            overlay_full[mask_bool] = color_np
             return mask_full
 
-        # --- A. XỬ LÝ VESSELS (OPTIMIZED) ---
+        # --- A. VESSELS ---
         if 'Vessels' in loaded_sessions:
             try:
-                # [FIX] Dùng hàm preprocess riêng (CLAHE)
                 input_v = preprocess_for_vessels(original_rgb)
-
                 session = loaded_sessions['Vessels']
                 pred = session.run(None, {session.get_inputs()[0].name: input_v})[0]
-                
-                # [FIX] min_size=0 để không xóa các mạch máu đứt đoạn
                 mask_v = clean_mask(pred[0,:,:,0], min_size=0) 
-                
-                # Lưu mask full để phân tích
                 vessel_mask_full = cv2.resize(mask_v, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-                
-                # Vẽ lên ảnh (Xanh lá)
                 draw_mask_on_overlay(mask_v, (0, 255, 0))
                 findings['Vessels'] = 1 
-            except Exception as e:
-                print(f"❌ Vessels Error: {e}")
+            except Exception as e: print(f"❌ Vessels Error: {e}")
 
-        # --- B. XỬ LÝ LESIONS ---
+        # --- B. LESIONS (VỚI BỘ LỌC ÁNH SÁNG) ---
         def run_seg_std(key, color, min_size=5):
             if key in loaded_sessions:
                 try:
                     session = loaded_sessions[key]
                     pred = session.run(None, {session.get_inputs()[0].name: input_seg})[0]
                     mask_cleaned = clean_mask(pred[0,:,:,0], min_size)
-                    findings[key] = np.sum(mask_cleaned)
-                    if findings[key] > 0:
-                        draw_mask_on_overlay(mask_cleaned, color)
-                except: pass
+                    
+                    # Resize mask về kích thước gốc để check độ sáng
+                    mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+                    
+                    # [LUMINOSITY CHECK - KHẮC PHỤC LỖI VÀNG/ĐỎ]
+                    if key in ['EX', 'SE']: # Nếu là Xuất tiết (Phải SÁNG)
+                        # Lọc bỏ các pixel tối (máu) mà bị nhận nhầm là EX
+                        # Điều kiện: Pixel phải sáng hơn trung bình nền một chút
+                        mask_full[g_channel < avg_brightness] = 0 
+                        
+                    elif key in ['HE', 'MA']: # Nếu là Xuất huyết (Phải TỐI)
+                        # (Optional) Lọc bỏ pixel quá sáng
+                        mask_full[g_channel > (avg_brightness + 30)] = 0
 
+                    # Tính lại số lượng sau khi lọc
+                    final_count = np.sum(mask_full > 0) / (orig_w * orig_h / (256*256)) # Normalize lại scale 256
+                    findings[key] = final_count
+
+                    if final_count > 0:
+                        # Vẽ mask đã lọc lên overlay
+                        mask_bool = mask_full > 0.5
+                        color_np = np.array(color, dtype=np.uint8)
+                        overlay_full[mask_bool] = color_np
+                        
+                except Exception as e: pass
+
+        # Chạy model (Vàng vẽ trước, Đỏ vẽ sau, nhưng giờ đã có bộ lọc nên sẽ chuẩn hơn)
         run_seg_std('EX', (0, 255, 255)) 
         run_seg_std('SE', (0, 255, 255)) 
         if 'HE' in loaded_sessions: run_seg_std('HE', (0, 0, 255), 2)
@@ -255,7 +250,7 @@ def run_aura_inference(image_bytes):
 
         vascular_info = re_evaluate_vascular(analyze_vascular_health(vessel_mask_full))
 
-        # 4. REPORTING (RULE BASED OVERRIDE)
+        # 4. REPORTING
         risk_score = (findings['MA']*1) + (findings['EX']*2) + (findings['HE']*3) + (findings['SE']*4)
         ai_grade_origin = dr_grade
         
