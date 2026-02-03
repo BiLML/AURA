@@ -601,7 +601,7 @@ const DashboardDr: React.FC = () => {
                                     <div style={styles.cardHeader}>
                                         <h3 style={styles.pageTitle}>
                                             <FaExclamationTriangle style={{marginRight:10, color:'#ef4444'}}/> 
-                                            Hồ sơ cần chú ý ({alerts.length})
+                                            Hồ sơ cần chú ý (Servere NPDR và PDR): {alerts.length}
                                         </h3>
                                     </div>
                                     <table style={styles.table} className="table-hover">
@@ -612,7 +612,6 @@ const DashboardDr: React.FC = () => {
                                                 <th style={styles.th}>Giới tính</th>
                                                 <th style={styles.th}>Chiều cao</th>
                                                 <th style={styles.th}>BHYT</th>
-                                                <th style={styles.th}>Kết quả gần nhất</th>
                                                 <th style={styles.th}>Thao tác</th>
                                             </tr>
                                         </thead>
@@ -650,18 +649,6 @@ const DashboardDr: React.FC = () => {
                                                         ) : (
                                                             <span style={{color:'#ccc', fontSize:'12px'}}>Chưa có</span>
                                                         )}
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        {p.latest_scan?.ai_result ? (
-                                                                <span style={{
-                                                                color: p.latest_scan.ai_result.toLowerCase().includes('nặng') || p.latest_scan.ai_result.toLowerCase().includes('severe') ? '#dc2626' : 
-                                                                        p.latest_scan.ai_result.toLowerCase().includes('trung bình') || p.latest_scan.ai_result.toLowerCase().includes('moderate') ? '#ea580c' : '#16a34a',
-                                                                fontWeight:'700',
-                                                                background: p.latest_scan.ai_result.toLowerCase().includes('nặng') || p.latest_scan.ai_result.toLowerCase().includes('severe') ? '#fef2f2' : 'transparent',
-                                                                padding: '4px 8px',
-                                                                borderRadius: '6px'
-                                                                }}>{p.latest_scan.ai_result}</span>
-                                                        ) : <span style={{color:'#94a3b8', fontStyle:'italic'}}>Chưa khám</span>}
                                                     </td>
                                                     <td style={styles.td}>
                                                         <div style={{display:'flex', gap:'8px'}}>
@@ -827,11 +814,11 @@ const DashboardDr: React.FC = () => {
                             >
                                 <div style={styles.reportBox} className="slide-up-card">
                                     <h3 style={{margin:'0 0 10px 0', color:'#007bff'}}>Gửi báo cáo sai lệch AI</h3>
-                                    <p style={{fontSize:'14px', color:'#475569', margin:0}}>Nếu phát hiện AI chẩn đoán sai, hãy vào <strong>Bệnh nhân &rarr; Chi tiết &rarr; Chẩn đoán</strong> để cập nhật Ground Truth.</p>
+                                    <p style={{fontSize:'14px', color:'#475569', margin:0}}>Nếu phát hiện AI chẩn đoán sai, hãy vào <strong>Bệnh nhân &rarr; Chi tiết &rarr; Báo lỗi</strong> để báo cáo</p>
                                 </div>
                                 <div style={styles.card} className="slide-up-card">
                                     <div style={styles.cardHeader}>
-                                        <h3 style={{margin:0, fontSize:'18px', display:'flex', alignItems:'center', color:'#1e293b'}}><FaChartBar style={{marginRight:10, color:'#007bff'}}/> Lịch sử báo cáo của tôi</h3>
+                                        <h3 style={{margin:0, fontSize:'18px', display:'flex', alignItems:'center', color:'#1e293b'}}><FaChartBar style={{marginRight:10, color:'#007bff'}}/> Lịch sử báo cáo</h3>
                                         <button onClick={fetchMyReports} className="btn-secondary-hover" style={styles.btnSecondary}><FaChartBar style={{marginRight:5}}/> Làm mới</button>
                                     </div>
                                     <div style={{padding:'0'}}>

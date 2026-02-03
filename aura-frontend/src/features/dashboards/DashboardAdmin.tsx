@@ -142,6 +142,7 @@ const DashboardAdmin: React.FC = () => {
     const [clinicViewMode, setClinicViewMode] = useState<'pending' | 'active' | 'suspended'>('pending');
     const [adminName, setAdminName] = useState('Admin');
     const [isLoading, setIsLoading] = useState(true);
+    const [chartView, setChartView] = useState<'revenue' | 'performance'>('revenue');
 
     // --- STATE DATA ---
     const [userList, setUserList] = useState<User[]>([]);
@@ -405,45 +406,110 @@ const DashboardAdmin: React.FC = () => {
             <main style={styles.mainBody}>
                 <div style={styles.contentWrapper} className="animate-fade-in">
 
-                    {/* REVENUE CHART */}
-                    <div style={{...styles.chartCard, marginBottom: '24px'}} className="hover-card">
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                            <div>
-                                <h3 style={{fontSize:'18px', fontWeight:'700', color:'#0f172a', margin:0, display:'flex', alignItems:'center'}}>
-                                    <FaChartPie style={{marginRight:10, color:'#007bff'}}/> 
-                                    Xu hướng Doanh thu
-                                </h3>
-                                <p style={{fontSize:'13px', color:'#64748b', margin:'4px 0 0 0'}}>
-                                    Thống kê doanh thu trong 7 ngày gần nhất
-                                </p>
+                    {/* --- CHART SECTION WITH TABS [UPDATED] --- */}
+                    <div style={{...styles.chartCard, padding: 0, display: 'flex', overflow: 'hidden', height: '400px', marginBottom: '24px'}} className="hover-card">
+                        
+                        {/* LEFT SIDEBAR: MENU */}
+                        <div style={{width: '220px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '20px 0', display: 'flex', flexDirection: 'column'}}>
+                            <div style={{padding: '0 20px 15px', borderBottom: '1px solid #e2e8f0', marginBottom: '10px'}}>
+                                <h4 style={{margin: 0, color: '#334155', fontSize: '14px', fontWeight: '700', textTransform: 'uppercase'}}>Thống kê</h4>
                             </div>
-                            <div style={{textAlign:'right'}}>
-                                <span style={{fontSize:'12px', color:'#64748b', fontWeight:'600', display:'block', textTransform:'uppercase', letterSpacing:'0.5px'}}>Tổng Doanh Thu</span>
-                                <span style={{fontSize:'26px', fontWeight:'800', color:'#15803d', letterSpacing:'-0.5px'}}>
-                                    {formatCurrency(globalStats.revenue)}
-                                </span>
-                            </div>
+                            
+                            {/* Nút Doanh thu */}
+                            <button 
+                                onClick={() => setChartView('revenue')}
+                                style={chartView === 'revenue' ? styles.chartTabActive : styles.chartTab}
+                            >
+                                <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
+                                    <FaMoneyBillWave size={16} />
+                                    <span>Doanh thu</span>
+                                </div>
+                            </button>
+
+                            {/* Nút Hiệu suất AI */}
+                            <button 
+                                onClick={() => setChartView('performance')}
+                                style={chartView === 'performance' ? styles.chartTabActive : styles.chartTab}
+                            >
+                                <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
+                                    <FaBrain size={16} />
+                                    <span>Hiệu suất AI</span>
+                                </div>
+                            </button>
                         </div>
 
-                        <div style={{width: '100%', height: '300px'}}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#007bff" stopOpacity={0.2}/>
-                                            <stop offset="95%" stopColor="#007bff" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(value)} />
-                                    <RechartsTooltip 
-                                        contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                                        formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]}
-                                    />
-                                    <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                        {/* RIGHT CONTENT: CHART AREA */}
+                        <div style={{flex: 1, padding: '24px', display: 'flex', flexDirection: 'column'}}>
+                            
+                            {/* HEADER CỦA BIỂU ĐỒ */}
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                                <div>
+                                    <h3 style={{fontSize:'18px', fontWeight:'700', color:'#0f172a', margin:0, display:'flex', alignItems:'center'}}>
+                                        {chartView === 'revenue' ? (
+                                            <><FaChartPie style={{marginRight:10, color:'#007bff'}}/> Xu hướng Doanh thu</>
+                                        ) : (
+                                            <><FaBrain style={{marginRight:10, color:'#8b5cf6'}}/> Hiệu suất Phân tích AI</>
+                                        )}
+                                    </h3>
+                                    <p style={{fontSize:'13px', color:'#64748b', margin:'4px 0 0 0'}}>
+                                        {chartView === 'revenue' 
+                                            ? 'Thống kê tổng doanh thu từ các gói dịch vụ (7 ngày)' 
+                                            : 'Tổng số lượt quét và phân tích hình ảnh toàn hệ thống (7 ngày)'}
+                                    </p>
+                                </div>
+                                <div style={{textAlign:'right'}}>
+                                    <span style={{fontSize:'12px', color:'#64748b', fontWeight:'600', display:'block', textTransform:'uppercase', letterSpacing:'0.5px'}}>
+                                        {chartView === 'revenue' ? 'Tổng Doanh Thu' : 'Tổng Lượt Scan'}
+                                    </span>
+                                    <span style={{fontSize:'26px', fontWeight:'800', color: chartView === 'revenue' ? '#15803d' : '#8b5cf6', letterSpacing:'-0.5px'}}>
+                                        {chartView === 'revenue' 
+                                            ? formatCurrency(globalStats.revenue)
+                                            : new Intl.NumberFormat('vi-VN').format(globalStats.totalScans)
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* BIỂU ĐỒ */}
+                            <div style={{flex: 1, width: '100%', minHeight: 0}}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    {chartView === 'revenue' ? (
+                                        <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                            <defs>
+                                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#007bff" stopOpacity={0.2}/>
+                                                    <stop offset="95%" stopColor="#007bff" stopOpacity={0}/>
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(value)} />
+                                            <RechartsTooltip 
+                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                                                formatter={(value: any) => [formatCurrency(Number(value)), "Doanh thu"]}
+                                            />
+                                            <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
+                                        </AreaChart>
+                                    ) : (
+                                        <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                            <defs>
+                                                <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                                                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                                            <RechartsTooltip 
+                                                contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                                                formatter={(value: any) => [value, "Lượt Scan"]}
+                                            />
+                                            <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" animationDuration={1000}/>
+                                        </AreaChart>
+                                    )}
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
 
@@ -1006,7 +1072,19 @@ const styles: { [key: string]: React.CSSProperties } = {
     chartCard: { background: 'white', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' },
     chartTitle: { margin: '0 0 24px 0', fontSize: '16px', color: '#1e293b', fontWeight: '700' },
     configBox: { background:'white', padding:'24px', borderRadius:'12px', border:'1px solid #e2e8f0', height: '100%' },
-    configTitle: { marginBottom:'20px', color:'#0f172a', borderBottom:'1px solid #f1f5f9', paddingBottom:'12px', fontSize: '15px', fontWeight: '700' }
+    configTitle: { marginBottom:'20px', color:'#0f172a', borderBottom:'1px solid #f1f5f9', paddingBottom:'12px', fontSize: '15px', fontWeight: '700' },
+    chartTab: {
+        display: 'flex', alignItems: 'center', width: '100%', padding: '12px 20px', 
+        background: 'transparent', border: 'none', borderLeft: '3px solid transparent', 
+        cursor: 'pointer', color: '#64748b', fontSize: '14px', fontWeight: '500', 
+        transition: 'all 0.2s', textAlign: 'left'
+    },
+    chartTabActive: {
+        display: 'flex', alignItems: 'center', width: '100%', padding: '12px 20px', 
+        background: '#f1f5f9', border: 'none', borderLeft: '3px solid #007bff', 
+        cursor: 'pointer', color: '#007bff', fontSize: '14px', fontWeight: '700', 
+        transition: 'all 0.2s', textAlign: 'left'
+    },
 };
 
 export default DashboardAdmin;
