@@ -495,12 +495,11 @@ const DashboardAdmin: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div style={{flex: 1, width: '100%', minHeight: 0, minWidth: 0, position: 'relative'}}>
+                            <div style={{width: '100%', height: '340px', marginTop: '10px'}}>
+                                
                                 {chartView === 'revenue' && (
-                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
-                                        {globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
-                                        
-                                        <ResponsiveContainer width="99%" height="100%" minWidth={0} debounce={200}>
+                                    globalStats.revenueChart && globalStats.revenueChart.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                                 <defs>
                                                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -515,44 +514,41 @@ const DashboardAdmin: React.FC = () => {
                                                 <Area type="monotone" dataKey="value" stroke="#007bff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1000}/>
                                             </AreaChart>
                                         </ResponsiveContainer>
-
-                                        ) : <div style={{padding: 20}}>Đang tải dữ liệu biểu đồ...</div>}
-                                    </div>
+                                    ) : (
+                                        <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8'}}>
+                                            Đang tải dữ liệu biểu đồ...
+                                        </div>
+                                    )
                                 )}
 
                                 {chartView === 'performance' && (
-                                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%'}}>
-                                        {analyticsData.upload_trends && analyticsData.upload_trends.length > 0 ? (
-                                            
-                                            <ResponsiveContainer width="99%" height="100%" minWidth={0} debounce={200}>
-                                                <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                                                    {/* ... (Giữ nguyên nội dung bên trong AreaChart) ... */}
-                                                    <defs>
-                                                        <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                                                        </linearGradient>
-                                                        <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
-                                                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                                                        </linearGradient>
-                                                    </defs>
-
-                                                    <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
-                                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                                                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                                                    <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} />
-                                                    
-                                                    <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
-                                                    <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
-                                                    <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-
-                                        ) : (
-                                            <div style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>Đang tải dữ liệu hiệu suất...</div>
-                                        )}
-                                    </div>
+                                    analyticsData.upload_trends && analyticsData.upload_trends.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                    <linearGradient id="colorCorrect" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/>
+                                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                                                <RechartsTooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 25px -5px rgba(0,0,0,0.1)'}} />
+                                                <Area type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorPerformance)" />
+                                                <Area type="monotone" dataKey="correct" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorCorrect)" />
+                                                <Area type="monotone" dataKey="incorrect" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fillOpacity={0} fill="transparent" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8'}}>
+                                            Chưa có dữ liệu hiệu suất
+                                        </div>
+                                    )
                                 )}
                                 
                                 {chartView === 'usage' && (
