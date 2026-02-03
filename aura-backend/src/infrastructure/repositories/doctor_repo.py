@@ -108,7 +108,16 @@ class DoctorRepository(IDoctorRepository):
             .outerjoin(DoctorValidation, AIAnalysisResult.id == DoctorValidation.analysis_id)
             .filter(
                 RetinalImage.uploader_id.in_(patient_ids_query),
-                DoctorValidation.id == None,  # Chỉ lấy hồ sơ CHƯA được bác sĩ xem
+                or_(
+                # Trường hợp 1: Chưa khám (Validation là Null)
+                DoctorValidation.id == None,
+                
+                # Trường hợp 2: Đã khám nhưng đánh dấu là Nguy hiểm (Logic mở rộng nếu cần)
+                DoctorValidation.doctor_confirm.ilike("%Severe%"),
+                DoctorValidation.doctor_confirm.ilike("%PDR%"),
+                DoctorValidation.doctor_confirm.ilike("%Nặng%"),
+                DoctorValidation.doctor_confirm.ilike("%Nguy hiểm%")
+                ),
                 
                 # --- LOGIC LỌC CHÍNH XÁC ---
                 or_(

@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import os
 import base64
+import math
 from concurrent.futures import ThreadPoolExecutor
 
 # --- CẤU HÌNH ---
@@ -29,49 +30,18 @@ sess_options.intra_op_num_threads = 2
 sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-#providers = [
-#    ('CUDAExecutionProvider', {
-#        'device_id': 0,
-#        'arena_extend_strategy': 'kNextPowerOfTwo',
-#        'cudnn_conv_algo_search': 'EXHAUSTIVE',
-#        'do_copy_in_default_stream': True,
-#    }),
-#    'CPUExecutionProvider',
-#]
+providers = ['CPUExecutionProvider'] # Hoặc CUDA nếu có
 
-providers = ['CPUExecutionProvider']
-
-print(f"📂 Đang tìm model trong thư mục: {ONNX_DIR}")
 for name, filename in MODEL_FILES.items():
     path = os.path.join(ONNX_DIR, filename)
     if os.path.exists(path):
         try:
             loaded_sessions[name] = ort.InferenceSession(path, sess_options, providers=providers)
-            used_provider = loaded_sessions[name].get_providers()[0]
-            print(f"   ✅ Loaded: {name} [{used_provider}]")
+            print(f"   ✅ Loaded: {name}")
         except Exception as e:
             print(f"   ❌ Failed to load {name}: {e}")
-    else:
-        print(f"   ⚠️ FILE MISSING: {filename}")
 
-# In ra tổng kết CUDA vs CPU
-def get_runtime_info():
-    """Trả về thông tin runtime (CUDA hay CPU) để kiểm tra từ API."""
-    if not loaded_sessions:
-        return {"cuda": False, "provider": None, "message": "No model loaded"}
-    sample = next(iter(loaded_sessions.values()))
-    provider = sample.get_providers()[0]
-    return {
-        "cuda": "CUDAExecutionProvider" in provider,
-        "provider": provider,
-        "message": "CUDA (GPU)" if "CUDAExecutionProvider" in provider else "CPU",
-    }
-
-if loaded_sessions:
-    info = get_runtime_info()
-    print(f"🖥️ RUNTIME: {info['message']}")
-
-# --- HELPER ---
+# --- HELPER FUNCTIONS ---
 def encode_image_to_base64(img_array):
     _, buffer = cv2.imencode('.jpg', img_array)
     return base64.b64encode(buffer).decode('utf-8')
@@ -96,6 +66,65 @@ def clean_mask(mask_array, min_size=10):
             cleaned[labels == i] = 255
     return cleaned.astype(np.float32) / 255.0
 
+# --- NEW: PHÂN TÍCH MẠCH MÁU & RỦI RO TOÀN THÂN ---
+def analyze_vascular_health(vessel_mask_full):
+    """
+    Phân tích hình thái mạch máu để dự đoán rủi ro toàn thân.
+    Input: Mask mạch máu kích thước gốc (0-1 float hoặc 0-255 uint8)
+    """
+    # 1. Chuẩn bị mask
+    mask_bin = (vessel_mask_full * 255).astype(np.uint8) if vessel_mask_full.max() <= 1.0 else vessel_mask_full.astype(np.uint8)
+    _, mask_bin = cv2.threshold(mask_bin, 127, 255, cv2.THRESH_BINARY)
+    
+    h, w = mask_bin.shape
+    total_area = h * w
+    vessel_area = np.sum(mask_bin > 0)
+    
+    # 2. Tính Mật độ mạch máu (Vessel Density) -> Liên quan đến thiếu máu cục bộ
+    density = (vessel_area / total_area) * 100 
+    
+    # 3. Tính Độ cong (Tortuosity) -> Liên quan đến Tăng huyết áp (Hypertension)
+    contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    tortuosity_indices = []
+    
+    for cnt in contours:
+        if cv2.contourArea(cnt) > 50: # Chỉ tính mạch máu dài
+            perimeter = cv2.arcLength(cnt, True)
+            # Khoảng cách thẳng giữa điểm đầu và cuối (xấp xỉ qua bounding box diagonal hoặc perimeter ratio)
+            # Đơn giản hóa: Tortuosity = Chu vi thực / Chu vi convex hull (độ lồi lõm)
+            hull = cv2.convexHull(cnt)
+            hull_perimeter = cv2.arcLength(hull, True)
+            if hull_perimeter > 0:
+                tortuosity_indices.append(perimeter / hull_perimeter)
+
+    avg_tortuosity = np.mean(tortuosity_indices) if tortuosity_indices else 1.0
+
+    # 4. Đánh giá Rủi ro
+    risks = []
+    
+    # -- Rủi ro Tăng Huyết Áp (Hypertensive Retinopathy Signs) --
+    htn_risk = "Thấp"
+    if avg_tortuosity > 2.2: htn_risk = "Cao (Cảnh báo)"
+    elif avg_tortuosity > 1.8: htn_risk = "Trung bình"
+    
+    if htn_risk != "Thấp":
+        risks.append(f"- Tăng huyết áp: Phát hiện mạch máu co kéo, gấp khúc bất thường (Tortuosity Index: {avg_tortuosity:.2f}).")
+
+    # -- Rủi ro Tim mạch / Đột quỵ (Cardiovascular / Stroke) --
+    # Mạch máu quá thưa thớt hoặc bị đứt đoạn (Density thấp bất thường)
+    cvd_risk = "Ổn định"
+    if density < 1.5: # Ngưỡng giả định
+        cvd_risk = "Cảnh báo thiếu máu cục bộ"
+        risks.append(f"- Nguy cơ Đột quỵ/Tim mạch: Mật độ mạch máu võng mạc thấp ({density:.2f}%), gợi ý tình trạng thiếu máu cục bộ.")
+    
+    return {
+        "density": density,
+        "tortuosity": avg_tortuosity,
+        "htn_risk": htn_risk,
+        "cvd_risk": cvd_risk,
+        "systemic_notes": risks
+    }
+
 # --- CORE LOGIC ---
 def run_aura_inference(image_bytes):
     try:
@@ -106,149 +135,117 @@ def run_aura_inference(image_bytes):
         orig_h, orig_w = original_img.shape[:2]
         original_rgb = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
         
-        # Input chuẩn cho các model 256 (EX, SE, HE, MA, OD)
+        # Input Models
         input_seg = preprocess_image(original_rgb, target_size=SEG_INPUT_SIZE, use_graham=False)
-        if input_seg.ndim == 3:
-            input_seg = np.expand_dims(input_seg, axis=0)
-
         input_cls = preprocess_image(original_rgb, target_size=CLS_INPUT_SIZE, use_graham=True)
+        if input_seg.ndim == 3: input_seg = np.expand_dims(input_seg, axis=0)
+        if input_cls.ndim == 3: input_cls = np.expand_dims(input_cls, axis=0)
 
-        # 1. CLASSIFIER
+        # 1. CLASSIFIER (DR Grading)
         dr_grade = "Unknown"
         confidence = 0.0
-        
         if 'CLASSIFIER' in loaded_sessions:
             session = loaded_sessions['CLASSIFIER']
-            cls_input = input_cls
-            if cls_input.ndim == 3: cls_input = np.expand_dims(cls_input, axis=0)
-            
-            preds = session.run(None, {session.get_inputs()[0].name: cls_input})[0]
+            preds = session.run(None, {session.get_inputs()[0].name: input_cls})[0]
             class_idx = np.argmax(preds[0])
             confidence = float(np.max(preds[0]))
             dr_grade = CLASS_MAP.get(class_idx, "Unknown")
-            
-            # Logic: Luôn trả về tên bệnh, nếu Normal tin cậy cao thì ghi chú thêm
-            if class_idx == 0 and confidence > 0.95:
-                dr_grade = "Normal (Healthy Retina)"
+            if class_idx == 0 and confidence > 0.95: dr_grade = "Normal (Healthy Retina)"
 
-        # 2. SEGMENTATION
+        # 2. SEGMENTATION LOOP
         overlay_full = np.zeros((orig_h, orig_w, 3), dtype=np.uint8) 
         findings = {'HE': 0, 'MA': 0, 'EX': 0, 'SE': 0, 'Vessels': 0}
-
-        def process_and_draw(key, input_tensor, color, min_size=0, is_contour=False):
-            if key in loaded_sessions:
-                try:
-                    # Chạy AI
-                    session = loaded_sessions[key]
-                    pred = session.run(None, {session.get_inputs()[0].name: input_tensor})[0]
-                    
-                    # Lấy mask gốc (float 0.0 -> 1.0)
-                    mask_small = pred[0,:,:,0]
-                    
-                    # Clean mask nhưng giữ nguyên độ mượt (không threshold cứng ở đây nếu muốn đẹp)
-                    # Nếu clean_mask của bạn đang trả về 0/1, hãy sửa nó để trả về soft mask hoặc chấp nhận clean xong mới resize
-                    mask_cleaned = clean_mask(mask_small, min_size)
-                    
-                    findings[key] = np.sum(mask_cleaned)
-                    
-                    if findings[key] > 0:
-                        # 1. Resize mượt mà lên kích thước gốc
-                        mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-                        
-                        if is_contour:
-                            # Với Gai thị (OD), vẫn cần viền nên giữ logic contour
-                            _, mask_bin = cv2.threshold(mask_full, 0.5, 1, cv2.THRESH_BINARY)
-                            contours, _ = cv2.findContours(mask_bin.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                            cv2.drawContours(overlay_full, contours, -1, color, 2)
-                        else:
-                            # 2. VỚI CÁC BỆNH KHÁC: Dùng Alpha Blending thay vì tô bệt
-                            # Biến color thành mảng numpy
-                            color_np = np.array(color, dtype=np.float32)
-                            
-                            # Tạo vùng ảnh màu tại vị trí mask
-                            # mask_full lúc này là độ đậm nhạt (0.0 đến 1.0) tại từng pixel
-                            
-                            # Lấy vùng ảnh hiện tại trên overlay
-                            current_region = overlay_full.astype(np.float32)
-                            
-                            # Công thức cộng màu: Màu Mới * Độ Đậm Mask
-                            # Ta lặp qua 3 kênh màu (B, G, R)
-                            for c in range(3):
-                                # Chỉ cộng màu vào nơi có mask, giữ nguyên nơi khác
-                                # Cách này tạo hiệu ứng "phát sáng" (Glow)
-                                current_region[:, :, c] = np.maximum(
-                                    current_region[:, :, c], 
-                                    mask_full * color_np[c]
-                                )
-                                
-                            # Gán ngược lại overlay_full
-                            np.copyto(overlay_full, current_region.astype(np.uint8))
-                            
-                except Exception as e:
-                    print(f"Lỗi xử lý {key}: {e}")
-
-        # --- A. XỬ LÝ RIÊNG CHO VESSELS (512x512, Grayscale) ---
-        if 'Vessels' in loaded_sessions:
-            try:
-                # 1. Resize về 512x512
-                img_vessels = cv2.resize(original_rgb, (512, 512))
-                # 2. Chuyển sang Grayscale (1 kênh)
-                img_vessels_gray = cv2.cvtColor(img_vessels, cv2.COLOR_RGB2GRAY)
-                # 3. Chuẩn hóa 0-1
-                img_vessels_norm = img_vessels_gray.astype(np.float32) / 255.0
-                # 4. Reshape thành (1, 512, 512, 1)
-                input_vessels = np.expand_dims(img_vessels_norm, axis=0) # (1, 512, 512)
-                input_vessels = np.expand_dims(input_vessels, axis=-1)   # (1, 512, 512, 1)
-                
-                process_and_draw('Vessels', input_vessels, (0, 255, 0), min_size=0)
-            except Exception as e:
-                print(f"❌ Custom Vessel Error: {e}")
-
-        # --- B. CÁC MODEL KHÁC (256x256, RGB) ---
-        process_and_draw('EX', input_seg, (0, 255, 255), 5)
-        process_and_draw('SE', input_seg, (0, 255, 255), 5)
         
-        # HE/MA
-        seg_batch = np.expand_dims(input_seg, axis=0) if input_seg.ndim == 3 else input_seg
-        if 'HE' in loaded_sessions:
+        vessel_mask_full = np.zeros((orig_h, orig_w), dtype=np.float32) # Để dành phân tích mạch máu
+
+        def run_seg_model(key, color, is_vessel=False):
+            if key not in loaded_sessions: return
             try:
-                pred = loaded_sessions['HE'].run(None, {loaded_sessions['HE'].get_inputs()[0].name: seg_batch})[0]
-                mask_he = clean_mask(pred[0,:,:,0], 2)
-                findings['HE'] = np.sum(mask_he)
-            except: pass
-        if 'MA' in loaded_sessions:
-            try:
-                pred = loaded_sessions['MA'].run(None, {loaded_sessions['MA'].get_inputs()[0].name: seg_batch})[0]
-                mask_ma = clean_mask(pred[0,:,:,0], 2)
-                findings['MA'] = np.sum(mask_ma)
-            except: pass
+                # Xử lý input riêng cho Vessels (nếu cần 512x512) hoặc dùng chung
+                curr_input = input_seg
+                if key == 'Vessels': # Vessels model thường train 512 hoặc xử lý riêng
+                    img_v = cv2.resize(original_rgb, (512, 512))
+                    img_v = cv2.cvtColor(img_v, cv2.COLOR_RGB2GRAY)
+                    img_v = img_v.astype(np.float32) / 255.0
+                    curr_input = np.expand_dims(img_v, axis=0)
+                    curr_input = np.expand_dims(curr_input, axis=-1)
 
-        # Vẽ HE/MA (Màu Đỏ)
-        if findings['HE'] > 0 or findings['MA'] > 0:
-             try:
-                 mask_red = np.zeros((SEG_INPUT_SIZE, SEG_INPUT_SIZE))
-                 if 'HE' in loaded_sessions: mask_red = np.maximum(mask_red, clean_mask(loaded_sessions['HE'].run(None, {loaded_sessions['HE'].get_inputs()[0].name: seg_batch})[0][0,:,:,0], 2))
-                 if 'MA' in loaded_sessions: mask_red = np.maximum(mask_red, clean_mask(loaded_sessions['MA'].run(None, {loaded_sessions['MA'].get_inputs()[0].name: seg_batch})[0][0,:,:,0], 2))
-                 
-                 mask_full = cv2.resize(mask_red, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
-                 _, mask_binary = cv2.threshold(mask_full, 0.5, 1, cv2.THRESH_BINARY)
-                 overlay_full[mask_binary.astype(np.uint8) > 0] = (0, 0, 255)
-             except: pass
+                session = loaded_sessions[key]
+                pred = session.run(None, {session.get_inputs()[0].name: curr_input})[0]
+                mask_small = pred[0,:,:,0]
+                mask_cleaned = clean_mask(mask_small, min_size=10 if not is_vessel else 0)
+                
+                findings[key] = np.sum(mask_cleaned)
+                
+                # Resize lên kích thước gốc để vẽ
+                mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+                
+                # Nếu là Vessels, lưu lại mask full để phân tích sau
+                if is_vessel:
+                    np.copyto(vessel_mask_full, mask_full)
 
-        process_and_draw('OD', input_seg, (255, 0, 0), 0, True)
+                # Vẽ Overlay
+                color_np = np.array(color, dtype=np.float32)
+                current_region = overlay_full.astype(np.float32)
+                for c in range(3):
+                    current_region[:, :, c] = np.maximum(current_region[:, :, c], mask_full * color_np[c])
+                np.copyto(overlay_full, current_region.astype(np.uint8))
+                
+            except Exception as e: print(f"Lỗi {key}: {e}")
 
-        # Trộn màu
+        # Chạy các model
+        run_seg_model('EX', (0, 255, 255)) # Vàng
+        run_seg_model('SE', (0, 255, 255))
+        run_seg_model('HE', (0, 0, 255))   # Đỏ
+        run_seg_model('MA', (0, 0, 255))
+        run_seg_model('Vessels', (0, 255, 0), is_vessel=True) # Xanh lá
+        run_seg_model('OD', (255, 0, 0))   # Xanh dương
+
+        # 3. PHÂN TÍCH CHUYÊN SÂU (SYSTEMIC RISK)
+        vascular_info = analyze_vascular_health(vessel_mask_full)
+
+        # 4. TỔNG HỢP BÁO CÁO (NÂNG CAO)
+        risk_score = (findings['MA']*1) + (findings['HE']*3) + (findings['EX']*2) + (findings['SE']*3)
+        if risk_score > 500 and "Normal" in dr_grade: dr_grade = "Mild NPDR (Early Signs)"
+
+        # Tạo nội dung báo cáo chi tiết
+        report_lines = []
+        report_lines.append("=== KẾT QUẢ PHÂN TÍCH TỔNG QUÁT ===")
+        report_lines.append(f"• Chẩn đoán AI: {dr_grade.upper()}")
+        report_lines.append(f"• Độ tin cậy: {confidence*100:.1f}%")
+        report_lines.append(f"• Điểm tổn thương vùng mắt: {int(risk_score)}")
+        
+        report_lines.append("\n=== PHÂN TÍCH HỆ THỐNG MẠCH MÁU (SÀNG LỌC TOÀN THÂN) ===")
+        report_lines.append("Dựa trên hình thái mạch máu võng mạc (Retinal Vessel Morphology):")
+        report_lines.append(f"- Mật độ mạch máu: {vascular_info['density']:.2f}% (Chỉ số tưới máu)")
+        report_lines.append(f"- Chỉ số độ cong (Tortuosity): {vascular_info['tortuosity']:.2f}")
+        
+        report_lines.append(f"► Nguy cơ Tăng Huyết Áp: {vascular_info['htn_risk'].upper()}")
+        if vascular_info['htn_risk'] != 'Thấp':
+             report_lines.append("  (Phát hiện dấu hiệu mạch máu gấp khúc, gợi ý áp lực thành mạch cao)")
+             
+        report_lines.append(f"► Sức khỏe Tim mạch/Đột quỵ: {vascular_info['cvd_risk'].upper()}")
+        
+        if vascular_info['systemic_notes']:
+            report_lines.append("\n⚠️ CẢNH BÁO LÂM SÀNG:")
+            for note in vascular_info['systemic_notes']:
+                report_lines.append(note)
+        else:
+            report_lines.append("\n✅ Chưa phát hiện dấu hiệu bất thường liên quan đến bệnh lý toàn thân trên ảnh đáy mắt.")
+
+        report_lines.append("\n=== CHI TIẾT TỔN THƯƠNG VÕNG MẠC ===")
+        report_lines.append(f"- Xuất huyết (Hemorrhages): {int(findings['HE'])} vùng")
+        report_lines.append(f"- Vi phình mạch (Microaneurysms): {int(findings['MA'])} điểm")
+        report_lines.append(f"- Xuất tiết cứng (Exudates): {int(findings['EX'])} vùng")
+        
+        final_report = "\n".join(report_lines)
+
+        # Trộn ảnh
         disease_mask = np.sum(overlay_full, axis=2) > 0   
         final_overlay = original_img.copy()
         final_overlay[disease_mask] = cv2.addWeighted(original_img[disease_mask], 0.3, overlay_full[disease_mask], 0.7, 0)
 
-        # Report
-        risk_score = (findings['MA']*1) + (findings['HE']*3) + (findings['EX']*2) + (findings['SE']*3)
-        if risk_score > 0 and "Normal" in dr_grade: dr_grade = "Mild NPDR (Early Signs)"
-        if risk_score > 5000 and "Mild" in dr_grade: dr_grade = "Moderate NPDR"
-
-        report = f"DIAGNOSIS: {dr_grade}\nSeverity Score: {int(risk_score)}\nHE: {int(findings['HE'])} | EX: {int(findings['EX'])}"
-        return encode_image_to_base64(final_overlay), dr_grade, report
+        return encode_image_to_base64(final_overlay), dr_grade, final_report
 
     except Exception as e:
         print(f"❌ ERROR Inference: {e}")
@@ -262,10 +259,13 @@ def run_batch_inference(images_bytes_list):
         annotated, diag, rep = run_aura_inference(img_bytes)
         return {"file_index": index, "diagnosis": diag, "confidence": 99.9, "image_base64": annotated, "report": rep}
 
-    print(f"🚀 AI Batch: Đang xử lý {len(images_bytes_list)} ảnh...")
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(worker, i, img) for i, img in enumerate(images_bytes_list)]
         for future in futures:
             res = future.result()
             results[res['file_index']] = res
     return results
+
+# Cần giữ hàm này cho API check
+def get_runtime_info():
+    return {"cuda": False, "provider": "CPUExecutionProvider", "message": "CPU Optimized Mode"}
