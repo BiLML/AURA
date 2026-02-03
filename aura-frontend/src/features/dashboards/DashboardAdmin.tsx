@@ -492,11 +492,8 @@ const DashboardAdmin: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* BODY CONTENT */}
-                            <div style={{flex: 1, width: '100%', minHeight: 0, position: 'relative'}}>
-                                
+                            <div style={{flex: 1, width: '100%', minHeight: 0, minWidth: 0, position: 'relative'}}>
                                 {chartView === 'revenue' && (
-                                    // [FIX] Thêm div tuyệt đối để neo kích thước, tránh lỗi width(-1)
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={globalStats.revenueChart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
@@ -517,7 +514,6 @@ const DashboardAdmin: React.FC = () => {
                                 )}
 
                                 {chartView === 'performance' && (
-                                    // [FIX] Thêm div tuyệt đối tương tự cho biểu đồ này
                                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={analyticsData.upload_trends} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
@@ -616,7 +612,6 @@ const DashboardAdmin: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* STATS / TABS NAVIGATION */}
                     <div style={styles.statsGrid}>
                         {[
                             { id: 'users', icon: <FaUsers size={22}/>, label: 'Người dùng', count: `${userList.length} Active` },
@@ -651,10 +646,8 @@ const DashboardAdmin: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* CONTENT TABLE AREA */}
                     <div style={styles.tableCard} className="animate-fade-in">
                         
-                        {/* TAB CONTENT HANDLER */}
                         {activeTab === 'users' && (
                             <>
                                 <div style={styles.cardHeader}>
@@ -881,7 +874,6 @@ const DashboardAdmin: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Other tabs follow similar pattern... (Feedback, Billing, Audit) */}
                         {(activeTab === 'feedback' || activeTab === 'audit' || activeTab === 'billing') && (
                             <div className="animate-fade-in">
                                 <div style={styles.cardHeader}>
@@ -928,7 +920,6 @@ const DashboardAdmin: React.FC = () => {
                                                     <td style={{...styles.td, color:'#64748b'}}>{pkg.description}</td>
                                                 </tr>
                                             ))}
-                                            {/* (Logic cho feedback/audit tương tự - giữ code logic cũ, thêm className="hover-row") */}
                                             {activeTab === 'audit' && auditLogs
                                                 .filter(log => auditFilter === 'ALL' || (log.role && log.role.toLowerCase() === auditFilter.toLowerCase()))
                                                 .map((log, i) => (
@@ -936,7 +927,6 @@ const DashboardAdmin: React.FC = () => {
                                                     <td style={styles.td}>{new Date(log.time).toLocaleString('vi-VN')}</td>
                                                     <td style={styles.td}><b>{log.actor}</b></td>
                                                     
-                                                    {/* Cột VAI TRÒ Mới */}
                                                     <td style={styles.td}>
                                                         <span style={{
                                                             ...styles.roleBadge,
@@ -1009,13 +999,21 @@ const DashboardAdmin: React.FC = () => {
                             <h3 style={{fontSize: 16, marginBottom: 15}}>Giao dịch gần đây</h3>
                             <table style={styles.table}>
                                 <tbody>
-                                    {globalStats.recentTransactions.map((tx: Transaction, i) => (
-                                        <tr key={i} className="hover-row">
-                                            <td style={styles.td}>{tx.user}</td>
-                                            <td style={{...styles.td, color:'#15803d', fontWeight:'bold'}}>+{formatCurrency(tx.amount)}</td>
-                                            <td style={styles.td}>{new Date(tx.date).toLocaleDateString('vi-VN')}</td>
+                                    {globalStats.recentTransactions && globalStats.recentTransactions.length > 0 ? (
+                                        globalStats.recentTransactions.map((tx: Transaction, i) => (
+                                            <tr key={i} className="hover-row">
+                                                <td style={styles.td}>{tx.user}</td>
+                                                <td style={{...styles.td, color:'#15803d', fontWeight:'bold'}}>+{formatCurrency(tx.amount)}</td>
+                                                <td style={styles.td}>{new Date(tx.date).toLocaleDateString('vi-VN')}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={3} style={{padding: '20px', textAlign: 'center', color: '#94a3b8'}}>
+                                                Chưa có giao dịch nào
+                                            </td>
                                         </tr>
-                                    ))}
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -1024,7 +1022,6 @@ const DashboardAdmin: React.FC = () => {
                 </div>
             </main>
 
-            {/* MODALS WITH ANIMATIONS */}
             {showUserModal && editingUser && (
                 <div style={styles.modalOverlay} className="animate-fade-in">
                     <div style={styles.modalContent} className="animate-scale-in">
@@ -1063,13 +1060,11 @@ const DashboardAdmin: React.FC = () => {
                             <button onClick={() => setShowPackageModal(false)} style={styles.closeBtn}><FaTimes/></button>
                         </div>
                         <div style={styles.modalBody}>
-                            {/* Tên gói */}
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Tên gói</label>
                                 <input style={styles.input} type="text" value={newPackage.name} onChange={(e) => setNewPackage({...newPackage, name: e.target.value})} />
                             </div>
 
-                            {/* Hàng 1: Giá & Đối tượng */}
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Giá (VNĐ)</label>
