@@ -76,7 +76,7 @@ def clean_mask(mask_array, min_size=10):
             cleaned[labels == i] = 255
     return cleaned.astype(np.float32) / 255.0
 
-# --- PHÂN TÍCH VASCULAR ---
+# --- PHÂN TÍCH VASCULAR (THUẬT TOÁN MỚI) ---
 def analyze_vascular_health(vessel_mask_full):
     mask_bin = (vessel_mask_full * 255).astype(np.uint8) if vessel_mask_full.max() <= 1.0 else vessel_mask_full.astype(np.uint8)
     _, mask_bin = cv2.threshold(mask_bin, 127, 255, cv2.THRESH_BINARY)
@@ -85,36 +85,51 @@ def analyze_vascular_health(vessel_mask_full):
     total_area = h * w
     vessel_area = np.sum(mask_bin > 0)
     
-    # Tính Density
+    # 1. Mật độ (Density)
     density = (vessel_area / total_area) * 100 
     
-    # Tính Tortuosity
+    # 2. Độ cong (Tortuosity) - [THUẬT TOÁN MỚI: ARC-CHORD RATIO]
     contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     tortuosity_indices = []
     
     for cnt in contours:
+        # Chỉ xét các đoạn mạch máu đủ dài
         if cv2.contourArea(cnt) > 30: 
             perimeter = cv2.arcLength(cnt, True)
-            hull = cv2.convexHull(cnt)
-            hull_perimeter = cv2.arcLength(hull, True)
-            if hull_perimeter > 0:
-                tortuosity_indices.append(perimeter / hull_perimeter)
+            
+            # Thay vì dùng ConvexHull (dễ sai với nhánh cây), ta dùng Rotated Bounding Box
+            rect = cv2.minAreaRect(cnt)
+            (center), (width, height), angle = rect
+            
+            # Chiều dài lớn nhất của hộp bao quanh (xấp xỉ Chord Length)
+            major_axis = max(width, height)
+            
+            if major_axis > 5:
+                # Chu vi mạch máu (2 mặt) chia 2 = Chiều dài thực tế của mạch (Arc Length)
+                actual_length = perimeter / 2.0
+                
+                # Công thức: Arc / Chord
+                t_index = actual_length / major_axis
+                tortuosity_indices.append(t_index)
 
+    # Lấy trung bình (nếu không có mạch nào thì mặc định 1.0)
     avg_tortuosity = np.mean(tortuosity_indices) if tortuosity_indices else 1.0
 
-    # Đánh giá Rủi ro
+    # 3. Đánh giá Rủi ro
     risks = []
     
-    # Tăng Huyết Áp
+    # Tăng Huyết Áp (Ngưỡng đã được chuẩn hóa lại theo công thức mới)
+    # Công thức Arc/Chord thường cho giá trị nhỏ hơn Hull, nên ngưỡng thấp hơn chút
+    # Bình thường ~1.0 - 1.05. Cong nhẹ > 1.08. Cong nặng > 1.12
     htn_risk = "Thấp"
-    if avg_tortuosity > 1.12: 
+    if avg_tortuosity > 1.15: # Cong xoắn lò xo
         htn_risk = "Cao (Cảnh báo)"
-        risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {avg_tortuosity:.2f} > 1.12).")
-    elif avg_tortuosity > 1.08: 
+        risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {avg_tortuosity:.2f} > 1.15).")
+    elif avg_tortuosity > 1.09: # Hơi uốn lượn
         htn_risk = "Trung bình"
         risks.append(f"- Tăng huyết áp: Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {avg_tortuosity:.2f}).")
 
-    # Tim mạch / Đột quỵ
+    # Tim mạch / Đột quỵ (Ngưỡng 3.5% như đã chốt)
     cvd_risk = "Ổn định"
     if density < 3.5: 
         cvd_risk = "Cảnh báo thiếu máu cục bộ"
@@ -138,8 +153,8 @@ def run_aura_inference(image_bytes):
         orig_h, orig_w = original_img.shape[:2]
         original_rgb = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
         
-        # [QUAN TRỌNG] Lấy kênh Green để lọc nhiễu màu
-        g_channel = original_img[:, :, 1] # BGR -> Index 1 là Green
+        # Lấy kênh Green để lọc nhiễu màu
+        g_channel = original_img[:, :, 1] 
         avg_brightness = np.mean(g_channel)
 
         input_seg = preprocess_image(original_rgb, target_size=SEG_INPUT_SIZE, use_graham=False)
@@ -190,32 +205,24 @@ def run_aura_inference(image_bytes):
                     pred = session.run(None, {session.get_inputs()[0].name: input_seg})[0]
                     mask_cleaned = clean_mask(pred[0,:,:,0], min_size)
                     
-                    # Resize mask về kích thước gốc để check độ sáng
                     mask_full = cv2.resize(mask_cleaned, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
                     
-                    # [LUMINOSITY CHECK - KHẮC PHỤC LỖI VÀNG/ĐỎ]
-                    if key in ['EX', 'SE']: # Nếu là Xuất tiết (Phải SÁNG)
-                        # Lọc bỏ các pixel tối (máu) mà bị nhận nhầm là EX
-                        # Điều kiện: Pixel phải sáng hơn trung bình nền một chút
+                    # Luminosity Check
+                    if key in ['EX', 'SE']: 
                         mask_full[g_channel < avg_brightness] = 0 
-                        
-                    elif key in ['HE', 'MA']: # Nếu là Xuất huyết (Phải TỐI)
-                        # (Optional) Lọc bỏ pixel quá sáng
+                    elif key in ['HE', 'MA']: 
                         mask_full[g_channel > (avg_brightness + 30)] = 0
 
-                    # Tính lại số lượng sau khi lọc
-                    final_count = np.sum(mask_full > 0) / (orig_w * orig_h / (256*256)) # Normalize lại scale 256
+                    final_count = np.sum(mask_full > 0) / (orig_w * orig_h / (256*256)) 
                     findings[key] = final_count
 
                     if final_count > 0:
-                        # Vẽ mask đã lọc lên overlay
                         mask_bool = mask_full > 0.5
                         color_np = np.array(color, dtype=np.uint8)
                         overlay_full[mask_bool] = color_np
                         
                 except Exception as e: pass
 
-        # Chạy model (Vàng vẽ trước, Đỏ vẽ sau, nhưng giờ đã có bộ lọc nên sẽ chuẩn hơn)
         run_seg_std('EX', (0, 255, 255)) 
         run_seg_std('SE', (0, 255, 255)) 
         if 'HE' in loaded_sessions: run_seg_std('HE', (0, 0, 255), 2)
@@ -238,10 +245,11 @@ def run_aura_inference(image_bytes):
             t_val = info['tortuosity']
             new_risks = []
             htn_status = "Thấp"
-            if t_val > 1.12: 
+            # Cập nhật ngưỡng mới cho công thức Arc/Chord
+            if t_val > 1.15: 
                 htn_status = "Cao (Cảnh báo)"
-                new_risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {t_val:.2f} > 1.12).")
-            elif t_val > 1.08: 
+                new_risks.append(f"- Tăng huyết áp: Mạch máu co kéo rõ rệt (Tortuosity: {t_val:.2f} > 1.15).")
+            elif t_val > 1.09: 
                 htn_status = "Trung bình"
                 new_risks.append(f"- Tăng huyết áp: Mạch máu bắt đầu có dấu hiệu uốn cong (Tortuosity: {t_val:.2f}).")
             info['htn_risk'] = htn_status
@@ -271,7 +279,7 @@ def run_aura_inference(image_bytes):
         report_lines.append("\n=== SÀNG LỌC SỨC KHỎE TOÀN THÂN (QUA MẠCH MÁU) ===")
         report_lines.append(f"🔍 Chỉ số mạch máu (Vessel Metrics):")
         report_lines.append(f"   - Mật độ (Density): {vascular_info['density']:.2f}%")
-        report_lines.append(f"   - Độ cong (Tortuosity): {vascular_info['tortuosity']:.2f} (Ngưỡng an toàn < 1.08)")
+        report_lines.append(f"   - Độ cong (Tortuosity): {vascular_info['tortuosity']:.2f} (Ngưỡng an toàn < 1.09)")
         report_lines.append(f"\n► Nguy cơ Tăng Huyết Áp: {vascular_info['htn_risk'].upper()}")
         report_lines.append(f"► Nguy cơ Tim mạch/Đột quỵ: {vascular_info['cvd_risk'].upper()}")
         
