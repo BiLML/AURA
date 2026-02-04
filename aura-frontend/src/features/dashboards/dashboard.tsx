@@ -33,8 +33,48 @@ interface Transaction {
 }
 
 // --- Dashboard Component (USER / PATIENT) ---
+
+const formatVNTime = (dateString: string) => {
+    if (!dateString) return { date: '', time: '' };
+    const date = new Date(dateString);
+    
+    // Nếu ngày lỗi thì trả về nguyên gốc
+    if (isNaN(date.getTime())) return { date: dateString, time: '' };
+
+    return {
+        date: date.toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            timeZone: 'Asia/Ho_Chi_Minh'
+        }),
+        time: date.toLocaleTimeString('vi-VN', {
+            hour: '2-digit', minute: '2-digit',
+            hour12: false,
+            timeZone: 'Asia/Ho_Chi_Minh'
+        })
+    };
+};
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
+// Hàm chuyển đổi giờ UTC từ server sang giờ Việt Nam (GMT+7)
+const formatVNTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    
+    // Kiểm tra nếu date không hợp lệ
+    if (isNaN(date.getTime())) return dateString;
+
+    return {
+        date: date.toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            timeZone: 'Asia/Ho_Chi_Minh'
+        }),
+        time: date.toLocaleTimeString('vi-VN', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false,
+            timeZone: 'Asia/Ho_Chi_Minh'
+        })
+    };
+};
     
     // --- STATE DỮ LIỆU ---
     const [userRole, setUserRole] = useState<string>('Guest');
@@ -127,6 +167,7 @@ const Dashboard: React.FC = () => {
             if (historyRes.ok) {
                 const rawData = await historyRes.json();
                 const list = Array.isArray(rawData) ? rawData : (rawData.items || rawData.history || []);
+                const { date, time } = formatVNTime(rawDate);
 
                 const mappedHistory = list.map((item: any) => {
                     const rawDate = item.created_at || item.upload_date || new Date().toISOString();
@@ -144,13 +185,8 @@ const Dashboard: React.FC = () => {
                     return {
                         id: item.id,
                         rawTimestamp: new Date(rawDate).getTime(),
-                        date: new Date(rawDate).toLocaleDateString('vi-VN'),
-                        time: new Date(rawDate).toLocaleTimeString('vi-VN', { 
-                            hour: '2-digit', 
-                            minute: '2-digit', 
-                            hour12: false, // Định dạng 24h
-                            timeZone: 'Asia/Ho_Chi_Minh' 
-                        }),
+                        date: date, // Dùng biến date đã format
+                        time: time, // Dùng biến time đã format
                         result: resultDisplay,
                         status: statusDisplay,
                         annotated_url: analysisData.annotated_image_url || null
@@ -831,11 +867,14 @@ if (activeTab === 'messages') {
                                 {transactions.length === 0 ? (
                                     <tr><td colSpan={4} style={styles.emptyCell}>Chưa có giao dịch nào.</td></tr>
                                 ) : (
-                                    transactions.map(tx => (
-                                        <tr key={tx.id} style={styles.tr}>
-                                            <td style={styles.td}>
-                                                {new Date(tx.created_at).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} <br/>
-                                                <small style={{color:'#94a3b8'}}>{new Date(tx.created_at).toLocaleTimeString('vi-VN')}</small>
+                                    transactions.map(tx => {
+                                        const { date, time } = formatVNTime(tx.created_at); // Dùng hàm format
+                                        return (
+                                            <tr key={tx.id} style={styles.tr}>
+                                                <td style={styles.td}>
+                                                    {/* Hiển thị giờ đã convert */}
+                                                    <span style={{fontWeight:500}}>{date}</span> <br/>
+                                                    <small style={{color:'#94a3b8'}}>{time}</small>
                                             </td>
                                             <td style={styles.td}><b style={{color:'#334155'}}>{tx.package_name}</b></td>
                                             <td style={{...styles.td, fontWeight:'bold', color:'#16a34a'}}>
