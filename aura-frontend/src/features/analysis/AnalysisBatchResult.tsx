@@ -15,9 +15,11 @@ const AnalysisBatchResult: React.FC = () => {
     const [currentRole, setCurrentRole] = useState<string>('');
     const [isRoleLoaded, setIsRoleLoaded] = useState(false);
 
+    const [modelVersion, setModelVersion] = useState<string>('v1.0.0');
+
     // --- Logic Fetch Role ---
     useEffect(() => {
-        const fetchUserRole = async () => {
+        const fetchData = async () => {
             const token = localStorage.getItem('token');
             if (!token) { 
                 setIsRoleLoaded(true);
@@ -35,6 +37,18 @@ const AnalysisBatchResult: React.FC = () => {
                     const rawRole = info.role || '';
                     setCurrentRole(rawRole.toUpperCase().trim());
                 }
+
+                const configRes = await fetch('https://aurahealth.name.vn/api/v1/admin/config', { 
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (configRes.ok) {
+                    const configData = await configRes.json();
+                    if (configData.model_version) {
+                        setModelVersion(configData.model_version);
+                    }
+                }
+
             } catch (error) {
                 console.error("Lỗi lấy thông tin user:", error);
             } finally {
@@ -42,7 +56,7 @@ const AnalysisBatchResult: React.FC = () => {
             }
         };
 
-        fetchUserRole();
+        fetchData();
     }, []);
 
     const isClinicOrDoctor = currentRole === 'CLINIC' || currentRole === 'DOCTOR';
@@ -208,7 +222,7 @@ const AnalysisBatchResult: React.FC = () => {
                                     e.currentTarget.src = 'https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg';
                                 }}
                             />
-                            <div style={styles.confidenceBadge}>{item.confidence || 99}%</div>
+                            <div style={styles.confidenceBadge}>{modelVersion}</div>
                         </div>
 
                         <div style={styles.cardBody}>
