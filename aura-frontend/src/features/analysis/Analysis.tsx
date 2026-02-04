@@ -28,6 +28,8 @@ const AnalysisResult: React.FC = () => {
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated');
     const [annotatedImageError, setAnnotatedImageError] = useState(false); 
 
+    const [modelVersion, setModelVersion] = useState<string>('v1.0.0');
+
     // --- Logic Data Normalization (Giữ nguyên) ---
     const normalizeData = (rawData: any): MedicalRecord => {
         if (rawData.image && rawData.analysis) {
@@ -88,6 +90,15 @@ const AnalysisResult: React.FC = () => {
                 }
             } catch (err) { console.error(err); } finally { setLoading(false); }
         }
+
+        try {
+            const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
+            if (configRes.ok) {
+                const configData = await configRes.json();
+                if (configData.model_version) setModelVersion(configData.model_version);
+            }
+        } catch (e) { console.error(e); }
+
     }, [id, location.state]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -118,9 +129,9 @@ const AnalysisResult: React.FC = () => {
         const opt = {
             margin:       10, // lề 10mm
             filename:     `AURA_Medical_Report_${data.id}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
+            image:        { type: 'jpeg' as const, quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, logging: true }, // scale 2 để nét, useCORS để tải ảnh từ server khác
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' } as any
         };
 
         // Hiệu ứng loading nút bấm (optional)
@@ -180,7 +191,13 @@ const AnalysisResult: React.FC = () => {
 
                     <div style={styles.rightColumn}>
                         <div style={styles.resultBox}>
-                            <label style={styles.label}>Tình trạng:</label>
+                            <div style={{display:'flex', justifyContent:'space-between'}}>
+                                <label style={styles.label}>Tình trạng:</label>
+                                {/* [MỚI 3] Hiện trên UI web */}
+                                <span style={{fontSize:'12px', color:'#999', background:'#f1f5f9', padding:'2px 8px', borderRadius:'10px'}}>
+                                    AI Model: {modelVersion}
+                                </span>
+                            </div>
                             <h1 style={{color: severity.color, margin: '5px 0 15px 0', fontSize: '28px'}}>{data.ai_result}</h1>
                             <div style={{backgroundColor: severity.bg, padding: '15px', borderRadius: '8px', borderLeft: `4px solid ${severity.color}`}}>{severity.advice}</div>
                         </div>
@@ -229,6 +246,9 @@ const AnalysisResult: React.FC = () => {
                                 </tr>
                                 <tr>
                                     <td style={pdfStyles.tdLabel}>Chẩn đoán AI:</td>
+                                    <td style={{...pdfStyles.tdValue, color: severity.color, fontWeight: 'bold'}}>
+                                        {data.ai_result} <span style={{fontSize:'10pt', color:'#666', fontWeight:'normal'}}>({modelVersion})</span>
+                                    </td>
                                     <td style={{...pdfStyles.tdValue, color: severity.color, fontWeight: 'bold'}}>{data.ai_result}</td>
                                     <td style={pdfStyles.tdLabel}>Trạng thái:</td>
                                     <td style={pdfStyles.tdValue}>Đã hoàn tất</td>

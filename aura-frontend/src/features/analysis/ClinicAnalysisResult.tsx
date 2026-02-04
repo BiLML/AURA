@@ -33,7 +33,7 @@ const ClinicAnalysisResult: React.FC = () => {
     const [data, setData] = useState<AnalysisData | null>(null);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'original' | 'annotated'>('annotated'); 
-
+    const [modelVersion, setModelVersion] = useState<string>('v1.0.0');
     // --- FETCH DATA ---
     const fetchData = useCallback(async () => {
         const token = localStorage.getItem('token');
@@ -70,6 +70,15 @@ const ClinicAnalysisResult: React.FC = () => {
         } finally {
             setLoading(false);
         }
+
+        try {
+            const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
+            if (configRes.ok) {
+                const configData = await configRes.json();
+                if (configData.model_version) setModelVersion(configData.model_version);
+            }
+        } catch (e) { console.error("Lỗi lấy version", e); }
+
     }, [id]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -173,6 +182,7 @@ const ClinicAnalysisResult: React.FC = () => {
                             <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                                 <div style={{background:'#eff6ff', padding:'8px', borderRadius:'8px'}}><FaRobot size={20} color="#3b82f6"/></div>
                                 <span style={styles.sectionTitle}>KẾT QUẢ AI PHÂN TÍCH</span>
+                                <div style={{fontSize:'11px', color:'#94a3b8', marginTop:'2px'}}>Model: {modelVersion}</div>
                             </div>
                         </div>
                         <div style={styles.sectionBody}>

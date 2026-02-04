@@ -31,6 +31,8 @@ const DoctorReport: React.FC = () => {
     const [feedbackContent, setFeedbackContent] = useState('');    
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const [modelVersion, setModelVersion] = useState<string>('v1.0.0');
+
     useEffect(() => {
         const fetchReportDetails = async () => {
             const token = localStorage.getItem('token');
@@ -65,8 +67,13 @@ const DoctorReport: React.FC = () => {
             } finally {
                 setLoading(false);
             }
-        };
 
+            fetch('https://aurahealth.name.vn/api/v1/public/config')
+                .then(r => r.json())
+                .then(d => { if(d.model_version) setModelVersion(d.model_version); })
+                .catch(e => console.error(e));
+            
+        };
         fetchReportDetails();
     }, [id]);
 
@@ -170,6 +177,9 @@ const DoctorReport: React.FC = () => {
                                     <div style={styles.diagnosisLabel}><FaRobot style={{marginRight:6}}/> AI Chẩn đoán</div>
                                     <div style={{...styles.badge, backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5'}}>
                                         {info.ai_diagnosis}
+                                    </div>
+                                    <div style={{marginTop: 8, fontSize: '11px', color:'#94a3b8', textAlign:'center', borderTop:'1px dashed #eee', paddingTop: 4}}>
+                                        Ver: {modelVersion}
                                     </div>
                                 </div>
 

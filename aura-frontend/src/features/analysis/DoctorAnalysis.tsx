@@ -42,6 +42,7 @@ const DoctorAnalysis: React.FC = () => {
     const [internalNote, setInternalNote] = useState('');          
     const [isSaving, setIsSaving] = useState(false);
     const [reportContent, setReportContent] = useState(''); 
+    const [modelVersion, setModelVersion] = useState<string>('v1.0.0');
 
     // --- 2. CẬP NHẬT NORMALIZE DATA ---
     const normalizeData = (rawData: any): MedicalRecord => {
@@ -103,6 +104,15 @@ const DoctorAnalysis: React.FC = () => {
         } finally {
             setLoading(false);
         }
+
+        try {
+            const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
+            if (configRes.ok) {
+                const configData = await configRes.json();
+                if (configData.model_version) setModelVersion(configData.model_version);
+            }
+        } catch (e) { console.error(e); }
+
     }, [id]);
 
     useEffect(() => {
@@ -339,9 +349,12 @@ const DoctorAnalysis: React.FC = () => {
                     <div className="slide-up-card" style={{marginTop: '10px'}}>
                         <div style={styles.cardInfo}>
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', borderBottom:'1px solid #f1f5f9', paddingBottom:'10px'}}>
-                                <h4 style={{margin:0, color:'#1e293b', display:'flex', alignItems:'center'}}>
-                                    <FaStethoscope style={{marginRight:'8px', color:'#007bff'}}/> Kết quả AI
-                                </h4>
+                                <div>
+                                    <h4 style={{margin:0, color:'#1e293b', display:'flex', alignItems:'center'}}>
+                                        <FaStethoscope style={{marginRight:'8px', color:'#007bff'}}/> Kết quả AI
+                                    </h4>
+                                    <span style={{fontSize:'11px', color:'#64748b'}}>Phiên bản: {modelVersion}</span>
+                                </div>
                                 <span style={{
                                     ...styles.badge, 
                                     backgroundColor: (data.ai_result||'').includes('Normal') ? '#dcfce7' : '#fee2e2',
