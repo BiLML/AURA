@@ -54,7 +54,7 @@ const Dashboard: React.FC = () => {
     // State giao diện
     const [activeTab, setActiveTab] = useState<string>('home');
     const [showUserMenu, setShowUserMenu] = useState(false);
-
+    const [showHistoryModal, setShowHistoryModal] = useState(false); // <--- THÊM DÒNG NÀY
     // [THÊM STATE THÔNG BÁO]
     const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -452,21 +452,6 @@ const Dashboard: React.FC = () => {
         navigate('/upload');
     };
     const goToDetail = (recordId: string) => navigate(`/analysis-result/${recordId}`);
-    
-    const getStatusColor = (result: string) => {
-        if (!result) return 'black';
-        const r = result.toLowerCase();
-        if (r.includes('nặng') || r.includes('severe') || r.includes('pdr')) return '#dc3545'; 
-        if (r.includes('vừa') || r.includes('moderate')) return '#fd7e14'; 
-        if (r.includes('bình thường') || r.includes('normal') || r.includes('không')) return '#16a34a'; 
-        return '#007bff'; 
-    };
-
-    const totalScans = historyData.length;
-    const highRiskCount = historyData.filter(item => {
-        const res = (item.result || "").toLowerCase();
-        return res.includes('nặng') || res.includes('severe') || res.includes('moderate') || res.includes('pdr');
-    }).length;
     
     const recentNotifications = historyData.slice(0, 5);
     const unreadMessagesCount = chatData.filter(chat => chat.unread).length; 
@@ -886,81 +871,98 @@ if (activeTab === 'messages') {
         return (
             <div className="fade-in" style={{display: 'flex', flexDirection: 'column', gap: '30px'}}>
                 {/* Stats Cards */}
-                <div style={styles.card} className="slide-up-card">
-                    <div style={styles.cardHeader}><h2 style={styles.pageTitle}>📊 Tổng quan sức khỏe</h2></div>
-                    <div style={{padding:'30px', display: 'flex', gap: '60px'}}>
-                         <div><span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>TỔNG LẦN KHÁM</span><h1 style={{ margin: '8px 0 0', color: '#007bff', fontSize: '36px' }}>{totalScans}</h1></div>
-                         <div><span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>NGUY CƠ CAO</span><h1 style={{ margin: '8px 0 0', color: highRiskCount > 0 ? '#dc3545' : '#16a34a', fontSize: '36px' }}>{highRiskCount}</h1></div>
-                    </div>
-                </div>
+                {/* --- KẾT QUẢ PHÂN TÍCH GẦN ĐÂY (Đã tối ưu) --- */}
+<div className="slide-up-card" style={{...styles.card, animationDelay: '0.1s'}}>
+    <div style={styles.cardHeader}>
+        {/* TIÊU ĐỀ TRÁI */}
+        <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+            <h3 style={styles.pageTitle}><FaHistory style={{marginRight: 10, color:'#6366f1'}}/> Lịch sử Phân tích AI</h3>
+            <span style={styles.badge}>{historyData.length} Ca</span>
+        </div>
 
-                {/* --- History Table --- */}
-                <div className="slide-up-card" style={{...styles.card, animationDelay: '0.1s'}}>
-                    <div style={styles.cardHeader}>
-                        <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
-                            <h3 style={styles.pageTitle}><FaHistory style={{marginRight: 10}}/> Lịch sử Phân tích AI</h3>
-                            <span style={styles.badge}>{historyData.length} Ca khám</span>
+        {/* CỤM NÚT PHẢI: Gộp cả "Xem tất cả" và "Phân tích mới" vào đây */}
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+            
+            {/* 1. Nút Xem chi tiết (Mở Modal) - Chỉ hiện khi có > 3 ca */}
+            {historyData.length > 3 && (
+                <button 
+                    onClick={() => setShowHistoryModal(true)} 
+                    className="btn-secondary-hover"
+                    style={{
+                        background:'transparent', border:'none', color:'#64748b', 
+                        cursor:'pointer', fontSize:'13px', fontWeight:'600',
+                        display:'flex', alignItems:'center', gap:'5px'
+                    }}
+                >
+                    Xem tất cả ({historyData.length}) ➔
+                </button>
+            )}
+
+            {/* 2. Nút Phân tích mới (Dẫn sang trang Upload) */}
+            <button 
+                className="btn-primary-hover pulse-on-active"
+                onClick={goToUpload} 
+                style={{
+                    ...styles.primaryBtn,
+                    display:'flex', alignItems:'center', gap:'8px', padding: '8px 16px', fontSize:'13px',
+                    background: mySub.credits > 0 ? 'linear-gradient(135deg, #007bff, #0069d9)' : '#64748b'
+                }}
+            >
+                {mySub.credits > 0 ? <FaCamera /> : <FaLock />}       
+                Phân tích mới
+            </button>
+        </div>
+    </div>
+
+    {/* NỘI DUNG DANH SÁCH (Top 3) */}
+    <div style={{padding:'20px'}}>
+        {historyData.length === 0 ? (
+            <div style={{textAlign:'center', padding:'40px', color:'#94a3b8', background:'#f8fafc', borderRadius:'12px', border:'1px dashed #e2e8f0'}}>
+                <FaCamera size={30} color="#cbd5e1" style={{marginBottom:10}}/>
+                <p style={{fontSize:'14px', margin:0}}>Chưa có dữ liệu phân tích nào.</p>
+                <button onClick={goToUpload} style={{...styles.actionBtn, marginTop:'10px', background:'white'}}>
+                    Bắt đầu ngay
+                </button>
+            </div>
+        ) : (
+            <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                {/* Chỉ lấy 3 phần tử đầu tiên để hiển thị */}
+                {historyData.slice(0, 3).map((item: any, i: number) => (
+                    <div key={i} style={styles.historyItem} className="hover-lift">
+                        <img 
+                            src={item.annotated_url || item.image_url} 
+                            alt="scan" 
+                            style={{width:'60px', height:'60px', borderRadius:'8px', objectFit:'cover', border:'1px solid #e2e8f0'}}
+                        />
+                        <div style={{flex:1, minWidth:0}}>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'4px'}}>
+                                <span style={{fontWeight:'700', color:'#334155'}}>
+                                    {item.date}
+                                </span>
+                                <span style={{
+                                    fontSize:'11px', fontWeight:'700', padding:'2px 8px', borderRadius:'12px',
+                                    background: (item.result || '').includes('Normal') ? '#dcfce7' : '#fee2e2',
+                                    color: (item.result || '').includes('Normal') ? '#166534' : '#b91c1c'
+                                }}>
+                                    {item.result}
+                                </span>
+                            </div>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                <p style={{margin:0, fontSize:'12px', color:'#64748b'}}>ID: #{item.id}</p>
+                                <small style={{fontSize:'11px', color:'#94a3b8'}}>{item.time}</small>
+                            </div>
                         </div>
                         <button 
-                            className="btn-primary-hover pulse-on-active"
-                            onClick={goToUpload} 
-                            style={{
-                                ...styles.primaryBtn,
-                                display:'flex', alignItems:'center', gap:'8px', padding: '10px 18px', fontSize:'13px',
-                                background: mySub.credits > 0 ? 'linear-gradient(135deg, #007bff, #0069d9)' : '#64748b'
-                            }}
+                            onClick={() => navigate(`/analysis-result/${item.id}`, { state: { result: item } })}
+                            style={styles.btnIcon} title="Xem chi tiết"
                         >
-                            {mySub.credits > 0 ? <FaCamera /> : <FaLock />}       
-                            Phân tích mới
+                            ➔
                         </button>
                     </div>
-
-                    <table style={styles.table} className="table-hover">
-                        <thead>
-                            <tr>
-                                <th style={styles.th}>Thời gian</th>
-                                <th style={styles.th}>Hình ảnh</th>
-                                <th style={styles.th}>Kết quả AI</th>
-                                <th style={styles.th}>Trạng thái</th>
-                                <th style={styles.th}>Chi tiết</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {historyData.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} style={styles.emptyCell}>
-                                        Chưa có dữ liệu phân tích nào. <br/>
-                                        <button onClick={goToUpload} className="btn-primary-hover" style={{...styles.primaryBtn, marginTop:'15px', display:'inline-block', fontSize:'13px', padding:'8px 20px'}}>Bắt đầu ngay</button>
-                                    </td>
-                                </tr>
-                            ) : (
-                                historyData.map((item, i) => (
-                                    <tr key={i} style={styles.tr}>
-                                        <td style={styles.td}><span style={{fontWeight:500}}>{item.date}</span><br/><small style={{color:'#94a3b8'}}>{item.time}</small></td>
-                                        <td style={styles.td}>
-                                            {item.annotated_url ? (
-                                                <img src={item.annotated_url} alt="Scan" className="hover-lift" style={{width:'48px', height:'48px', objectFit:'cover', borderRadius:'8px', border:'1px solid #e2e8f0', boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}} />
-                                            ) : <div style={{width:'48px', height:'48px', background:'#f1f5f9', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center'}}><FaImage color="#cbd5e1"/></div>}
-                                        </td>
-                                        <td style={styles.td}>
-                                            <span style={{color: getStatusColor(item.result), fontWeight:'700', padding:'4px 0'}}>
-                                                {item.status.includes('PENDING') ? 'Đang chờ...' : item.result}
-                                            </span>
-                                        </td>
-                                        <td style={styles.td}>
-                                            {(item.status.includes('PENDING') || item.status.includes('Đang')) ? 
-                                                <span style={styles.statusPending}><span className="spin">⏳</span> Đang xử lý</span> : 
-                                                <span style={styles.statusActive}>Hoàn tất</span>
-                                            }
-                                        </td>
-                                        <td style={styles.td}>
-                                            <button onClick={() => goToDetail(item.id)} className="btn-secondary-hover" style={styles.actionBtn}>Xem kết quả</button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                ))}
+            </div>
+        )}
+    </div>
                 </div>
             </div>
         );
@@ -1094,6 +1096,67 @@ if (activeTab === 'messages') {
                     </div>
                 </div>
             )}
+
+            {/* --- MODAL HIỂN THỊ TOÀN BỘ LỊCH SỬ --- */}
+{showHistoryModal && (
+    <div style={styles.modalOverlay}>
+        <div style={styles.modalContent}>
+            {/* Header Modal */}
+            <div style={styles.modalHeader}>
+                <h3 style={{margin:0, display:'flex', alignItems:'center', gap:'10px'}}>
+                    <FaHistory color="#007bff"/> Tất cả Lịch sử Phân tích
+                </h3>
+                <button onClick={() => setShowHistoryModal(false)} style={styles.closeBtn}>
+                    <FaTimes size={20}/>
+                </button>
+            </div>
+
+            {/* Body Modal (Danh sách cuộn) */}
+            <div style={{padding: '20px', overflowY: 'auto', maxHeight: '60vh'}}>
+                <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '14px'}}>
+                    <thead>
+                        <tr style={{background:'#f8fafc', borderBottom:'2px solid #e2e8f0'}}>
+                            <th style={{padding:'10px', textAlign:'left'}}>Ảnh</th>
+                            <th style={{padding:'10px', textAlign:'left'}}>Thời gian</th>
+                            <th style={{padding:'10px', textAlign:'left'}}>Kết quả AI</th>
+                            <th style={{padding:'10px', textAlign:'center'}}>Chi tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {historyData.map((item: any, index: number) => (
+                            <tr key={index} style={{borderBottom:'1px solid #f1f5f9'}}>
+                                <td style={{padding:'10px'}}>
+                                    <img src={item.image_url} style={{width:'40px', height:'40px', borderRadius:'4px', objectFit:'cover'}} />
+                                </td>
+                                <td style={{padding:'10px'}}>
+                                    <div>{new Date(item.created_at).toLocaleDateString('vi-VN')}</div>
+                                    <small style={{color:'#94a3b8'}}>{new Date(item.created_at).toLocaleTimeString('vi-VN')}</small>
+                                </td>
+                                <td style={{padding:'10px'}}>
+                                    <span style={{
+                                        padding:'4px 8px', borderRadius:'12px', fontSize:'12px', fontWeight:'600',
+                                        background: item.ai_result.includes('Normal') ? '#dcfce7' : '#fee2e2',
+                                        color: item.ai_result.includes('Normal') ? '#15803d' : '#b91c1c'
+                                    }}>
+                                        {item.ai_result}
+                                    </span>
+                                </td>
+                                <td style={{padding:'10px', textAlign:'center'}}>
+                                    <button 
+                                        onClick={() => navigate(`/analysis-result/${item.id}`, { state: { result: item } })}
+                                        style={{border:'1px solid #007bff', background:'white', color:'#007bff', padding:'4px 8px', borderRadius:'4px', cursor:'pointer'}}
+                                    >
+                                        Xem
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+)}
         </div>
 
 
@@ -1174,6 +1237,25 @@ const styles: { [key: string]: React.CSSProperties } = {
     pricingHeader: { padding: '25px', backgroundColor: '#f8fbff', borderBottom: '1px solid #f1f5f9', textAlign: 'center' },
     priceTag: { fontSize: '28px', fontWeight: '800', color: '#007bff', marginTop: '10px' },
     pricingBody: { padding: '25px' },
+    modalOverlay: {
+        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+        backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        backdropFilter: 'blur(4px)'
+    },
+    modalContent: {
+        backgroundColor: 'white', borderRadius: '12px', width: '800px', maxWidth: '90%',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        animation: 'scaleIn 0.3s ease-out'
+    },
+    modalHeader: {
+        padding: '20px', borderBottom: '1px solid #e2e8f0',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+    },
+    closeBtn: {
+        background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b'
+    },
 };
 
 // --- GLOBAL CSS (ĐÃ FIX TRIỆT ĐỂ) ---
