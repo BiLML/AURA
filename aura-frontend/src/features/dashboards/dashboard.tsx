@@ -55,26 +55,6 @@ const formatVNTime = (dateString: string) => {
 };
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
-// Hàm chuyển đổi giờ UTC từ server sang giờ Việt Nam (GMT+7)
-const formatVNTime = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    
-    // Kiểm tra nếu date không hợp lệ
-    if (isNaN(date.getTime())) return dateString;
-
-    return {
-        date: date.toLocaleDateString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            timeZone: 'Asia/Ho_Chi_Minh'
-        }),
-        time: date.toLocaleTimeString('vi-VN', {
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-            hour12: false,
-            timeZone: 'Asia/Ho_Chi_Minh'
-        })
-    };
-};
     
     // --- STATE DỮ LIỆU ---
     const [userRole, setUserRole] = useState<string>('Guest');
@@ -155,7 +135,7 @@ const formatVNTime = (dateString: string) => {
         } catch (error) { console.error("Lỗi chat:", error); }
     }, []);
 
-    // --- 2. HÀM TẢI LỊCH SỬ KHÁM ---
+    // --- 2. HÀM TẢI LỊCH SỬ KHÁM (ĐÃ SỬA) ---
     const fetchMedicalRecords = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -167,10 +147,14 @@ const formatVNTime = (dateString: string) => {
             if (historyRes.ok) {
                 const rawData = await historyRes.json();
                 const list = Array.isArray(rawData) ? rawData : (rawData.items || rawData.history || []);
-                const { date, time } = formatVNTime(rawDate);
 
+                // [FIX] Đưa logic format vào trong vòng lặp map
                 const mappedHistory = list.map((item: any) => {
                     const rawDate = item.created_at || item.upload_date || new Date().toISOString();
+                    
+                    // Gọi hàm formatVNTime ở đây mới đúng
+                    const { date, time } = formatVNTime(rawDate);
+
                     const analysisData = item.analysis_result || {};
                     const risk = analysisData.risk_level;
                     
@@ -185,8 +169,8 @@ const formatVNTime = (dateString: string) => {
                     return {
                         id: item.id,
                         rawTimestamp: new Date(rawDate).getTime(),
-                        date: date, // Dùng biến date đã format
-                        time: time, // Dùng biến time đã format
+                        date: date, // Dùng biến đã format
+                        time: time, // Dùng biến đã format
                         result: resultDisplay,
                         status: statusDisplay,
                         annotated_url: analysisData.annotated_image_url || null
@@ -890,7 +874,7 @@ if (activeTab === 'messages') {
                                                 </span>
                                             </td>
                                         </tr>
-                                    ))
+                                    )})
                                 )}
                             </tbody>
                         </table>

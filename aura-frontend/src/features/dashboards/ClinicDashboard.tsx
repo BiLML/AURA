@@ -518,40 +518,61 @@ const ClinicDashboard: React.FC = () => {
                                 className="btn-icon-hover" 
                                 style={styles.iconBtn} 
                                 onClick={() => {
-                                    if (!showNotifications) {
-            // 1. Đánh dấu đã đọc ở phía Client (để UI phản hồi ngay lập tức)
-                                        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-            
-            // 2. [SỬA LỖI] Gọi API báo cho Server biết đã đọc hết
-            // Để lần sau fetch lại, Server sẽ trả về trạng thái is_read: true
-                                        const token = localStorage.getItem('token');
-                                        if (token) {
-                                            fetch('https://aurahealth.name.vn/api/v1/users/me/notifications/mark-all-read', { 
-                                                method: 'PUT', 
-                                                headers: { 'Authorization': `Bearer ${token}` } 
-                                            }).catch(err => console.error("Lỗi mark-read:", err));
-                                        }
-                                    }
-        // 3. Toggle hiển thị dropdown
                                     setShowNotifications(!showNotifications);
-                            }}
-                        >
-                            <FaBell color="#64748b" size={20}/>
-            {/* Chỉ hiện chấm đỏ nếu có tin chưa đọc */}
+                                }}
+                            >
+                                <FaBell color="#64748b" size={20}/>
                             {notifications.some((n:any) => !n.is_read) && <span style={styles.bellBadge}></span>}
                             </button>
                              {showNotifications && (
                                 <div style={styles.notificationDropdown} className="pop-in">
                                     <div style={styles.dropdownHeader}>Thông báo</div>
                                     <div style={{maxHeight:'300px', overflowY:'auto'}}>
-                                        {notifications.length > 0 ? notifications.map((n:any)=>(
-                                            <div key={n.id} className="notification-item-hover" style={styles.notifItem}>
-                                                <div style={{fontWeight:'600', fontSize:'13px', marginBottom:'4px', color:'#334155'}}>{n.title}</div>
-                                                <div style={{fontSize:'12px', color:'#64748b'}}>{n.content}</div>
-                                                <div style={{fontSize:'10px', color:'#94a3b8', marginTop:'5px'}}>{new Date(n.created_at).toLocaleString('vi-VN')}</div>
-                                            </div>
-                                        )) : <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>}
-                                    </div>
+    {notifications.length > 0 ? notifications.map((n:any) => (
+        <div 
+            key={n.id} 
+            className="notification-item-hover" 
+            style={{
+                ...styles.notifItem,
+                // [UX] Làm mờ tin đã đọc để dễ phân biệt
+                backgroundColor: n.is_read ? '#ffffff' : '#f0f9ff',
+                opacity: n.is_read ? 0.7 : 1
+            }}
+            // [LOGIC MỚI] Bấm vào tin -> Gọi API /read của bạn
+            onClick={async () => {
+                if (n.is_read) return; // Đã đọc rồi thì không làm gì
+
+                // 1. Cập nhật giao diện ngay lập tức (để người dùng thấy nhanh)
+                setNotifications(prev => prev.map(item => 
+                    item.id === n.id ? { ...item, is_read: true } : item
+                ));
+
+                // 2. Gọi xuống Backend (Hàm Python bạn vừa gửi)
+                try {
+                    const token = localStorage.getItem('token');
+                    await fetch(`https://aurahealth.name.vn/api/v1/users/me/notifications/${n.id}/read`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (e) {
+                    console.error("Lỗi cập nhật trạng thái đọc:", e);
+                }
+            }}
+        >
+            <div style={{fontWeight:'600', fontSize:'13px', marginBottom:'4px', color:'#334155'}}>
+                {n.title}
+                {/* Dấu chấm đỏ nhỏ bên cạnh tiêu đề nếu chưa đọc */}
+                {!n.is_read && <span style={{color:'red', marginLeft:'5px'}}>●</span>}
+            </div>
+            <div style={{fontSize:'12px', color:'#64748b'}}>{n.content}</div>
+            <div style={{fontSize:'10px', color:'#94a3b8', marginTop:'5px'}}>
+                {new Date(n.created_at).toLocaleString('vi-VN')}
+            </div>
+        </div>
+    )) : (
+        <div style={{padding:'15px', fontSize:'13px', color:'#999'}}>Không có thông báo mới</div>
+    )}
+</div>
                                 </div>
                             )}
                         </div>
