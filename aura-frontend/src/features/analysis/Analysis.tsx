@@ -73,6 +73,14 @@ const AnalysisResult: React.FC = () => {
     };
 
     const fetchData = useCallback(async () => {
+        try {
+            const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
+            if (configRes.ok) {
+                const configData = await configRes.json();
+                if (configData.model_version) setModelVersion(configData.model_version);
+            }
+        } catch (e) { console.error(e); }
+
         const token = localStorage.getItem('token');
         if (location.state && location.state.result && !data) {
             setData(normalizeData(location.state.result));
@@ -90,14 +98,6 @@ const AnalysisResult: React.FC = () => {
                 }
             } catch (err) { console.error(err); } finally { setLoading(false); }
         }
-
-        try {
-            const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
-            if (configRes.ok) {
-                const configData = await configRes.json();
-                if (configData.model_version) setModelVersion(configData.model_version);
-            }
-        } catch (e) { console.error(e); }
 
     }, [id, location.state]);
 

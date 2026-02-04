@@ -24,6 +24,11 @@ const Login = () => {
             sessionStorage.setItem('user_info', JSON.stringify(userInfoToSave));
         }
 
+        if (data.is_new_user) {
+            navigate('/set-username', { replace: true });
+            return;
+        }
+
         const standardizedRole = data.role ? data.role.toLowerCase() : '';
         if (standardizedRole === 'admin') navigate('/admin', { replace: true });
         else if (standardizedRole === 'doctor') navigate('/dashboarddr', { replace: true });
