@@ -518,25 +518,27 @@ const ClinicDashboard: React.FC = () => {
                                 className="btn-icon-hover" 
                                 style={styles.iconBtn} 
                                 onClick={() => {
-                                    // [MỚI] Logic xử lý khi nhấn vào chuông
                                     if (!showNotifications) {
-                                        // 1. Nếu hành động là MỞ -> Đánh dấu tất cả là "đã đọc" trong State ngay lập tức
-                                        // Việc này làm chấm đỏ biến mất ngay lập tức
+            // 1. Đánh dấu đã đọc ở phía Client (để UI phản hồi ngay lập tức)
                                         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-                                        
-                                        // 2. (Tùy chọn) Gọi API ngầm để báo Server biết là đã đọc hết (nếu có API mark-all-read)
-                                        // const token = localStorage.getItem('token');
-                                        // fetch('https://aurahealth.name.vn/api/v1/users/me/notifications/mark-all-read', { 
-                                        //    method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } 
-                                        // });
+            
+            // 2. [SỬA LỖI] Gọi API báo cho Server biết đã đọc hết
+            // Để lần sau fetch lại, Server sẽ trả về trạng thái is_read: true
+                                        const token = localStorage.getItem('token');
+                                        if (token) {
+                                            fetch('https://aurahealth.name.vn/api/v1/users/me/notifications/mark-all-read', { 
+                                                method: 'PUT', 
+                                                headers: { 'Authorization': `Bearer ${token}` } 
+                                            }).catch(err => console.error("Lỗi mark-read:", err));
+                                        }
                                     }
-                                    // 3. Toggle hiển thị dropdown
+        // 3. Toggle hiển thị dropdown
                                     setShowNotifications(!showNotifications);
-                                }}
-                            >
-                                <FaBell color="#64748b" size={20}/>
-                                {/* Logic hiển thị chấm đỏ: Chỉ hiện khi có tin chưa đọc */}
-                                {notifications.some((n:any) => !n.is_read) && <span style={styles.bellBadge}></span>}
+                            }}
+                        >
+                            <FaBell color="#64748b" size={20}/>
+            {/* Chỉ hiện chấm đỏ nếu có tin chưa đọc */}
+                            {notifications.some((n:any) => !n.is_read) && <span style={styles.bellBadge}></span>}
                             </button>
                              {showNotifications && (
                                 <div style={styles.notificationDropdown} className="pop-in">
