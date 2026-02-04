@@ -145,7 +145,12 @@ const Dashboard: React.FC = () => {
                         id: item.id,
                         rawTimestamp: new Date(rawDate).getTime(),
                         date: new Date(rawDate).toLocaleDateString('vi-VN'),
-                        time: new Date(rawDate).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
+                        time: new Date(rawDate).toLocaleTimeString('vi-VN', { 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            hour12: false, // Định dạng 24h
+                            timeZone: 'Asia/Ho_Chi_Minh' 
+                        }),
                         result: resultDisplay,
                         status: statusDisplay,
                         annotated_url: analysisData.annotated_image_url || null
@@ -829,7 +834,7 @@ if (activeTab === 'messages') {
                                     transactions.map(tx => (
                                         <tr key={tx.id} style={styles.tr}>
                                             <td style={styles.td}>
-                                                {new Date(tx.created_at).toLocaleDateString('vi-VN')} <br/>
+                                                {new Date(tx.created_at).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} <br/>
                                                 <small style={{color:'#94a3b8'}}>{new Date(tx.created_at).toLocaleTimeString('vi-VN')}</small>
                                             </td>
                                             <td style={styles.td}><b style={{color:'#334155'}}>{tx.package_name}</b></td>
@@ -1039,7 +1044,7 @@ if (activeTab === 'messages') {
                                                 <div style={{fontWeight: '600', fontSize: '13px', marginBottom: '4px', color:'#1e293b'}}>{n.title}</div>
                                                 <div style={{fontSize: '13px', color: '#475569', lineHeight: 1.4}}>{n.content}</div>
                                                 <div style={{fontSize: '11px', color: '#94a3b8', marginTop: '6px'}}>
-                                                    {new Date(n.created_at).toLocaleString('vi-VN')}
+                                                    {new Date(n.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                                                 </div>
                                             </div>
                                         ))}
