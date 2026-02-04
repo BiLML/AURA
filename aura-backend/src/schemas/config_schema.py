@@ -20,3 +20,10 @@ class SystemConfigResponse(SystemConfigBase):
     
     class Config:
         from_attributes = True
+
+class PublicConfigResponse(BaseModel):
+    model_version: str
+    maintenance_mode: bool = False # Ví dụ thêm: chế độ bảo trì
+    
+    class Config:
+        from_attributes = True

@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
+
 # Import các router
 from api import auth, users, medical_records, clinic, billing, admin, chat, doctor
 from api import billing_webhook # Import file vừa tạo
+from api import public
 
 app = FastAPI(title="Aura AI Backend")
 
@@ -36,7 +38,7 @@ app.mount("/static", StaticFiles(directory="uploads"), name="static")
 # 1. Auth & Users
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-
+app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 # 2. Chức năng chính
 app.include_router(medical_records.router, prefix="/api/v1/medical-records", tags=["Medical Records"])
 app.include_router(clinic.router, prefix="/api/v1/clinics", tags=["Clinics"])

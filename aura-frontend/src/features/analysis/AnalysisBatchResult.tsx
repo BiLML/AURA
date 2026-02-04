@@ -38,9 +38,7 @@ const AnalysisBatchResult: React.FC = () => {
                     setCurrentRole(rawRole.toUpperCase().trim());
                 }
 
-                const configRes = await fetch('https://aurahealth.name.vn/api/v1/admin/config', { 
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const configRes = await fetch('https://aurahealth.name.vn/api/v1/public/config');
 
                 if (configRes.ok) {
                     const configData = await configRes.json();
