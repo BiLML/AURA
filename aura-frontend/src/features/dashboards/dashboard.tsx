@@ -427,7 +427,13 @@ const Dashboard: React.FC = () => {
     }, []);
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        if (!window.confirm(`Bạn muốn thanh toán online qua VNPay cho gói "${pkg.name}" (${pkg.price.toLocaleString('vi-VN')} đ)?`)) return;
+        // Nếu gói miễn phí, đổi câu thông báo cho hợp lý
+        const isFree = pkg.price === 0;
+        const confirmMsg = isFree 
+            ? `Xác nhận đăng ký gói miễn phí "${pkg.name}"?`
+            : `Bạn muốn thanh toán online qua VNPay cho gói "${pkg.name}" (${pkg.price.toLocaleString('vi-VN')} đ)?`;
+
+        if (!window.confirm(confirmMsg)) return;
         
         setIsBuying(true);
         const token = localStorage.getItem('token');
@@ -446,12 +452,18 @@ const Dashboard: React.FC = () => {
 
             const data = await res.json();
             
+            // [MỚI] KIỂM TRA NẾU GÓI ĐƯỢC KÍCH HOẠT NGAY (Gói Free)
+            if (res.ok && data.status === 'ACTIVATED') {
+                alert("✅ " + data.message);
+                fetchBillingData(); // Tải lại số dư ngay lập tức
+                return; // Dừng hàm, không chạy logic chuyển hướng bên dưới
+            }
+
+            // Logic cũ cho gói trả phí
             if (res.ok && data.payment_url) {
                 if (paymentMethod === 'VNPAY') {
-                    // VNPay: Chuyển hướng
                     window.location.href = data.payment_url;
                 } else {
-                    // SePay: Lưu URL để hiện Popup
                     setQrCodeUrl(data.payment_url);
                 }
             } else {

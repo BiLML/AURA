@@ -335,15 +335,22 @@ const ClinicDashboard: React.FC = () => {
     };
 
     const handleBuyPackage = async (pkg: ServicePackage) => {
-        // [SỬA] Thông báo rõ phương thức đang chọn
-        const methodName = paymentMethod === 'SEPAY' ? 'Quét mã QR (SePay)' : 'VNPay';
-        if (!window.confirm(`Xác nhận thanh toán qua ${methodName} cho gói "${pkg.name}"?`)) return;
+        // Nếu gói miễn phí
+        const isFree = pkg.price === 0;
+        let confirmMsg = "";
+        
+        if (isFree) {
+            confirmMsg = `Xác nhận kích hoạt gói miễn phí "${pkg.name}"?`;
+        } else {
+            const methodName = paymentMethod === 'SEPAY' ? 'Quét mã QR (SePay)' : 'VNPay';
+            confirmMsg = `Xác nhận thanh toán qua ${methodName} cho gói "${pkg.name}"?`;
+        }
+
+        if (!window.confirm(confirmMsg)) return;
         
         setIsBuying(true);
         const token = localStorage.getItem('token');
         try {
-            // [SỬA] Gọi API chung (create-url) thay vì gọi cứng vnpay
-            // Lưu ý: Backend cần đảm bảo endpoint này xử lý được cho cả ROLE CLINIC
             const res = await fetch('https://aurahealth.name.vn/api/v1/billing/payment/create-url', {
                 method: 'POST',
                 headers: { 
@@ -352,18 +359,24 @@ const ClinicDashboard: React.FC = () => {
                 },
                 body: JSON.stringify({ 
                     package_id: pkg.id,
-                    payment_method: paymentMethod // Gửi phương thức lên
+                    payment_method: paymentMethod 
                 })
             });
 
             const data = await res.json();
+
+            // [MỚI] KIỂM TRA NẾU GÓI ĐƯỢC KÍCH HOẠT NGAY (Gói Free)
+            if (res.ok && data.status === 'ACTIVATED') {
+                alert("✅ " + data.message);
+                fetchBillingData(); // Tải lại số dư ngay lập tức
+                return;
+            }
             
+            // Logic cũ
             if (res.ok && data.payment_url) {
                 if (paymentMethod === 'VNPAY') {
-                    // VNPay: Chuyển hướng
                     window.location.href = data.payment_url;
                 } else {
-                    // SePay: Hiện Popup QR
                     setQrCodeUrl(data.payment_url);
                 }
             } else {

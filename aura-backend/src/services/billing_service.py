@@ -50,6 +50,25 @@ class BillingService:
     def create_payment_url(self, user_id: UUID, package_id: UUID, ip_address: str, payment_method: str = "SEPAY"):
         pkg = self.billing_repo.get_package_by_id(package_id)
         if not pkg: raise ValueError("Gói dịch vụ không tồn tại")
+        
+        if pkg.price == 0:
+            # 1. Tạo Transaction trạng thái SUCCESS luôn
+            self.billing_repo.create_transaction(user_id, pkg.id, 0, "SUCCESS")
+            
+            # 2. Kích hoạt Subscription ngay lập tức
+            self.billing_repo.create_subscription(
+                user_id=user_id,
+                package_id=pkg.id,
+                days=pkg.duration_days,
+                credits=pkg.analysis_limit
+            )
+            
+            # 3. Trả về flag đặc biệt "ACTIVATED" để Frontend biết
+            return {
+                "status": "ACTIVATED",
+                "message": f"Đăng ký gói {pkg.name} thành công!",
+                "payment_url": None 
+            }
 
         # Chọn Gateway dựa trên method user gửi lên (Mặc định là SEPAY nếu không khớp)
         gateway_key = payment_method.upper()
