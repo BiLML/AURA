@@ -1,4 +1,3 @@
-# Project-Group-4
 ● English: System for Retinal Vascular Health Screening 
 
 ● Vietnamese: Hệ Thống Sàng Lọc Sức Khỏe Mạch Máu Võng Mạc
